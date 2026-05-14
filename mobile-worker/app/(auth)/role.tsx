@@ -20,8 +20,8 @@ export default function RolePicker() {
       <View className="flex-1 px-6 pt-10 pb-8 justify-between">
         <View>
           <View className="items-center mb-10">
-            <Text className="text-6xl mb-2">💧</Text>
-            <Text className="text-white text-3xl font-bold">ماء</Text>
+            <Text className="text-6xl mb-2">🏠</Text>
+            <Text className="text-white text-3xl font-bold">داري</Text>
             <Text className="text-slate-400 text-sm mt-1">للعاملين</Text>
           </View>
 

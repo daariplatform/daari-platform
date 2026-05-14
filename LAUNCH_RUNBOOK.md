@@ -1,4 +1,4 @@
-# 🚀 دليل الإطلاق الفعلي لتطبيقات "ماء" — Step by Step
+# 🚀 دليل الإطلاق الفعلي لمنصّة "داري" — Step by Step
 
 **المطوّر**: أحمد العاني — Phi-Bit ([phi-bit.com](https://phi-bit.com))
 **التواصل**: support@phi-bit.com
@@ -11,7 +11,7 @@
 
 - [x] حساب Google Play Console مدفوع ($٢٥ مرة واحدة) ← **لديك**
 - [ ] حساب Expo (مجاني) — انشئ من [expo.dev/signup](https://expo.dev/signup)
-- [ ] Domain مسجّل (مثلاً `maa-iq.com` أو `phi-bit.com/maa`)
+- [ ] Domain مسجّل (مثلاً `daari.app` أو `phi-bit.com/maa`)
 - [ ] خادم backend مستضاف (سنُحدّد لاحقاً، يمكن البدء بـ Vercel + Railway مجاناً)
 - [ ] صور أيقونة التطبيق الحقيقية (أو سأولّد لك واحدة بسيطة الآن)
 
@@ -21,7 +21,7 @@
 
 ### 1.1 تسجيل دخول EAS
 ```bash
-cd /Users/ahmedalani/Downloads/maa-platform/mobile-customer
+cd /Users/ahmedalani/Downloads/daari-platform/mobile-customer
 npx eas-cli login
 # سيفتح المتصفح — سجّل دخولك بحساب Expo
 npx eas-cli whoami
@@ -77,15 +77,15 @@ npx eas-cli whoami
 Google Play **يطلب رابطاً مباشراً** لسياسة الخصوصية. حلول سريعة:
 
 ### الخيار أ: GitHub Pages (مجاني)
-1. أنشئ repo جديد `phi-bit/maa-legal`
+1. أنشئ repo جديد `phi-bit/daari-legal`
 2. ارفع `legal/PRIVACY_POLICY_AR.md` و `TERMS_OF_SERVICE_AR.md`
 3. فعّل GitHub Pages من Settings → Pages
-4. الرابط يصبح: `https://phi-bit.github.io/maa-legal/PRIVACY_POLICY_AR`
+4. الرابط يصبح: `https://phi-bit.github.io/daari-legal/PRIVACY_POLICY_AR`
 
 ### الخيار ب: phi-bit.com (إذا متاح لديك)
 ارفع الملفات على موقعك الحالي:
-- `https://phi-bit.com/maa/privacy.html`
-- `https://phi-bit.com/maa/terms.html`
+- `https://phi-bit.com/daari/privacy.html`
+- `https://phi-bit.com/daari/terms.html`
 
 ### الخيار ج: Notion + custom domain (أسرع)
 1. أنشئ صفحة Notion عامة بنص الخصوصية
@@ -103,9 +103,9 @@ Google Play **يطلب رابطاً مباشراً** لسياسة الخصوصي
 ### الأسرع: Railway (مجاني للبداية)
 1. ادخل [railway.app](https://railway.app) ← سجّل بـ GitHub
 2. اضغط "New Project" → "Deploy from GitHub repo"
-3. اربط `maa-platform/backend`
+3. اربط `daari-platform/backend`
 4. أضف PostgreSQL: New → Database → PostgreSQL
-5. Railway يعطيك URL مثل `https://maa-backend-production.up.railway.app`
+5. Railway يعطيك URL مثل `https://daari-backend-production.up.railway.app`
 
 ### عدّل `apiBaseUrl` في كلا التطبيقَين:
 ```json
@@ -217,7 +217,7 @@ npx eas-cli build --profile production --platform android
 ٤. **Release name**: 0.1.0
 ٥. **Release notes**:
    ```
-   الإصدار الأول من تطبيق ماء — منصّة توصيل مياه الشرب المنزلية في العراق.
+   الإصدار الأول من تطبيق داري — منصّة توصيل مياه الشرب المنزلية في العراق.
    - طلب تعبئة بضغطة زر
    - تذكيرات تلقائية شهرية
    - تتبّع السائق وموقعه

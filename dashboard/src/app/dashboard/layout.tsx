@@ -42,7 +42,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen flex">
       <aside className="w-64 bg-white border-l shadow-sm flex flex-col">
         <div className="p-5 border-b">
-          <h2 className="font-bold text-primary-700 text-xl">منصة ماء</h2>
+          <h2 className="font-bold text-primary-700 text-xl">منصة داري</h2>
           <p className="text-xs text-slate-500 mt-1">لوحة المعمل</p>
         </div>
         <nav className="flex-1 p-3 space-y-1">

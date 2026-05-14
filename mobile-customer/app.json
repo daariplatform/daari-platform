@@ -1,15 +1,15 @@
 {
   "expo": {
-    "name": "ماء",
-    "slug": "maa-customer",
-    "scheme": "maacustomer",
+    "name": "داري",
+    "slug": "daari-customer",
+    "scheme": "daaricustomer",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
     "owner": "phibit",
-    "description": "تطبيق طلب توصيل مياه الشرب المعقّمة للمنازل في العراق. اطلب تعبئة خزانك بضغطة زر، تابع وصول السائق، واستلم تأكيداً عبر WhatsApp.",
+    "description": "داري — منصّة خدمات منزلية شاملة في العراق. تبدأ بتوصيل مياه الشرب المعقّمة، وقريباً: الغاز المنزلي، تنظيف الخزانات، فلاتر RO، وخدمات أخرى. كل ما يحتاجه بيتك بضغطة زر.",
     "primaryColor": "#0891b2",
     "splash": {
       "image": "./assets/splash.png",
@@ -44,7 +44,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.maaiq.customer",
+      "bundleIdentifier": "com.phibit.daari.customer",
       "buildNumber": "1",
       "config": {
         "usesNonExemptEncryption": false
@@ -60,7 +60,7 @@
       }
     },
     "android": {
-      "package": "com.maaiq.customer",
+      "package": "com.phibit.daari.customer",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ماء — منصة معامل المياه (نموذج تجريبي)</title>
+<title>داري — Daari Platform (نموذج تجريبي)</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -135,10 +135,10 @@ tailwind.config = {
 <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
   <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
     <div class="flex items-center gap-3">
-      <div class="w-12 h-12 rounded-2xl bg-aqua-gradient flex items-center justify-center text-white text-2xl shadow-lg">💧</div>
+      <div class="w-12 h-12 rounded-2xl bg-aqua-gradient flex items-center justify-center text-white text-2xl shadow-lg">🏠</div>
       <div>
-        <div class="font-black text-lg leading-tight text-slate-900">ماء</div>
-        <div class="text-[11px] text-slate-500">منصة إدارة معامل المياه والتوصيل • العراق</div>
+        <div class="font-black text-lg leading-tight text-slate-900">داري</div>
+        <div class="text-[11px] text-slate-500">خدمات منزلك بضغطة زر • Phi-Bit</div>
       </div>
     </div>
     <div class="bg-slate-100 p-1 rounded-2xl flex gap-1 text-sm font-bold">
@@ -200,7 +200,7 @@ tailwind.config = {
         <div class="flex items-center gap-2 px-2 pb-3 mb-2 border-b border-slate-700">
           <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-xl shadow-lg">👑</div>
           <div>
-            <div class="font-black text-white text-sm">منصة ماء</div>
+            <div class="font-black text-white text-sm">منصة داري</div>
             <div class="text-[10px] text-amber-300">صاحب المنصة</div>
           </div>
         </div>
@@ -510,7 +510,7 @@ function custOnboarding() {
     <div class="bg-aqua-gradient pt-2 pb-6 px-5 ripple-bg">
       <div class="text-white text-center">
         <div class="text-4xl mb-1">💧</div>
-        <div class="font-black text-xl">أهلاً بك في ماء</div>
+        <div class="font-black text-xl">أهلاً بك في داري</div>
         <div class="text-xs opacity-90 mt-1">إعداد سريع لمدة دقيقة</div>
       </div>
       <div class="flex items-center justify-center gap-2 mt-4">
@@ -683,7 +683,7 @@ function custFinishOnboard() {
   if (!state.cust.termsAck) return;
   state.cust.onboarded = true;
   state.cust.onboardStep = 1;
-  toast('تم تفعيل حسابك ✓ مرحباً بك في ماء','success');
+  toast('تم تفعيل حسابك ✓ مرحباً بك في داري','success');
   renderCustomer();
 }
 function custResetOnboard() {

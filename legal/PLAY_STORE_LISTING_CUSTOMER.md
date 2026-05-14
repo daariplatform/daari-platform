@@ -1,12 +1,12 @@
-# Google Play Store Listing — ماء (تطبيق الزبون)
+# Google Play Store Listing — داري (تطبيق الزبون)
 
 ## التطبيق
-- **اسم الحزمة**: `com.maaiq.customer`
-- **اسم التطبيق على المتجر**: ماء — توصيل مياه الشرب
+- **اسم الحزمة**: `com.phibit.daari.customer`
+- **اسم التطبيق على المتجر**: داري — خدمات منزلية (يبدأ بالمياه)
 - **المطوّر**: Phi-Bit (أحمد العاني)
 - **الموقع**: https://phi-bit.com
 - **البريد الإلكتروني**: support@phi-bit.com
-- **سياسة الخصوصية**: https://phi-bit.com/maa/privacy
+- **سياسة الخصوصية**: https://phi-bit.com/daari/privacy
 
 ## التصنيف
 - **الفئة الرئيسية**: Lifestyle (نمط حياة)
@@ -18,7 +18,7 @@
 ## العنوان (٣٠ حرف كحد أقصى)
 
 ```
-ماء — توصيل مياه الشرب
+داري — خدمات منزلية
 ```
 
 ## الوصف القصير (٨٠ حرف كحد أقصى)
@@ -30,9 +30,9 @@
 ## الوصف الكامل (٤٠٠٠ حرف كحد أقصى)
 
 ```
-🌊 ماء — أسهل طريقة لطلب مياه الشرب لبيتك
+🏠 داري — أسهل طريقة لطلب الخدمات المنزلية
 
-تطبيق "ماء" يربطك بمعمل تنقية المياه الأقرب لمنطقتك، ويتيح لك طلب تعبئة خزانك المنزلي بضغطة زر — بدون مكالمات ولا انتظار.
+منصّة "داري" يربطك بمعمل تنقية المياه الأقرب لمنطقتك، ويتيح لك طلب تعبئة خزانك المنزلي بضغطة زر — بدون مكالمات ولا انتظار.
 
 ✨ المميزات الرئيسية:
 
@@ -76,7 +76,7 @@
 
 ---
 
-تطبيق "ماء" من تطوير شركة Phi-Bit (phi-bit.com) — منصّة عراقية لإدارة معامل المياه والتوصيل المنزلي.
+منصّة "داري" من تطوير شركة Phi-Bit (phi-bit.com) — منصّة عراقية لإدارة معامل المياه والتوصيل المنزلي.
 
 للدعم والاستفسار: support@phi-bit.com
 ```
@@ -84,7 +84,7 @@
 ## الكلمات المفتاحية (للبحث الداخلي)
 
 ```
-ماء، مياه شرب، معمل ماء، توصيل مياه، خزان ماء، ر.ق، RO، تعبئة خزان،
+داري، مياه شرب، معمل ماء، توصيل مياه، خزان ماء، ر.ق، RO، تعبئة خزان،
 مياه نقية، عراق، بغداد، البصرة، أربيل، توصيل منزلي، اشتراك مياه
 ```
 
@@ -137,9 +137,9 @@ Demo account for Google Play reviewers:
 The app requires a phone number for OTP login. Reviewers can use the
 "Try without registering" button to explore all screens with demo data.
 
-Backend API endpoint: https://api.maa-iq.com (live)
-Privacy Policy: https://phi-bit.com/maa/privacy
-Terms: https://phi-bit.com/maa/terms
+Backend API endpoint: https://api.daari.app (live)
+Privacy Policy: https://phi-bit.com/daari/privacy
+Terms: https://phi-bit.com/daari/terms
 ```
 
 ## Screenshots المطلوبة (لكل لقطة وصف)

@@ -1,12 +1,12 @@
-# Google Play Store Listing — ماء للعاملين (تطبيق السائق/البائع)
+# Google Play Store Listing — داري للعاملين (تطبيق السائق/البائع)
 
 ## التطبيق
-- **اسم الحزمة**: `com.maaiq.worker`
-- **اسم التطبيق على المتجر**: ماء — للعاملين
+- **اسم الحزمة**: `com.phibit.daari.worker`
+- **اسم التطبيق على المتجر**: داري — للعاملين
 - **المطوّر**: Phi-Bit (أحمد العاني)
 - **الموقع**: https://phi-bit.com
 - **البريد الإلكتروني**: support@phi-bit.com
-- **سياسة الخصوصية**: https://phi-bit.com/maa/privacy
+- **سياسة الخصوصية**: https://phi-bit.com/daari/privacy
 
 ## التصنيف
 - **الفئة الرئيسية**: Business
@@ -19,7 +19,7 @@
 ## العنوان (٣٠ حرف كحد أقصى)
 
 ```
-ماء — للعاملين
+داري — للعاملين
 ```
 
 ## الوصف القصير (٨٠ حرف كحد أقصى)
@@ -31,9 +31,9 @@
 ## الوصف الكامل
 
 ```
-🚛 ماء — للعاملين | تطبيق إدارة عمل سائقي توصيل المياه
+🚛 داري — للعاملين | تطبيق إدارة عمل سائقي توصيل المياه
 
-تطبيق احترافي مخصّص لسائقي معامل المياه والبائعين المتجولين العاملين في منصّة "ماء". يُنظّم جولتك اليومية، يثبت تعبئاتك بالـGPS والصور، ويحسب عمولاتك تلقائياً.
+تطبيق احترافي مخصّص لسائقي معامل المياه والبائعين المتجولين العاملين في منصّة "داري". يُنظّم جولتك اليومية، يثبت تعبئاتك بالـGPS والصور، ويحسب عمولاتك تلقائياً.
 
 ✨ المميزات الرئيسية:
 
@@ -72,7 +72,7 @@
 
 ---
 
-⚠️ هذا التطبيق مُخصّص حصراً للسائقين والبائعين المسجّلين في منصّة "ماء". لطلب خدمة توصيل ماء كزبون، حمّل تطبيق "ماء" العادي.
+⚠️ هذا التطبيق مُخصّص حصراً للسائقين والبائعين المسجّلين في منصّة "داري". لطلب خدمة توصيل ماء كزبون، حمّل منصّة "داري" العادي.
 
 تطبيق من تطوير Phi-Bit (phi-bit.com).
 الدعم: support@phi-bit.com
@@ -141,8 +141,8 @@ The app's primary feature is BACKGROUND LOCATION TRACKING. To demonstrate:
 4. Background tracking starts when work shift begins
 5. Tapping "logout" or backgrounding > 8h auto-stops tracking
 
-Backend API: https://api.maa-iq.com
-Privacy Policy: https://phi-bit.com/maa/privacy
+Backend API: https://api.daari.app
+Privacy Policy: https://phi-bit.com/daari/privacy
 Background Location Justification: See in-app screen "Why we need this"
 ```
 
@@ -157,7 +157,7 @@ Google Play **REQUIRES a 30-60 second video** showing:
 Plan to record:
 - Open app → login → see "ابدأ وردية العمل" button
 - Tap it → permission dialog → "Allow always"
-- Show persistent notification "وردية ماء نشطة"
+- Show persistent notification "وردية داري نشطة"
 - Tap "إنهاء الوردية" → confirm tracking stopped
 - Upload to YouTube as Unlisted, paste link in Play Console
 

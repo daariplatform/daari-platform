@@ -1,4 +1,4 @@
-# Privacy Policy — Maa App
+# Privacy Policy — Daari App
 
 **Last Updated**: May 11, 2026
 **Developer**: Ahmed Alani — Phi-Bit ([phi-bit.com](https://phi-bit.com))
@@ -8,9 +8,9 @@
 
 ## 1. Introduction
 
-Phi-Bit ("we", "the Company") develops and operates the **Maa** apps for water plant customers and workers in Iraq. This policy explains what data we collect, how we use it, and when we share it.
+Phi-Bit ("we", "the Company") develops and operates the **Daari** platform — home services delivery in Iraq. Daari currently offers water delivery and will expand to gas, cleaning, and more. The platform consists of customer and worker apps for water plant customers and workers in Iraq. This policy explains what data we collect, how we use it, and when we share it.
 
-By using either Maa app, you agree to this policy.
+By using any Daari app, you agree to this policy.
 
 ## 2. Data We Collect
 

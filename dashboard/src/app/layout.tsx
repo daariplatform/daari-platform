@@ -3,7 +3,7 @@ import './globals.css';
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
-  title: 'منصة ماء — لوحة تحكم المعمل',
+  title: 'منصة داري — لوحة تحكم المعمل',
   description: 'إدارة الخزانات والزبائن والسائقين والمحاسبة',
 };
 

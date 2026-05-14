@@ -1,15 +1,15 @@
 {
   "expo": {
-    "name": "ماء — للعاملين",
-    "slug": "maa-worker",
-    "scheme": "maaworker",
+    "name": "داري — للعاملين",
+    "slug": "daari-worker",
+    "scheme": "daariworker",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
     "owner": "phibit",
-    "description": "تطبيق سائقي معامل المياه والبائعين المتجولين — يعرض مهام اليوم، يثبت التعبئات بـGPS وصورة، ويحسب العمولات تلقائياً.",
+    "description": "داري للعاملين — تطبيق سائقي معامل المياه والبائعين المتجولين على منصّة داري. يعرض مهام اليوم، يثبت التعبئات بـGPS وصورة، ويحسب العمولات تلقائياً.",
     "primaryColor": "#0891b2",
     "splash": {
       "image": "./assets/splash.png",
@@ -44,7 +44,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.maaiq.worker",
+      "bundleIdentifier": "com.phibit.daari.worker",
       "buildNumber": "1",
       "config": {
         "usesNonExemptEncryption": false
@@ -65,7 +65,7 @@
       }
     },
     "android": {
-      "package": "com.maaiq.worker",
+      "package": "com.phibit.daari.worker",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

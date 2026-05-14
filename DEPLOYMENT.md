@@ -1,6 +1,6 @@
-# Deployment Guide — Maa Platform Mobile Apps
+# Deployment Guide — Daari Platform Mobile Apps
 
-دليل النشر الكامل لتطبيقَي **ماء** (الزبون + العامل) إلى App Store و Google Play باستخدام Expo + EAS.
+دليل النشر الكامل لتطبيقات **داري** (الزبون + العامل) إلى App Store و Google Play باستخدام Expo + EAS.
 
 ## 0. المتطلبات الأولية (مرة واحدة)
 

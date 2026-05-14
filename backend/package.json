@@ -1,7 +1,7 @@
 {
-  "name": "maa-platform-backend",
+  "name": "daari-platform-backend",
   "version": "0.1.0",
-  "description": "Backend API for Maa water platform — multi-tenant SaaS for water plant operations in Iraq",
+  "description": "Backend API for Daari — multi-tenant SaaS for Iraqi home services delivery. Built by Phi-Bit.",
   "main": "dist/main.js",
   "scripts": {
     "build": "nest build",

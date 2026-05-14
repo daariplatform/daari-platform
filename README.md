@@ -1,11 +1,15 @@
-# منصة ماء — Maa Platform
+# داري — Daari Platform
 
-SaaS متعدد المستأجرين (multi-tenant) لإدارة معامل المياه وشبكة التوصيل في العراق.
+> **خدمات منزلك بضغطة زر**
+
+منصّة SaaS عراقية متعدّدة المستأجرين لإدارة الخدمات المنزلية. **الإطلاق الأول**: توصيل مياه الشرب من المعامل للبيوت. **الخدمات القادمة**: توصيل الغاز، تنظيف الخزانات، فلاتر RO، صيانة منزلية، وأكثر.
+
+**شركة Phi-Bit** | أحمد العاني | [phi-bit.com](https://phi-bit.com)
 
 ## ما الذي بُني في هذه الجولة
 
 ```
-maa-platform/
+daari-platform/
 ├── backend/          ✅ NestJS API كامل (Prisma + PostGIS + JWT + Capabilities + Cron + WhatsApp/SMS)
 ├── dashboard/        ✅ Next.js لوحة المعمل (RTL، عربي، صفحات أساسية)
 ├── mobile-customer/  ✅ Expo (React Native + TypeScript + NativeWind) — تطبيق الزبون

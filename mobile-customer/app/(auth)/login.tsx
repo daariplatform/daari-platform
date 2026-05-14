@@ -28,6 +28,8 @@ export default function LoginScreen() {
   const [fullName, setFullName] = useState('');
   const [sending, setSending] = useState(false);
 
+  const isDemoMode = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
   async function requestOtp() {
     if (!/^07\d{9}$/.test(phone)) {
       Alert.alert('رقم غير صحيح', 'الرقم يجب أن يبدأ بـ 07 ويتكون من 11 رقماً');
@@ -35,9 +37,19 @@ export default function LoginScreen() {
     }
     setSending(true);
     try {
-      // Server will send OTP via SMS in production. In dev it's a no-op
-      // and we just move to the next step.
-      await api.post('/auth/otp/request', { phone }).catch(() => {});
+      // Demo / no-backend mode: skip the API call entirely and hint at the
+      // mock OTP (last 6 digits of the phone). Saves the user 12s of waiting.
+      if (isDemoMode) {
+        Alert.alert(
+          'رمز التحقق التجريبي',
+          `أدخل آخر ٦ أرقام من رقم هاتفك:\n${phone.slice(-6)}`,
+        );
+        setStep('otp');
+        return;
+      }
+      // Real backend: fire-and-forget with a tight timeout so a flaky server
+      // doesn't freeze the UI.
+      await api.post('/auth/otp/request', { phone }, { timeout: 4000 }).catch(() => {});
       setStep('otp');
     } finally {
       setSending(false);
@@ -46,6 +58,13 @@ export default function LoginScreen() {
 
   async function verifyOtp() {
     if (otp.length < 4) return;
+    // Demo / no-backend: accept the last-6-digits trick locally and drop
+    // straight into the demo session without hitting the API.
+    if (isDemoMode && otp === phone.slice(-6)) {
+      loginAsDemo();
+      router.replace('/(tabs)/home');
+      return;
+    }
     try {
       await loginWithOtp(phone, otp, fullName || undefined);
       router.replace('/(tabs)/home');
@@ -54,7 +73,13 @@ export default function LoginScreen() {
       if (msg === 'fullName required for first login') {
         setStep('name');
       } else {
-        Alert.alert('فشل التسجيل', msg || 'رمز التحقق غير صحيح');
+        Alert.alert(
+          'فشل التسجيل',
+          msg ||
+            (isDemoMode
+              ? `الرمز خطأ. جرّب آخر ٦ أرقام: ${phone.slice(-6)}`
+              : 'رمز التحقق غير صحيح'),
+        );
       }
     }
   }
@@ -77,9 +102,9 @@ export default function LoginScreen() {
       >
         <View className="flex-1 px-6 pt-12 pb-8">
           <View className="items-center mb-10">
-            <Text className="text-7xl mb-2">💧</Text>
-            <Text className="text-white text-3xl font-bold">ماء</Text>
-            <Text className="text-aqua-100 text-sm mt-1">منصة توصيل المياه المنزلية</Text>
+            <Text className="text-7xl mb-2">🏠</Text>
+            <Text className="text-white text-3xl font-bold">داري</Text>
+            <Text className="text-aqua-100 text-sm mt-1">خدمات منزلك بضغطة زر</Text>
           </View>
 
           <View className="bg-white rounded-3xl p-6 shadow-2xl">
