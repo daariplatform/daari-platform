@@ -1,0 +1,145 @@
+{
+  "expo": {
+    "name": "ماء — للعاملين",
+    "slug": "maa-worker",
+    "scheme": "maaworker",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": false,
+    "owner": "phibit",
+    "description": "تطبيق سائقي معامل المياه والبائعين المتجولين — يعرض مهام اليوم، يثبت التعبئات بـGPS وصورة، ويحسب العمولات تلقائياً.",
+    "primaryColor": "#0891b2",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "REPLACE_WITH_PROJECT_ID_AFTER_eas_init"
+      },
+      "apiBaseUrl": "https://api.maa-iq.com/api/v1",
+      "developer": {
+        "name": "أحمد العاني",
+        "company": "Phi-Bit",
+        "website": "https://phi-bit.com",
+        "supportEmail": "support@phi-bit.com",
+        "supportPhone": "+964 0000 000 000"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/REPLACE_WITH_PROJECT_ID_AFTER_eas_init",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.maaiq.worker",
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "نسجّل موقعك أثناء جولة العمل فقط، حتى تثبت تعبئاتك للمعمل وتُحسب عمولتك. التتبّع يتوقّف عند انتهاء وردية العمل.",
+        "NSLocationWhenInUseUsageDescription": "نحتاج موقعك لتأكيد وصولك للزبون.",
+        "NSLocationAlwaysUsageDescription": "نسجّل موقعك أثناء وردية العمل لتأكيد التعبئات.",
+        "NSCameraUsageDescription": "لمسح QR الخزانات والتقاط صورة دليل التعبئة.",
+        "NSPhotoLibraryUsageDescription": "لتحديد صورة دليل من المعرض.",
+        "NSPhotoLibraryAddUsageDescription": "لحفظ صور دليل التعبئة في الجهاز.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": [
+          "location",
+          "fetch",
+          "remote-notification"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.maaiq.worker",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0f172a"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "POST_NOTIFICATIONS",
+        "VIBRATE",
+        "WAKE_LOCK"
+      ]
+    },
+    "locales": {
+      "ar": "./assets/ar.json"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-localization",
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "نتتبّع موقعك أثناء وردية العمل لتأكيد التعبئات. التتبّع يتوقّف خارج الوردية.",
+          "locationWhenInUsePermission": "نحتاج موقعك لتأكيد وصولك للزبون.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "نستخدم الكاميرا لمسح QR الخزانات وتصوير دليل التعبئة."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "نستخدم صورك لتحديد دليل التعبئة.",
+          "cameraPermission": "نستخدم الكاميرا لتصوير دليل التعبئة."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#0891b2"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 24,
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ],
+      "expo-sqlite",
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

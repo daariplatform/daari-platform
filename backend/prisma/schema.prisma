@@ -1,0 +1,787 @@
+// Maa Platform — Prisma schema
+// Multi-tenant SaaS for Iraqi water plant operations.
+// Every domain row carries tenantId so a single DB serves many plants safely.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+// ─── Tenancy & users ──────────────────────────────────────────────────────────
+
+enum SubscriptionPlan {
+  STARTER
+  PRO
+  BUSINESS
+  ENTERPRISE
+}
+
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+/**
+ * A PlantGroup lets one owner manage multiple branches under one login.
+ * Each branch (Tenant) keeps its own customers / tanks / accounting,
+ * but the owner can switch between them or roll up reports across all.
+ */
+model PlantGroup {
+  id          String   @id @default(cuid())
+  name        String
+  ownerName   String
+  ownerPhone  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenants     Tenant[]
+
+  @@index([ownerPhone])
+}
+
+model Tenant {
+  id            String           @id @default(cuid())
+  name          String
+  ownerName     String
+  ownerPhone    String
+  city          String
+
+  // Coverage area for the "find my nearest plant" feature. Stored as
+  // a centre point + radius (km); future versions can use PostGIS polygons.
+  coverageLng   Float?
+  coverageLat   Float?
+  coverageKm    Float            @default(5)
+
+  groupId       String?
+  group         PlantGroup?      @relation(fields: [groupId], references: [id])
+
+  plan          SubscriptionPlan @default(STARTER)
+  status        TenantStatus     @default(TRIAL)
+  trialEndsAt   DateTime?
+  billingDay    Int              @default(1)
+
+  // Bonus the plant pays each driver per completed action, on top of
+  // salary + base commission. Adjustable from the dashboard.
+  refillBonusIqd       Int       @default(0)
+  deliveryBonusIqd     Int       @default(0)
+  reclaimBonusIqd      Int       @default(0)
+  newCustomerBonusIqd  Int       @default(0)
+
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  users         User[]
+  tanks         Tank[]
+  customers     Customer[]
+  drivers       Driver[]
+  refillOrders  RefillOrder[]
+  expenses      Expense[]
+  salaries      SalaryPayment[]
+  notifications NotificationLog[]
+  vendors       Vendor[]
+  subscriptions Subscription[]
+
+  @@index([status])
+  @@index([groupId])
+}
+
+/**
+ * Subscription history per tenant. Newest row is the active subscription.
+ * Platform admin renews / upgrades by inserting a new row.
+ */
+model Subscription {
+  id          String             @id @default(cuid())
+  tenantId    String
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  plan        SubscriptionPlan
+  priceIqd    Int                // monthly fee captured at subscription time
+  status      SubscriptionStatus @default(ACTIVE)
+
+  startsAt    DateTime
+  endsAt      DateTime           // next renewal deadline
+  cancelledAt DateTime?
+
+  createdAt   DateTime           @default(now())
+
+  @@index([tenantId, startsAt])
+  @@index([status, endsAt])      // for "expiring soon" queries
+}
+
+enum UserRole {
+  OWNER
+  MANAGER
+  ACCOUNTANT
+  DRIVER
+  CUSTOMER
+  VENDOR
+  PLATFORM_ADMIN
+}
+
+model User {
+  id           String    @id @default(cuid())
+  tenantId    String?
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  phone        String    @unique
+  passwordHash String?
+  fullName     String
+  role         UserRole
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  driver       Driver?
+  customer     Customer?
+  vendor       Vendor?
+  refreshTokens RefreshToken[]
+
+  @@index([tenantId, role])
+}
+
+model RefreshToken {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ─── Tanks ────────────────────────────────────────────────────────────────────
+
+enum TankCapacity {
+  L350
+  L500
+}
+
+enum TankStatus {
+  IN_PLANT
+  ASSIGNED
+  AT_RISK
+  RECLAIMED
+  DAMAGED
+}
+
+enum TankReclaimReason {
+  NON_COMPLIANCE       // عدم التزام بتعليمات الشركة (no monthly refill etc.)
+  MAINTENANCE          // خزان للصيانة
+  CUSTOMER_MOVED       // الزبون انتقل لمنطقة معمل آخر
+  CUSTOMER_CANCELLED   // الزبون ألغى الاشتراك
+  TANK_DAMAGED         // خزان تالف
+  OTHER
+}
+
+model Tank {
+  id           String       @id @default(cuid())
+  tenantId     String
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  serialNumber String
+  qrCode       String       @unique
+  capacity     TankCapacity
+  status       TankStatus   @default(IN_PLANT)
+
+  customerId   String?
+  customer     Customer?    @relation(fields: [customerId], references: [id])
+
+  installedAt  DateTime?
+  lastRefillAt DateTime?
+  notes        String?
+
+  // Reclaim audit: when, why, and which driver brought it back. Lets the
+  // plant owner answer "where did tank T-1024 go?" at a glance.
+  reclaimedAt        DateTime?
+  reclaimedByDriverId String?
+  reclaimReason       TankReclaimReason?
+  reclaimNotes        String?
+  reclaimPhotoUrl     String?
+
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  refillOrders RefillOrder[]
+
+  @@unique([tenantId, serialNumber])
+  @@index([tenantId, status])
+  @@index([customerId])
+}
+
+// ─── Customers ────────────────────────────────────────────────────────────────
+
+enum CustomerStatus {
+  PENDING_APPROVAL    // registered by a driver in the field; plant owner
+                      // must approve before the account can request refills
+                      // and a tank is dispatched.
+  ACTIVE
+  AT_RISK
+  INACTIVE
+  CHURNED
+}
+
+enum LocationSource {
+  DRIVER_AT_INSTALL   // most accurate — driver was physically at the door
+  CUSTOMER_PIN        // customer dropped a pin on the map
+  ADMIN_MANUAL        // plant typed an address, geocoded server-side
+  OFFLINE_SYNC        // captured offline, GPS at the moment of completion
+}
+
+model Customer {
+  id              String         @id @default(cuid())
+  tenantId        String
+  tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId          String?        @unique
+  user            User?          @relation(fields: [userId], references: [id])
+
+  fullName        String
+  phone           String
+  whatsapp        String?
+  district        String
+  addressLine     String
+  // PostGIS Point(longitude, latitude). Stored via raw SQL on insert.
+  // Use ST_X / ST_Y to read.
+  //
+  // These coords always represent the *home* where the tank lives —
+  // never the customer's current GPS at order time. Captured once at
+  // tank install (preferred) or by the customer via pin-on-map.
+  locationLng     Float?
+  locationLat     Float?
+  locationCapturedAt  DateTime?
+  locationCapturedBy  LocationSource?
+
+  // When a customer moves house, the previous home is kept for a grace
+  // period so deliveries to the old address still resolve. Geofence
+  // widens during the move window to absorb driver confusion.
+  movedAt             DateTime?
+  previousLocationLng Float?
+  previousLocationLat Float?
+
+  status          CustomerStatus @default(ACTIVE)
+
+  // Customer onboarding lifecycle. Driver installs the app on the
+  // customer's phone during tank delivery, walks them through terms,
+  // and `acceptedTermsAt` is stamped when the customer taps "I agree".
+  // Until then, the account is provisional — they can browse but not
+  // request refills (since they don't fully own the tank yet).
+  acceptedTermsAt    DateTime?
+  onboardedByDriverId String?
+  onboardedAt        DateTime?
+
+  balanceIqd      Int            @default(0)  // running balance in dinars
+  totalRefills    Int            @default(0)
+  lastRefillAt    DateTime?
+  registeredAt    DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  tanks           Tank[]
+  refillOrders    RefillOrder[]
+  deliveryOrders  DeliveryOrder[]
+
+  @@unique([tenantId, phone])
+  @@index([tenantId, status])
+  @@index([tenantId, district])
+}
+
+// ─── Drivers ──────────────────────────────────────────────────────────────────
+
+enum DriverStatus {
+  OFFLINE
+  AVAILABLE
+  ON_ROUTE
+  ON_BREAK
+}
+
+model Driver {
+  id                String         @id @default(cuid())
+  tenantId          String
+  tenant            Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId            String         @unique
+  user              User           @relation(fields: [userId], references: [id])
+
+  vehiclePlate      String?
+  baseSalaryIqd     Int            @default(0)
+  commissionPerRefillIqd Int       @default(0)
+  status            DriverStatus   @default(OFFLINE)
+  currentLng        Float?
+  currentLat        Float?
+  lastLocationAt    DateTime?
+  hiredAt           DateTime       @default(now())
+
+  refillOrders      RefillOrder[]
+  locations         DriverLocation[]
+  salaries          SalaryPayment[]
+
+  @@index([tenantId, status])
+}
+
+// Location pings stored for audit / replay. High write volume —
+// in production, partition by month or move to TimescaleDB.
+model DriverLocation {
+  id        BigInt   @id @default(autoincrement())
+  driverId  String
+  driver    Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  lng       Float
+  lat       Float
+  recordedAt DateTime @default(now())
+
+  @@index([driverId, recordedAt])
+}
+
+// ─── Orders ───────────────────────────────────────────────────────────────────
+
+enum RefillOrderStatus {
+  PENDING
+  ASSIGNED
+  EN_ROUTE
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+enum RefillOrderKind {
+  REFILL          // tank refill at customer site
+  TANK_DELIVERY   // first install — drop off the empty tank
+  TANK_RECLAIM    // pick the tank back up
+  WALKIN_SALE     // ad-hoc sale to a non-customer (e.g. the neighbour
+                  // who flagged the driver down). No tank assigned;
+                  // customer is optional. Tracked for accounting only.
+}
+
+enum PaymentMethod {
+  CASH
+  ZAINCASH
+  ASIA_HAWALA
+  CREDIT
+}
+
+model RefillOrder {
+  id              String              @id @default(cuid())
+  tenantId        String
+  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // customerId is required for normal refills but null for WALKIN_SALE,
+  // where the buyer is a one-time walk-up customer with no account.
+  customerId      String?
+  customer        Customer?           @relation(fields: [customerId], references: [id])
+
+  // Free-text capture for walk-in buyers (the neighbour's name + phone)
+  // so the plant has *some* trace even without a Customer row.
+  walkinBuyerName  String?
+  walkinBuyerPhone String?
+  walkinLiters     Int?
+
+  tankId          String?
+  tank            Tank?               @relation(fields: [tankId], references: [id])
+
+  driverId        String?
+  driver          Driver?             @relation(fields: [driverId], references: [id])
+
+  kind            RefillOrderKind     @default(REFILL)
+  status          RefillOrderStatus   @default(PENDING)
+
+  priceIqd        Int                 @default(1000)
+  paymentMethod   PaymentMethod?
+  paidAmountIqd   Int                 @default(0)
+  paidAt          DateTime?
+
+  requestedAt     DateTime            @default(now())
+  scheduledFor    DateTime?
+  assignedAt      DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  cancelReason    String?
+
+  proofPhotoUrl   String?
+  qrScanned       Boolean             @default(false)
+
+  // Bonus snapshot at completion time. Stored on the order itself so
+  // future bonus-rate changes don't retroactively alter past payouts.
+  bonusIqd        Int                 @default(0)
+
+  // GPS verification: driver's coordinates at the moment of completion.
+  // We compare these against the customer's registered location to flag
+  // refills logged from the wrong address.
+  completionLng   Float?
+  completionLat   Float?
+  gpsDistanceM    Int?                // distance from customer in metres
+  gpsVerified     Boolean             @default(false)
+
+  // Customer-side confirmation. After completion, we WhatsApp the customer
+  // a "did you receive this refill?" prompt. They confirm or dispute within
+  // 24h; unconfirmed refills are visible on the dashboard for follow-up.
+  customerConfirmedAt DateTime?
+  customerDisputedAt  DateTime?
+  disputeReason       String?
+
+  @@index([tenantId, status])
+  @@index([customerId, requestedAt])
+  @@index([driverId, status])
+  @@index([tenantId, customerConfirmedAt])
+}
+
+// ─── Mobile vendor (tuk-tuk) marketplace ──────────────────────────────────────
+
+enum VendorStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  SUSPENDED
+}
+
+enum VehicleType {
+  STOOTA
+  TUKTUK
+  SMALL_PICKUP
+}
+
+model Vendor {
+  id                String          @id @default(cuid())
+  // Vendors can be "platform-wide" (no tenant) or attached to a single plant.
+  tenantId          String?
+  tenant            Tenant?         @relation(fields: [tenantId], references: [id])
+
+  userId            String          @unique
+  user              User            @relation(fields: [userId], references: [id])
+
+  vehicleType       VehicleType
+  vehiclePlate      String?
+  maxCapacityLiters Int             @default(25)
+  status            VendorStatus    @default(PENDING_APPROVAL)
+
+  isAvailable       Boolean         @default(false)
+  currentLng        Float?
+  currentLat        Float?
+  lastLocationAt    DateTime?
+
+  walletBalanceIqd  Int             @default(0)
+  rating            Float           @default(5.0)
+  totalDeliveries   Int             @default(0)
+
+  deliveryOrders    DeliveryOrder[]
+  walletEntries     VendorWalletEntry[]
+}
+
+enum DeliveryOrderStatus {
+  SEARCHING
+  ACCEPTED
+  EN_ROUTE
+  DELIVERED
+  CANCELLED
+  EXPIRED
+}
+
+model DeliveryOrder {
+  id                String                 @id @default(cuid())
+
+  customerId        String
+  customer          Customer               @relation(fields: [customerId], references: [id])
+
+  vendorId          String?
+  vendor            Vendor?                @relation(fields: [vendorId], references: [id])
+
+  liters            Int                    // 5–25
+  priceIqd          Int
+  commissionIqd     Int                    // platform cut (~7–10%)
+  status            DeliveryOrderStatus    @default(SEARCHING)
+
+  pickupLng         Float?
+  pickupLat         Float?
+  dropLng           Float
+  dropLat           Float
+  dropAddress       String
+
+  paymentMethod     PaymentMethod          @default(CASH)
+  requestedAt       DateTime               @default(now())
+  acceptedAt        DateTime?
+  deliveredAt       DateTime?
+  cancelReason      String?
+
+  @@index([status, requestedAt])
+  @@index([vendorId, status])
+}
+
+enum WalletEntryKind {
+  EARNING
+  COMMISSION
+  WITHDRAWAL
+  ADJUSTMENT
+}
+
+model VendorWalletEntry {
+  id          String          @id @default(cuid())
+  vendorId    String
+  vendor      Vendor          @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  kind        WalletEntryKind
+  amountIqd   Int             // signed (+/-)
+  reference   String?         // delivery order id, withdrawal ref, etc.
+  note        String?
+  createdAt   DateTime        @default(now())
+
+  @@index([vendorId, createdAt])
+}
+
+// ─── Accounting ───────────────────────────────────────────────────────────────
+
+enum ExpenseCategory {
+  FUEL
+  MAINTENANCE
+  UTILITIES
+  PURCHASE
+  RENT
+  OTHER
+}
+
+model Expense {
+  id          String           @id @default(cuid())
+  tenantId    String
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  category    ExpenseCategory
+  amountIqd   Int
+  description String
+  receiptUrl  String?
+  occurredAt  DateTime         @default(now())
+  createdById String?
+  createdAt   DateTime         @default(now())
+
+  @@index([tenantId, occurredAt])
+  @@index([tenantId, category])
+}
+
+model SalaryPayment {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  driverId     String
+  driver       Driver   @relation(fields: [driverId], references: [id])
+
+  periodStart  DateTime
+  periodEnd    DateTime
+  baseIqd      Int
+  commissionIqd Int
+  bonusIqd     Int      @default(0)
+  deductionIqd Int      @default(0)
+  netIqd       Int
+  paidAt       DateTime?
+  note         String?
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId, periodStart])
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+enum NotificationChannel {
+  WHATSAPP
+  SMS
+  PUSH
+}
+
+enum NotificationKind {
+  REFILL_REMINDER
+  REFILL_WARNING
+  TANK_RECLAIM_NOTICE
+  DRIVER_EN_ROUTE
+  ORDER_COMPLETED
+  SUBSCRIPTION_REMINDER_14D
+  SUBSCRIPTION_REMINDER_7D
+  SUBSCRIPTION_EXPIRING_3D
+  SUBSCRIPTION_EXPIRED
+  CUSTOM
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+}
+
+model NotificationLog {
+  id          String                @id @default(cuid())
+  tenantId    String
+  tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  channel     NotificationChannel
+  kind        NotificationKind
+  recipient   String                // phone number
+  body        String
+  status      NotificationStatus    @default(QUEUED)
+  providerId  String?               // upstream message id
+  errorMsg    String?
+  sentAt      DateTime?
+  createdAt   DateTime              @default(now())
+
+  @@index([tenantId, kind, createdAt])
+  @@index([status])
+}
+
+// ─── Data monetization ────────────────────────────────────────────────────────
+
+enum DataReportCategory {
+  MARKET_ANNUAL       // "State of Water Distribution in Iraq YYYY"
+  OPPORTUNITY_ZONES   // underserved neighbourhoods
+  COMPETITOR_PRICING  // pricing intelligence
+  PLANT_PERFORMANCE   // self-report for the plant
+  CUSTOM
+}
+
+/**
+ * Aggregated reports sold to plants, investors, and partners.
+ * Personally identifying data is never included — only neighbourhood-
+ * level rollups and benchmarks.
+ */
+model DataReport {
+  id          String              @id @default(cuid())
+  title       String
+  description String
+  category    DataReportCategory
+  priceIqd    Int
+  fileUrl     String?             // generated PDF / Excel
+  publishedAt DateTime?
+  createdAt   DateTime            @default(now())
+
+  purchases   DataReportPurchase[]
+
+  @@index([category])
+}
+
+model DataReportPurchase {
+  id         String     @id @default(cuid())
+  reportId   String
+  report     DataReport @relation(fields: [reportId], references: [id])
+  buyerName  String
+  buyerKind  String     // "tenant", "external_company", "individual"
+  buyerEmail String?
+  amountIqd  Int
+  paidAt     DateTime?
+  createdAt  DateTime   @default(now())
+
+  @@index([reportId])
+}
+
+enum AdCampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+enum AdCategory {
+  GAS                 // home gas delivery
+  CLEANING            // tank/home cleaning
+  FILTERS             // RO maintenance
+  TELECOM             // internet, mobile plans
+  GROCERY             // FMCG, supermarkets
+  FINANCE             // micro-loans, BNPL
+  OTHER
+}
+
+/**
+ * Sponsored placements inside the customer app. Targets households by
+ * neighbourhood — never by individual identity. The plant takes no cut;
+ * platform earns the CPM/CPC directly.
+ */
+model AdCampaign {
+  id           String           @id @default(cuid())
+  advertiser   String
+  category     AdCategory
+  title        String
+  body         String
+  ctaText      String           @default("اطلب الآن")
+  ctaUrl       String?
+  imageUrl     String?
+
+  status       AdCampaignStatus @default(DRAFT)
+  budgetIqd    Int
+  spentIqd     Int              @default(0)
+  cpcIqd       Int              @default(50)   // cost per click in IQD
+
+  targetDistricts String[]
+  startAt      DateTime
+  endAt        DateTime
+  createdAt    DateTime         @default(now())
+
+  impressions  AdImpression[]
+
+  @@index([status, startAt])
+}
+
+model AdImpression {
+  id         BigInt     @id @default(autoincrement())
+  campaignId String
+  campaign   AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  customerId String?    // anonymised after 30 days
+  district   String?
+  clicked    Boolean    @default(false)
+  occurredAt DateTime   @default(now())
+
+  @@index([campaignId, occurredAt])
+}
+
+enum BulkDealStatus {
+  OPEN
+  COLLECTING
+  ORDERED
+  FULFILLED
+  CANCELLED
+}
+
+/**
+ * Group-buying for plants. Platform aggregates demand across many plants
+ * (filters, bottles, fuel cards, vehicle maintenance) to negotiate
+ * supplier discounts and take a commission.
+ */
+model BulkDeal {
+  id            String         @id @default(cuid())
+  title         String         // "فلاتر RO Pentair × 100"
+  supplier      String
+  category      String         // filters, bottles, fuel, maintenance
+  unitPriceIqd  Int
+  retailPriceIqd Int           // shown as "compare at" price
+  minOrder      Int            @default(1)
+  commissionPct Float          @default(10)   // platform cut
+
+  status        BulkDealStatus @default(OPEN)
+  openUntil     DateTime
+  fulfilledAt   DateTime?
+  createdAt     DateTime       @default(now())
+
+  participants  BulkDealParticipation[]
+
+  @@index([status, openUntil])
+}
+
+model BulkDealParticipation {
+  id        String   @id @default(cuid())
+  dealId    String
+  deal      BulkDeal @relation(fields: [dealId], references: [id])
+  tenantId  String
+  quantity  Int
+  createdAt DateTime @default(now())
+
+  @@unique([dealId, tenantId])
+  @@index([tenantId])
+}

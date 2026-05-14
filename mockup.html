@@ -1,0 +1,3608 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ماء — منصة معامل المياه (نموذج تجريبي)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet" />
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: { sans: ['Cairo', 'sans-serif'] },
+      colors: {
+        aqua: {
+          50:'#ecfeff', 100:'#cffafe', 200:'#a5f3fc', 300:'#67e8f9',
+          400:'#22d3ee', 500:'#06b6d4', 600:'#0891b2', 700:'#0e7490',
+          800:'#155e75', 900:'#164e63',
+        },
+        sea: {
+          400:'#38bdf8', 500:'#0ea5e9', 600:'#0284c7', 700:'#0369a1',
+        },
+        warn:  { 400:'#fbbf24', 500:'#f59e0b', 600:'#d97706' },
+        danger:{ 400:'#f87171', 500:'#ef4444', 600:'#dc2626' },
+        leaf:  { 400:'#4ade80', 500:'#22c55e', 600:'#16a34a' },
+      },
+      backgroundImage: {
+        'aqua-gradient': 'linear-gradient(135deg,#06b6d4 0%,#0284c7 100%)',
+        'sea-gradient':  'linear-gradient(135deg,#0ea5e9 0%,#0369a1 100%)',
+        'leaf-gradient': 'linear-gradient(135deg,#4ade80 0%,#16a34a 100%)',
+        'warn-gradient': 'linear-gradient(135deg,#fbbf24 0%,#d97706 100%)',
+        'danger-gradient': 'linear-gradient(135deg,#f87171 0%,#dc2626 100%)',
+      },
+    },
+  },
+};
+</script>
+<style>
+  body { font-family:'Cairo',sans-serif; background:#F1F5F9; }
+  .phone {
+    width:380px; height:780px; border-radius:44px; background:#0f172a;
+    padding:14px; box-shadow:0 25px 60px rgba(0,0,0,.35), inset 0 0 0 2px #1e293b; position:relative;
+  }
+  .phone::before {
+    content:''; position:absolute; top:14px; left:50%; transform:translateX(-50%);
+    width:130px; height:28px; background:#0f172a; border-radius:0 0 18px 18px; z-index:20;
+  }
+  .phone-screen { width:100%; height:100%; border-radius:32px; overflow:hidden; background:#f8fafc; position:relative; }
+  .desktop {
+    width:100%; max-width:1200px; height:780px; border-radius:16px;
+    overflow:hidden; background:#fff; box-shadow:0 25px 60px rgba(0,0,0,.18);
+    border:1px solid #e2e8f0;
+  }
+  .scroll-area::-webkit-scrollbar { width:6px; height:6px; }
+  .scroll-area::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:3px; }
+  .map-bg {
+    background-color:#ecfeff;
+    background-image:
+      linear-gradient(rgba(6,182,212,.15) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(6,182,212,.15) 1px, transparent 1px),
+      radial-gradient(circle at 30% 40%, rgba(14,165,233,.18) 0, transparent 30%),
+      radial-gradient(circle at 70% 60%, rgba(34,197,94,.16) 0, transparent 28%);
+    background-size:36px 36px, 36px 36px, 100% 100%, 100% 100%;
+  }
+  .pulse-dot {
+    position:relative; width:14px; height:14px; background:#06b6d4; border-radius:999px;
+    box-shadow:0 0 0 4px rgba(6,182,212,.25);
+  }
+  .pulse-dot::after {
+    content:''; position:absolute; inset:-6px; border:2px solid #06b6d4; border-radius:999px;
+    animation:ripple 1.6s ease-out infinite; opacity:0;
+  }
+  @keyframes ripple { 0% { transform:scale(.4); opacity:.8; } 100% { transform:scale(2.6); opacity:0; } }
+  .seg-active { background:#fff; color:#0f172a; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .nav-active { background:linear-gradient(135deg,#06b6d4,#0284c7); color:white; box-shadow:0 4px 12px rgba(6,182,212,.3); }
+  .chip { padding:4px 12px; border-radius:999px; font-size:11px; font-weight:700; }
+  .chip-sm { padding:2px 8px; border-radius:999px; font-size:10px; font-weight:700; }
+  .status-active     { background:#dcfce7; color:#166534; }
+  .status-atrisk     { background:#fef3c7; color:#92400e; }
+  .status-inplant    { background:#e0e7ff; color:#4338ca; }
+  .status-assigned   { background:#dbeafe; color:#1e40af; }
+  .status-pending    { background:#fef3c7; color:#92400e; }
+  .status-enroute    { background:#ffedd5; color:#9a3412; }
+  .status-completed  { background:#dcfce7; color:#166534; }
+  .status-cancelled  { background:#fee2e2; color:#991b1b; }
+  .toast {
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+    background:#0f172a; color:white; padding:12px 22px; border-radius:14px;
+    font-weight:700; z-index:100; opacity:0; transition:opacity .25s, transform .25s;
+    pointer-events:none; box-shadow:0 10px 25px rgba(0,0,0,.25);
+  }
+  .toast.show { opacity:1; transform:translate(-50%,-8px); }
+  .toast.success { background:linear-gradient(135deg,#06b6d4,#0284c7); }
+  .toast.warn { background:linear-gradient(135deg,#fbbf24,#d97706); }
+  .num { font-variant-numeric:tabular-nums; }
+  .pill { padding:6px 14px; border-radius:999px; font-size:12px; font-weight:700; white-space:nowrap; }
+  .gcard-1 { background:linear-gradient(135deg,#06b6d4,#0284c7); }
+  .gcard-2 { background:linear-gradient(135deg,#22c55e,#16a34a); }
+  .gcard-3 { background:linear-gradient(135deg,#fbbf24,#d97706); }
+  .gcard-4 { background:linear-gradient(135deg,#f87171,#dc2626); }
+  .progress-bar { height:8px; border-radius:999px; background:#e2e8f0; overflow:hidden; }
+  .progress-fill { height:100%; background:linear-gradient(90deg,#06b6d4,#0284c7); border-radius:999px; transition:width .4s ease; }
+  .progress-fill-warn { background:linear-gradient(90deg,#fbbf24,#d97706); }
+  .progress-fill-danger { background:linear-gradient(90deg,#f87171,#dc2626); }
+  .row-hov:hover { background:#f1f5f9; }
+  .water-fill {
+    background: linear-gradient(180deg, transparent 0%, transparent var(--empty), #67e8f9 var(--empty), #06b6d4 100%);
+    transition: --empty 1s ease;
+  }
+  .tank-shape {
+    background: linear-gradient(180deg,#0f766e 0%,#0e7490 100%);
+    border-radius: 12px 12px 16px 16px;
+    position:relative; overflow:hidden;
+  }
+  .bar-chart-col { display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .bar { width:22px; border-radius:6px 6px 0 0; transition:height .4s ease; background:linear-gradient(180deg,#22d3ee,#0891b2); }
+  .bar.active { background:linear-gradient(180deg,#fbbf24,#d97706); }
+  .ripple-bg {
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(255,255,255,.1) 0, transparent 40%),
+      radial-gradient(circle at 80% 70%, rgba(255,255,255,.08) 0, transparent 40%);
+  }
+  .tab-active { background:linear-gradient(135deg,#cffafe,#a5f3fc); color:#0e7490; }
+  .mode-toggle { background:linear-gradient(135deg,#0f172a,#1e293b); }
+  .step-done { background:#06b6d4; color:white; }
+  .step-active { background:#06b6d4; color:white; box-shadow:0 0 0 6px rgba(6,182,212,.18); }
+  .step-pending { background:#e2e8f0; color:#64748b; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ============================ TOP BAR ============================ -->
+<header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+  <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
+    <div class="flex items-center gap-3">
+      <div class="w-12 h-12 rounded-2xl bg-aqua-gradient flex items-center justify-center text-white text-2xl shadow-lg">💧</div>
+      <div>
+        <div class="font-black text-lg leading-tight text-slate-900">ماء</div>
+        <div class="text-[11px] text-slate-500">منصة إدارة معامل المياه والتوصيل • العراق</div>
+      </div>
+    </div>
+    <div class="bg-slate-100 p-1 rounded-2xl flex gap-1 text-sm font-bold">
+      <button onclick="setView('customer')" id="seg-customer" class="seg-active px-4 py-2 rounded-xl transition flex items-center gap-1.5">📱 <span>الزبون</span></button>
+      <button onclick="setView('worker')"   id="seg-worker"   class="px-4 py-2 rounded-xl transition text-slate-600 flex items-center gap-1.5">🚛 <span>العامل</span></button>
+      <button onclick="setView('admin')"    id="seg-admin"    class="px-4 py-2 rounded-xl transition text-slate-600 flex items-center gap-1.5">🖥️ <span>المعمل</span></button>
+      <button onclick="setView('platform')" id="seg-platform" class="px-4 py-2 rounded-xl transition text-slate-600 flex items-center gap-1.5">👑 <span>المنصة</span></button>
+    </div>
+    <div class="text-xs text-slate-500 hidden md:flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-leaf-500 animate-pulse"></span>
+      نموذج تفاعلي — جربه بالضغط
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto p-6">
+
+  <!-- ===================== CUSTOMER APP ===================== -->
+  <section id="view-customer" class="flex justify-center">
+    <div class="phone">
+      <div class="phone-screen">
+        <div class="absolute top-0 inset-x-0 h-12 flex items-center justify-between px-7 pt-1.5 text-xs font-bold text-slate-900 z-10">
+          <span class="num">9:41</span>
+          <span class="flex gap-1 items-center"><span>📶</span><span>🔋</span></span>
+        </div>
+        <div class="absolute inset-0 pt-12 pb-20 overflow-y-auto scroll-area" id="cust-content"></div>
+        <div class="absolute bottom-0 inset-x-0 bg-white border-t border-slate-200 grid grid-cols-3 py-1.5 z-10">
+          <button onclick="custGo('home')"     class="cust-tab flex flex-col items-center gap-0.5 py-1 rounded-lg" data-tab="home"><span class="text-lg">🏠</span><span class="text-[10px] font-bold">الرئيسية</span></button>
+          <button onclick="custGo('orders')"   class="cust-tab flex flex-col items-center gap-0.5 py-1 rounded-lg" data-tab="orders"><span class="text-lg">📋</span><span class="text-[10px] font-bold">طلباتي</span></button>
+          <button onclick="custGo('profile')"  class="cust-tab flex flex-col items-center gap-0.5 py-1 rounded-lg" data-tab="profile"><span class="text-lg">👤</span><span class="text-[10px] font-bold">حسابي</span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== WORKER APP ===================== -->
+  <section id="view-worker" class="hidden flex justify-center">
+    <div class="phone">
+      <div class="phone-screen">
+        <div class="absolute top-0 inset-x-0 h-12 flex items-center justify-between px-7 pt-1.5 text-xs font-bold text-slate-900 z-10">
+          <span class="num">9:41</span>
+          <span class="flex gap-1 items-center"><span>📶</span><span>🔋</span></span>
+        </div>
+        <div class="absolute inset-0 pt-12 pb-20 overflow-y-auto scroll-area" id="wrk-content"></div>
+        <div class="absolute bottom-0 inset-x-0 bg-white border-t border-slate-200 grid grid-cols-4 py-1.5 z-10">
+          <button onclick="wrkGo('home')"    class="wrk-tab flex flex-col items-center gap-0.5 py-1 rounded-lg" data-tab="home"><span class="text-lg">🏠</span><span class="text-[10px] font-bold">الرئيسية</span></button>
+          <button onclick="wrkGo('history')" class="wrk-tab flex flex-col items-center gap-0.5 py-1 rounded-lg" data-tab="history"><span class="text-lg">📜</span><span class="text-[10px] font-bold">السجل</span></button>
+          <button onclick="wrkGo('wallet')"  class="wrk-tab flex flex-col items-center gap-0.5 py-1 rounded-lg" data-tab="wallet"><span class="text-lg">💰</span><span class="text-[10px] font-bold">محفظتي</span></button>
+          <button onclick="wrkGo('profile')" class="wrk-tab flex flex-col items-center gap-0.5 py-1 rounded-lg" data-tab="profile"><span class="text-lg">👤</span><span class="text-[10px] font-bold">حسابي</span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== PLATFORM ADMIN DASHBOARD ===================== -->
+  <section id="view-platform" class="hidden">
+    <div class="desktop flex">
+      <aside class="w-60 bg-gradient-to-b from-slate-900 to-slate-800 text-slate-300 flex flex-col p-3 gap-1 shrink-0">
+        <div class="flex items-center gap-2 px-2 pb-3 mb-2 border-b border-slate-700">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-xl shadow-lg">👑</div>
+          <div>
+            <div class="font-black text-white text-sm">منصة ماء</div>
+            <div class="text-[10px] text-amber-300">صاحب المنصة</div>
+          </div>
+        </div>
+        <button onclick="platGo('overview')"      class="plat-nav text-right px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition" data-nav="overview"><span>📊</span><span>نظرة عامة</span></button>
+        <button onclick="platGo('plants')"        class="plat-nav text-right px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition" data-nav="plants"><span>🏭</span><span>المعامل</span></button>
+        <button onclick="platGo('subscriptions')" class="plat-nav text-right px-3 py-2 rounded-lg flex items-center justify-between gap-2 text-sm font-bold transition" data-nav="subscriptions">
+          <span class="flex items-center gap-2"><span>💳</span><span>الاشتراكات</span></span>
+          <span class="bg-warn-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">3</span>
+        </button>
+        <button onclick="platGo('revenue')"       class="plat-nav text-right px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition" data-nav="revenue"><span>💰</span><span>الإيرادات</span></button>
+        <button onclick="platGo('data')"          class="plat-nav text-right px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition" data-nav="data"><span>📊</span><span>منتجات البيانات</span></button>
+        <button onclick="platGo('ads')"           class="plat-nav text-right px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition" data-nav="ads"><span>📣</span><span>الإعلانات</span></button>
+        <button onclick="platGo('marketplace')"   class="plat-nav text-right px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition" data-nav="marketplace"><span>🤝</span><span>اتفاقيات الجملة</span></button>
+        <button onclick="platGo('support')"       class="plat-nav text-right px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition" data-nav="support"><span>🛟</span><span>الدعم الفني</span></button>
+        <div class="mt-auto pt-3 border-t border-slate-700 px-2 flex items-center gap-2 text-xs">
+          <div class="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white font-black">M</div>
+          <div>
+            <div class="text-white font-bold">صاحب المنصة</div>
+            <div class="text-amber-300">platform_admin</div>
+          </div>
+        </div>
+      </aside>
+      <main class="flex-1 overflow-y-auto scroll-area bg-slate-50" id="plat-content"></main>
+    </div>
+  </section>
+
+  <!-- ===================== ADMIN DASHBOARD ===================== -->
+  <section id="view-admin" class="hidden">
+    <div class="desktop flex">
+      <aside class="w-60 bg-slate-900 text-slate-300 flex flex-col p-3 gap-1 shrink-0">
+        <div class="flex items-center gap-2 px-2 pb-3 mb-2 border-b border-slate-700">
+          <div class="w-10 h-10 rounded-xl bg-aqua-gradient flex items-center justify-center text-white text-xl shadow-lg">💧</div>
+          <div>
+            <div class="font-black text-white text-sm">معمل النقاء</div>
+            <div class="text-[10px] text-slate-400">لوحة المعمل</div>
+          </div>
+        </div>
+        <button onclick="admGo('overview')" class="adm-nav text-right px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition" data-nav="overview"><span>📊</span><span>الرئيسية</span></button>
+        <button onclick="admGo('tanks')"    class="adm-nav text-right px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition" data-nav="tanks"><span>🛢️</span><span>الخزانات</span></button>
+        <button onclick="admGo('customers')" class="adm-nav text-right px-3 py-2 rounded-lg flex items-center justify-between gap-2 text-sm font-bold transition" data-nav="customers">
+          <span class="flex items-center gap-2"><span>👥</span><span>الزبائن</span></span>
+          <span id="adm-atrisk-badge" class="bg-warn-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">7</span>
+        </button>
+        <button onclick="admGo('drivers')"  class="adm-nav text-right px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition" data-nav="drivers"><span>🚛</span><span>السائقون</span></button>
+        <button onclick="admGo('orders')"   class="adm-nav text-right px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition" data-nav="orders"><span>📋</span><span>الطلبات</span></button>
+        <button onclick="admGo('accounting')" class="adm-nav text-right px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition" data-nav="accounting"><span>💵</span><span>المحاسبة</span></button>
+        <button onclick="admGo('bonuses')"     class="adm-nav text-right px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition" data-nav="bonuses"><span>🎁</span><span>المكافآت</span></button>
+        <button onclick="admGo('ai')"          class="adm-nav text-right px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition" data-nav="ai"><span>🧠</span><span>تحليلات AI</span></button>
+        <button onclick="admGo('marketplace')" class="adm-nav text-right px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition" data-nav="marketplace"><span>🛍️</span><span>عروض الجملة</span></button>
+        <button onclick="admGo('subscription')" class="adm-nav text-right px-3 py-2 rounded-lg flex items-center justify-between gap-2 text-sm font-bold transition" data-nav="subscription">
+          <span class="flex items-center gap-2"><span>💳</span><span>الاشتراك</span></span>
+          <span id="adm-sub-badge" class="bg-warn-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full hidden"></span>
+        </button>
+        <button onclick="admGo('notifications')" class="adm-nav text-right px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition" data-nav="notifications"><span>🔔</span><span>التنبيهات</span></button>
+        <div class="mt-auto pt-3 border-t border-slate-700 px-2 flex items-center gap-2 text-xs">
+          <div class="w-9 h-9 rounded-full bg-aqua-gradient flex items-center justify-center text-white font-black">أ</div>
+          <div>
+            <div class="text-white font-bold">أبو علي</div>
+            <div class="text-slate-400">صاحب المعمل</div>
+          </div>
+        </div>
+      </aside>
+      <main class="flex-1 overflow-y-auto scroll-area bg-slate-50" id="adm-content"></main>
+    </div>
+  </section>
+
+</main>
+
+<div id="toast" class="toast">تم</div>
+
+<!-- ============================ DATA & LOGIC ============================ -->
+<script>
+/* ===== Mock data ===== */
+const tankPrice = 1000;
+const reminderDays = 25;
+const warningDays = 35;
+const reclaimDays = 45;
+
+// Customer's data (logged-in customer = أم محمد)
+const myProfile = {
+  fullName:'أم محمد', phone:'07710000001', district:'الكرادة',
+  addressLine:'الكرادة، شارع 62، بيت 14',
+  locationCapturedAt:'2025-09-12', locationCapturedBy:'DRIVER_AT_INSTALL',
+  tank: { qrCode:'MAA-DEMO-A1B2C3D4', capacity:500, lastRefillAt:'2026-04-23', status:'ACTIVE' },
+  totalRefills:14, balanceIqd:0,
+  movedAt: null,
+};
+
+const myOrders = [
+  { id:'r-2026-129', date:'2026-05-11', time:'9:35', kind:'REFILL', amount:1000, status:'completed', driver:'علي عبد الله', awaitingConfirm:true, gpsVerified:true, gpsDistance:18 },
+  { id:'r-2026-118', date:'2026-04-23', kind:'REFILL', amount:1000, status:'completed', driver:'كريم السائق', customerConfirmedAt:'2026-04-23' },
+  { id:'r-2026-101', date:'2026-03-25', kind:'REFILL', amount:1000, status:'completed', driver:'كريم السائق', customerConfirmedAt:'2026-03-25' },
+  { id:'r-2026-082', date:'2026-02-26', kind:'REFILL', amount:1000, status:'completed', driver:'حسين', customerConfirmedAt:'2026-02-26' },
+  { id:'r-2026-064', date:'2026-01-30', kind:'REFILL', amount:1000, status:'completed', driver:'كريم السائق', customerConfirmedAt:'2026-01-30' },
+  { id:'r-2026-051', date:'2026-01-02', kind:'TANK_DELIVERY', amount:0, status:'completed', driver:'كريم السائق', customerConfirmedAt:'2026-01-02' },
+];
+
+/* Worker data — MVP: drivers only. Vendor mode is feature-flagged off. */
+const workerProfile = {
+  name:'علي عبد الله', phone:'07700000002', plate:'12345 بغداد',
+  capabilities:['driver'],
+  driver:{ baseSalary:500_000, commissionPerRefill:100, statusToday:'AVAILABLE', plant:'معمل النقاء' },
+};
+
+const driverTasks = [
+  { id:'t1', kind:'REFILL',        customer:'أم محمد',    district:'الكرادة',   address:'شارع 62 بيت 14', distance:'0.4 كم', priority:1, status:'EN_ROUTE',  scheduledAt:'9:30', tankQR:'MAA-DEMO-A1B2C3D4' },
+  { id:'t2', kind:'REFILL',        customer:'أبو حسن',    district:'الكاظمية',  address:'حي الحسين، 22',   distance:'2.1 كم', priority:2, status:'ASSIGNED',  scheduledAt:'10:15', tankQR:'MAA-DEMO-E5F6G7H8' },
+  { id:'t3', kind:'TANK_DELIVERY', customer:'حيدر جواد',  district:'الجادرية',  address:'شارع 14 رمضان',   distance:'5.4 كم', priority:3, status:'ASSIGNED',  scheduledAt:'11:00', tankQR:'MAA-DEMO-NEW00001' },
+  { id:'t4', kind:'REFILL',        customer:'أم زينب',    district:'المنصور',   address:'حي المعلمين 102', distance:'7.2 كم', priority:4, status:'ASSIGNED',  scheduledAt:'13:30', tankQR:'MAA-DEMO-K9L0M1N2' },
+  { id:'t5', kind:'TANK_RECLAIM',  customer:'أبو فاطمة',  district:'البياع',    address:'محلة 824',         distance:'9.1 كم', priority:5, status:'ASSIGNED',  scheduledAt:'15:00', tankQR:'MAA-DEMO-OLD0099X' },
+];
+
+const workerHistory = [
+  { id:'r-2026-118', date:'2026-05-09 10:24', mode:'driver', kind:'تعبئة', customer:'أم محمد',  amount:1000,  status:'مكتمل' },
+  { id:'r-2026-117', date:'2026-05-09 09:55', mode:'driver', kind:'تعبئة', customer:'أبو علي',   amount:1000,  status:'مكتمل' },
+  { id:'r-2026-116', date:'2026-05-09 09:10', mode:'driver', kind:'تعبئة', customer:'كاظم علي', amount:1000, status:'مكتمل' },
+  { id:'r-2026-115', date:'2026-05-08 14:10', mode:'driver', kind:'توصيل خزان', customer:'حيدر', amount:0,    status:'مكتمل' },
+  { id:'r-2026-114', date:'2026-05-08 11:30', mode:'driver', kind:'تعبئة', customer:'أم زينب',  amount:1000, status:'مكتمل' },
+];
+
+/* Admin data */
+const tankInventory = { IN_PLANT:24, ASSIGNED:312, AT_RISK:7, RECLAIMED:8, DAMAGED:3 };
+const adminStats = {
+  customers:312, drivers:4, todayRefills:38, monthRevenue:38_240_000, atRiskCustomers:7,
+};
+
+const adminCustomers = [
+  { name:'أم محمد',    phone:'07710000001', district:'الكرادة',   refills:14, lastDays:17, status:'ACTIVE',  termsAcceptedAt:'2025-09-12' },
+  { name:'أبو حسن',     phone:'07710000002', district:'الكاظمية',  refills:11, lastDays:23, status:'ACTIVE',  termsAcceptedAt:'2025-10-04' },
+  { name:'حيدر جواد',   phone:'07710000003', district:'الجادرية',  refills:0,  lastDays:0,  status:'NEW',     termsAcceptedAt:'2026-05-09' },
+  { name:'سارة محمد',   phone:'07710000004', district:'المنصور',   refills:8,  lastDays:32, status:'AT_RISK', termsAcceptedAt:'2025-12-22' },
+  { name:'أبو فاطمة',   phone:'07710000005', district:'البياع',    refills:6,  lastDays:41, status:'AT_RISK', termsAcceptedAt:'2025-11-08' },
+  { name:'كاظم علي',     phone:'07710000006', district:'الدورة',    refills:13, lastDays:18, status:'ACTIVE',  termsAcceptedAt:null },
+];
+
+const adminDrivers = [
+  { name:'علي عبد الله', phone:'07700000002', plate:'12345 بغداد', refills:182, status:'AVAILABLE', salary:500_000, commission:18_200 },
+  { name:'كريم محمود',   phone:'07700000003', plate:'87654 بغداد', refills:165, status:'ON_ROUTE',  salary:500_000, commission:16_500 },
+  { name:'حسين رياض',    phone:'07700000004', plate:'33221 بغداد', refills:148, status:'ON_BREAK',  salary:450_000, commission:14_800 },
+  { name:'محمد كاظم',    phone:'07700000005', plate:'99887 بغداد', refills:140, status:'AVAILABLE', salary:450_000, commission:14_000 },
+];
+
+/* Refills awaiting customer confirmation — surfaced on admin dashboard
+   so the plant can chase disputed/unconfirmed deliveries quickly. */
+const unconfirmedRefills = [
+  { code:'r-2026-129', customer:'أم محمد',  driver:'علي عبد الله', time:'9:35',  hoursAgo:1, gpsOk:true,  amount:1000 },
+  { code:'r-2026-122', customer:'فاطمة',     driver:'كريم محمود',   time:'أمس',   hoursAgo:14, gpsOk:true, amount:1000 },
+  { code:'r-2026-119', customer:'كرار',      driver:'حسين رياض',    time:'أمس',   hoursAgo:22, gpsOk:false, amount:1000, gpsDistance:380 },
+];
+
+const adminOrders = [
+  { code:'r-2026-128', customer:'أم محمد',    district:'الكرادة',  driver:'علي عبد الله', amount:1000, status:'EN_ROUTE',  time:'9:25' },
+  { code:'r-2026-127', customer:'أبو حسن',    district:'الكاظمية', driver:'علي عبد الله', amount:1000, status:'ASSIGNED',  time:'9:10' },
+  { code:'r-2026-126', customer:'كاظم علي',   district:'الدورة',   driver:'كريم محمود',   amount:1000, status:'COMPLETED', time:'8:55' },
+  { code:'r-2026-125', customer:'سارة محمد',  district:'المنصور',  driver:null,           amount:1000, status:'PENDING',   time:'8:40' },
+  { code:'r-2026-124', customer:'أم زينب',    district:'الكاظمية', driver:'حسين رياض',    amount:1000, status:'COMPLETED', time:'8:20' },
+  { code:'r-2026-123', customer:'حيدر جواد',  district:'الجادرية', driver:'محمد كاظم',    amount:0,    status:'COMPLETED', time:'8:05', kind:'TANK_DELIVERY' },
+];
+
+const adminNotifications = [
+  { time:'10:00', kind:'SUBSCRIPTION_REMINDER_7D', recipient:'أبو علي (مالك المعمل)', channel:'WhatsApp', status:'DELIVERED' },
+  { time:'9:01',  kind:'REFILL_WARNING',  recipient:'أبو فاطمة', channel:'WhatsApp', status:'SENT' },
+  { time:'9:01',  kind:'REFILL_REMINDER', recipient:'سارة محمد', channel:'WhatsApp', status:'SENT' },
+  { time:'9:01',  kind:'REFILL_REMINDER', recipient:'فاطمة كاظم', channel:'WhatsApp', status:'DELIVERED' },
+  { time:'9:00',  kind:'REFILL_REMINDER', recipient:'كرار حسن',   channel:'WhatsApp', status:'FAILED' },
+  { time:'8:59',  kind:'REFILL_REMINDER', recipient:'مهدي علي',   channel:'SMS',      status:'DELIVERED' },
+];
+
+const monthRevenueData = [
+  { m:'كانون', v:24_500_000 },
+  { m:'شباط',  v:28_120_000 },
+  { m:'آذار',  v:31_400_000 },
+  { m:'نيسان', v:34_800_000 },
+  { m:'أيار',  v:38_240_000 },
+];
+
+/* ===== State ===== */
+/* The plant owner here has 3 branches. The active branch drives all
+   admin views; "all" means roll-up across the group. */
+const myPlants = [
+  { id:'p1', name:'معمل النقاء — الكرادة',  city:'بغداد',  customers:312, refills:38, revenue:14_240_000 },
+  { id:'p2', name:'معمل النقاء — المنصور',  city:'بغداد',  customers:218, refills:24, revenue:9_840_000 },
+  { id:'p3', name:'معمل النقاء — البصرة',   city:'البصرة', customers:184, refills:19, revenue:7_220_000 },
+];
+
+const platformPlants = [
+  { id:'p1', name:'معمل النقاء — الكرادة',  group:'مجموعة النقاء', owner:'أبو علي',     plan:'PRO',       status:'ACTIVE',  customers:312, monthsToRenew:0.6 },
+  { id:'p2', name:'معمل النقاء — المنصور',  group:'مجموعة النقاء', owner:'أبو علي',     plan:'PRO',       status:'ACTIVE',  customers:218, monthsToRenew:0.6 },
+  { id:'p3', name:'معمل النقاء — البصرة',   group:'مجموعة النقاء', owner:'أبو علي',     plan:'PRO',       status:'ACTIVE',  customers:184, monthsToRenew:0.6 },
+  { id:'p4', name:'مياه الفرات',             group:null,             owner:'حيدر عبد', plan:'STARTER',   status:'ACTIVE',  customers:74,  monthsToRenew:0.1 },
+  { id:'p5', name:'معمل الزلال',             group:null,             owner:'كرار حسن', plan:'BUSINESS',  status:'ACTIVE',  customers:1240, monthsToRenew:0.9 },
+  { id:'p6', name:'مياه الرافدين',           group:null,             owner:'سعد محمود', plan:'PRO',      status:'TRIAL',   customers:38,  monthsToRenew:-0.1 },
+  { id:'p7', name:'معمل الينابيع',           group:null,             owner:'فاضل علي',  plan:'STARTER',  status:'PAST_DUE', customers:122, monthsToRenew:-0.3 },
+];
+
+const planPrices = { STARTER:25_000, PRO:80_000, BUSINESS:180_000, ENTERPRISE:400_000 };
+const planLabels = { STARTER:'STARTER', PRO:'PRO', BUSINESS:'BUSINESS', ENTERPRISE:'ENTERPRISE' };
+
+/* Demo subscription: 6 days until renewal — triggers the 7-day banner. */
+const mySubscription = {
+  plan: 'PRO',
+  priceIqd: 80_000,
+  startsAt: '2026-04-17',
+  endsAt:   '2026-05-17',
+  daysLeft: 6,
+};
+
+const state = {
+  view:'customer',
+  cust:{ tab:'home', moveOpen:false, onboarded:true },
+  wrk: { tab:'home', scan:{ phase:'idle', error:null }, online:true, queuedCount:0, walkin:{ open:false, mode:null, search:'', selectedId:null }, reclaim:{ open:false, reason:null, taskId:null } },
+  adm: { nav:'overview', activePlant:'p1', plantSwitcherOpen:false, bonuses:{ refill:50, delivery:5000, reclaim:0, newCustomer:5000 }, subscription: mySubscription },
+  plat:{ nav:'overview' },
+};
+
+/* Registered customers the driver can look up for an unscheduled refill.
+   In production these come from /customers (filtered by plant). */
+const driverKnownCustomers = [
+  { id:'c1', name:'أم محمد',     phone:'07710000001', district:'الكرادة',   tankQR:'MAA-DEMO-A1B2C3D4', capacity:500, lastDays:17, balance:0,      addressLine:'شارع 62، بيت 14' },
+  { id:'c2', name:'أبو حسن',     phone:'07710000002', district:'الكاظمية',  tankQR:'MAA-DEMO-E5F6G7H8', capacity:350, lastDays:23, balance:0,      addressLine:'حي الحسين 22' },
+  { id:'c3', name:'سارة محمد',   phone:'07710000004', district:'المنصور',   tankQR:'MAA-DEMO-K9L0M1N2', capacity:500, lastDays:32, balance:-1000,  addressLine:'حي المعلمين 102' },
+  { id:'c4', name:'كاظم علي',     phone:'07710000006', district:'الدورة',    tankQR:'T-1024',            capacity:500, lastDays:18, balance:0,      addressLine:'محلة 832' },
+  { id:'c5', name:'أبو فاطمة',   phone:'07710000005', district:'البياع',    tankQR:'MAA-DEMO-OLD0099X', capacity:350, lastDays:41, balance:0,      addressLine:'محلة 824' },
+  { id:'c6', name:'حيدر جواد',    phone:'07710000003', district:'الجادرية',  tankQR:'MAA-DEMO-NEW00001', capacity:500, lastDays:2,  balance:0,      addressLine:'شارع 14 رمضان' },
+];
+
+/* Refills done today without a prior app order ("بيع فوري" — instant refill).
+   These customers ARE registered; they just flagged the truck down. */
+const walkinSalesToday = [
+  { id:'w1', driver:'علي عبد الله', customer:'كاظم علي',   district:'الدورة',   tankQR:'T-1024',            amount:1000, time:'10:42' },
+  { id:'w2', driver:'كريم محمود',   customer:'حيدر جواد',  district:'الجادرية', tankQR:'MAA-DEMO-NEW00001', amount:1000, time:'11:18' },
+];
+
+const pendingApprovals = [
+  { id:'pc1', name:'كاظم جواد',  phone:'07710099001', district:'الكرادة',  byDriver:'علي عبد الله', time:'منذ ٢٠ د', gps:'موقع مأخوذ' },
+  { id:'pc2', name:'أم باسم',     phone:'07710099002', district:'الكاظمية', byDriver:'كريم محمود',   time:'منذ ٤٥ د', gps:'موقع مأخوذ' },
+];
+
+/* ===== helpers ===== */
+const fmt = n => Number(n).toLocaleString('en-US') + ' د.ع';
+const fmtShort = n => {
+  if (n>=1_000_000) return (n/1_000_000).toFixed(1).replace(/\.0$/,'')+'م د.ع';
+  if (n>=1000) return (n/1000).toFixed(0)+'ك د.ع';
+  return Number(n).toLocaleString('en-US')+' د.ع';
+};
+function daysSince(dateStr) {
+  const d = new Date(dateStr); const now = new Date('2026-05-10');
+  return Math.floor((now - d) / 86400000);
+}
+function tankHealthLabel(days) {
+  if (days < reminderDays) return { label:`خزانك ممتلئ (${reminderDays - days} يوم على التذكير)`, color:'text-leaf-600', pct:Math.min(100, 100 - (days/reclaimDays)*100), klass:'' };
+  if (days < warningDays)  return { label:`حان وقت التعبئة (مر ${days} يوم)`, color:'text-warn-600', pct:100 - (days/reclaimDays)*100, klass:'progress-fill-warn' };
+  return { label:`تنبيه: قد يُسحَب الخزان! مر ${days} يوم`, color:'text-danger-600', pct:Math.max(8, 100 - (days/reclaimDays)*100), klass:'progress-fill-danger' };
+}
+function toast(msg, kind='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + (kind || '');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+/* ===== view switching ===== */
+function setView(v) {
+  state.view = v;
+  document.getElementById('view-customer').classList.toggle('hidden', v!=='customer');
+  document.getElementById('view-worker').classList.toggle('hidden', v!=='worker');
+  document.getElementById('view-admin').classList.toggle('hidden', v!=='admin');
+  document.getElementById('view-platform').classList.toggle('hidden', v!=='platform');
+  ['customer','worker','admin','platform'].forEach(k=>{
+    const el = document.getElementById('seg-'+k);
+    if (k===v) { el.classList.add('seg-active'); el.classList.remove('text-slate-600'); }
+    else { el.classList.remove('seg-active'); el.classList.add('text-slate-600'); }
+  });
+  if (v==='customer') renderCustomer();
+  if (v==='worker')   renderWorker();
+  if (v==='admin')    renderAdmin();
+  if (v==='platform') renderPlatform();
+}
+
+/* ============================ CUSTOMER ============================ */
+function custGo(tab){ state.cust.tab = tab; renderCustomer(); }
+
+function renderCustomer() {
+  document.querySelectorAll('.cust-tab').forEach(t => {
+    t.classList.toggle('tab-active', t.dataset.tab === state.cust.tab);
+  });
+  const root = document.getElementById('cust-content');
+  if (!state.cust.onboarded) {
+    root.innerHTML = custOnboarding();
+    return;
+  }
+  if (state.cust.tab==='home')    root.innerHTML = custHome();
+  if (state.cust.tab==='orders')  root.innerHTML = custOrders();
+  if (state.cust.tab==='profile') root.innerHTML = custProfile();
+}
+
+/* ============================ ONBOARDING ============================ */
+/* The first-launch flow has 4 steps:
+   1. GPS permission → detect nearest plant
+   2. Plant card shown — customer can only pick the ONE plant covering them
+   3. Driver brings the tank; customer sees "in your possession" notice
+   4. Terms acceptance — account activated */
+function custOnboarding() {
+  const step = state.cust.onboardStep || 1;
+  return `
+    <div class="bg-aqua-gradient pt-2 pb-6 px-5 ripple-bg">
+      <div class="text-white text-center">
+        <div class="text-4xl mb-1">💧</div>
+        <div class="font-black text-xl">أهلاً بك في ماء</div>
+        <div class="text-xs opacity-90 mt-1">إعداد سريع لمدة دقيقة</div>
+      </div>
+      <div class="flex items-center justify-center gap-2 mt-4">
+        ${[1,2,3,4].map(n => `
+          <div class="w-2 h-2 rounded-full ${n<=step?'bg-white':'bg-white/30'}"></div>
+        `).join('')}
+      </div>
+    </div>
+
+    <div class="px-4 -mt-2">
+      ${step===1 ? custOnboardStep1() : ''}
+      ${step===2 ? custOnboardStep2() : ''}
+      ${step===3 ? custOnboardStep3() : ''}
+      ${step===4 ? custOnboardStep4() : ''}
+    </div>
+  `;
+}
+
+function custOnboardStep1() {
+  return `
+    <div class="bg-white rounded-2xl p-5 shadow-md text-center">
+      <div class="text-5xl mb-3">📍</div>
+      <div class="font-black text-lg">أين تسكن؟</div>
+      <div class="text-sm text-slate-500 mt-1 leading-relaxed">
+        نحتاج موقعك لنعرف أي معمل يخدم منطقتك. ستظهر لك المعامل المتاحة في حيك فقط.
+      </div>
+
+      <div class="bg-slate-50 rounded-xl p-3 mt-4 text-right text-xs leading-relaxed text-slate-600">
+        <div class="font-black text-slate-700 mb-1">لماذا الموقع مرة واحدة؟</div>
+        • يحفظ موقع بيتك للتوصيل لاحقاً<br>
+        • لا يُستخدم لتتبعك<br>
+        • يُحدَّث فقط لو انتقلت لبيت جديد
+      </div>
+
+      <button onclick="custOnboardNext()" class="w-full bg-aqua-gradient text-white rounded-xl py-3 mt-4 font-black text-sm">
+        السماح بالوصول للموقع
+      </button>
+    </div>
+  `;
+}
+
+function custOnboardStep2() {
+  return `
+    <div class="bg-white rounded-2xl p-5 shadow-md text-center">
+      <div class="text-3xl mb-2">🏭</div>
+      <div class="font-black text-lg">المعمل الذي يخدم منطقتك</div>
+      <div class="text-xs text-slate-500 mt-1">الكرادة، بغداد — اخترنا الأقرب لك</div>
+
+      <div class="bg-aqua-50 border-2 border-aqua-300 rounded-2xl p-4 mt-4 text-right">
+        <div class="flex items-center gap-3">
+          <div class="w-14 h-14 rounded-2xl bg-aqua-gradient flex items-center justify-center text-white text-2xl">💧</div>
+          <div class="flex-1">
+            <div class="font-black text-aqua-900">معمل النقاء — الكرادة</div>
+            <div class="text-[11px] text-aqua-700 num">٢.٤ كم • يخدم منطقتك ✓</div>
+            <div class="flex items-center gap-1.5 mt-1">
+              <span class="chip-sm bg-leaf-50 text-leaf-700">RO معقّم</span>
+              <span class="chip-sm bg-aqua-50 text-aqua-700">⭐ 4.8</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-3 pt-3 border-t border-aqua-200 grid grid-cols-3 gap-2 text-center">
+          <div>
+            <div class="text-[10px] text-slate-500">سعر التعبئة</div>
+            <div class="font-black text-aqua-700 num text-sm">١٠٠٠ د.ع</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-slate-500">سعة الخزان</div>
+            <div class="font-black text-aqua-700 num text-sm">٥٠٠ لتر</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-slate-500">الخزان</div>
+            <div class="font-black text-leaf-600 text-sm">مجاناً</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mt-3 text-right text-[11px] text-amber-800 leading-relaxed">
+        ℹ️ بسبب اتفاقية المعامل، يُسمح لك بالتسجيل في المعمل الذي يخدم منطقتك فقط.
+      </div>
+
+      <button onclick="custOnboardNext()" class="w-full bg-aqua-gradient text-white rounded-xl py-3 mt-4 font-black text-sm">
+        اطلب خزاناً من هذا المعمل
+      </button>
+    </div>
+  `;
+}
+
+function custOnboardStep3() {
+  return `
+    <div class="bg-white rounded-2xl p-5 shadow-md text-center">
+      <div class="text-5xl mb-3">🚛</div>
+      <div class="font-black text-lg">السائق في الطريق</div>
+      <div class="text-sm text-slate-500 mt-1 leading-relaxed">
+        كريم السائق سيصل إلى بيتك خلال <strong class="text-aqua-700 num">٤٥ دقيقة</strong> ليُسلّمك خزاناً جديداً ويملأه مجاناً.
+      </div>
+
+      <div class="bg-slate-50 rounded-xl p-4 mt-4 text-right text-xs leading-relaxed">
+        <div class="font-black text-slate-700 mb-2">ماذا سيحدث عند وصوله:</div>
+        <div class="space-y-2">
+          <div class="flex gap-2"><span class="text-leaf-500">✓</span><span>يضع الخزان في المكان المناسب لك</span></div>
+          <div class="flex gap-2"><span class="text-leaf-500">✓</span><span>يساعدك في تسجيل الدخول للتطبيق</span></div>
+          <div class="flex gap-2"><span class="text-leaf-500">✓</span><span>يشرح لك كيف تطلب التعبئة في المستقبل</span></div>
+          <div class="flex gap-2"><span class="text-leaf-500">✓</span><span>يملأ الخزان مجاناً في أول مرة</span></div>
+        </div>
+      </div>
+
+      <div class="bg-aqua-50 rounded-xl p-3 mt-3 text-right text-[11px] text-aqua-800 leading-relaxed">
+        🔔 ستستلم إشعاراً عبر WhatsApp عند وصوله
+      </div>
+
+      <button onclick="custOnboardNext()" class="w-full bg-aqua-gradient text-white rounded-xl py-3 mt-4 font-black text-sm">
+        فهمت، ما هي الشروط؟
+      </button>
+    </div>
+  `;
+}
+
+function custOnboardStep4() {
+  return `
+    <div class="bg-white rounded-2xl p-5 shadow-md">
+      <div class="text-center mb-3">
+        <div class="text-3xl mb-2">📜</div>
+        <div class="font-black text-lg">شروط استلام الخزان</div>
+        <div class="text-xs text-slate-500 mt-1">اقرأها بعناية ثم اضغط موافق</div>
+      </div>
+
+      <div class="bg-slate-50 rounded-xl p-4 text-right text-xs leading-relaxed max-h-44 overflow-y-auto scroll-area space-y-2">
+        <div>
+          <strong class="text-slate-900">١. ملكية الخزان</strong><br>
+          الخزان يبقى ملكاً لـ <strong>معمل النقاء</strong>. أنت مسؤول عن المحافظة عليه ووضعه في مكان آمن.
+        </div>
+        <div>
+          <strong class="text-slate-900">٢. التعبئة الشهرية</strong><br>
+          يجب تعبئة الخزان مرة واحدة على الأقل كل شهر. التعبئة بسعر ١٠٠٠ د.ع تُدفع عند الوصول.
+        </div>
+        <div>
+          <strong class="text-slate-900">٣. سحب الخزان</strong><br>
+          إذا تأخرت في التعبئة أكثر من ٤٥ يوماً دون عذر، للمعمل الحق في سحب الخزان.
+        </div>
+        <div>
+          <strong class="text-slate-900">٤. الانتقال</strong><br>
+          عند الانتقال لبيت جديد، يجب إبلاغ المعمل عبر التطبيق ليتم نقل الخزان.
+        </div>
+        <div>
+          <strong class="text-slate-900">٥. الإلغاء</strong><br>
+          يمكنك إلغاء الاشتراك في أي وقت بإعادة الخزان بحالته السليمة.
+        </div>
+      </div>
+
+      <label class="flex items-start gap-2 mt-3 cursor-pointer">
+        <input id="terms-check" type="checkbox" onchange="state.cust.termsAck = this.checked; renderCustomer()" ${state.cust.termsAck?'checked':''} class="mt-0.5 w-5 h-5 accent-aqua-500" />
+        <span class="text-xs text-slate-700 leading-relaxed">
+          أوافق على الشروط أعلاه وأقرّ باستلام خزان <strong>٥٠٠ لتر</strong> رقم <span class="num font-bold">MAA-DEMO-A1B2C3D4</span> في عهدتي.
+        </span>
+      </label>
+
+      <button onclick="custFinishOnboard()" ${state.cust.termsAck?'':'disabled'} class="w-full ${state.cust.termsAck?'bg-aqua-gradient':'bg-slate-300'} text-white rounded-xl py-3 mt-3 font-black text-sm transition disabled:cursor-not-allowed">
+        ✓ موافق — فعّل حسابي
+      </button>
+    </div>
+  `;
+}
+
+function custOnboardNext() {
+  state.cust.onboardStep = (state.cust.onboardStep || 1) + 1;
+  renderCustomer();
+}
+function custFinishOnboard() {
+  if (!state.cust.termsAck) return;
+  state.cust.onboarded = true;
+  state.cust.onboardStep = 1;
+  toast('تم تفعيل حسابك ✓ مرحباً بك في ماء','success');
+  renderCustomer();
+}
+function custResetOnboard() {
+  state.cust.onboarded = false;
+  state.cust.onboardStep = 1;
+  state.cust.termsAck = false;
+  renderCustomer();
+}
+
+function custHome() {
+  const days = daysSince(myProfile.tank.lastRefillAt);
+  const health = tankHealthLabel(days);
+  const remaining = Math.max(0, 100 - (days/30)*100);
+  return `
+    <div class="bg-aqua-gradient pt-2 pb-6 px-5 ripple-bg">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <div class="text-aqua-100 text-xs">مرحباً</div>
+          <div class="text-white font-black text-lg">${myProfile.fullName}</div>
+        </div>
+        <button class="w-10 h-10 rounded-full bg-white/20 backdrop-blur text-white flex items-center justify-center">🔔</button>
+      </div>
+      <div class="bg-white/15 backdrop-blur rounded-2xl p-4 text-white">
+        <div class="text-xs opacity-90">معمل النقاء — ${myProfile.district}</div>
+        <div class="font-black text-base mt-0.5">خزان ${myProfile.tank.capacity} لتر</div>
+        <div class="text-[11px] opacity-80 mt-0.5 num">QR: ${myProfile.tank.qrCode}</div>
+      </div>
+    </div>
+
+    <div class="px-4 -mt-4 space-y-3">
+      <!-- Tank state card -->
+      <div class="bg-white rounded-2xl shadow-sm p-4">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="w-14 h-16 tank-shape relative">
+            <div class="absolute inset-x-1 bottom-1 rounded" style="height:${remaining}%; background:linear-gradient(180deg,#67e8f9,#06b6d4);"></div>
+          </div>
+          <div class="flex-1">
+            <div class="text-xs text-slate-500">آخر تعبئة</div>
+            <div class="font-black text-slate-900">منذ ${days} يوم</div>
+            <div class="text-[11px] ${health.color} font-bold mt-0.5">${health.label}</div>
+          </div>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill ${health.klass}" style="width:${health.pct}%"></div>
+        </div>
+        <div class="flex items-center justify-between text-[11px] text-slate-500 mt-1.5">
+          <span>اليوم</span><span>${reclaimDays} يوم (سحب الخزان)</span>
+        </div>
+      </div>
+
+      ${custUnconfirmedCard()}
+
+      <!-- Big request button -->
+      <button onclick="custOrderRefill()" class="w-full bg-aqua-gradient text-white rounded-2xl py-5 shadow-lg active:scale-[0.98] transition">
+        <div class="text-3xl mb-1">💧</div>
+        <div class="font-black text-lg">اطلب تعبئة الآن</div>
+        <div class="text-xs opacity-90 mt-0.5">${fmt(tankPrice)} • السائق سيصل خلال ساعة</div>
+      </button>
+
+      ${custPartnerAds()}
+
+      <!-- Stats -->
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-white rounded-2xl p-4 shadow-sm">
+          <div class="text-xs text-slate-500">إجمالي تعبئاتي</div>
+          <div class="font-black text-2xl text-aqua-700 num mt-1">${myProfile.totalRefills}</div>
+          <div class="text-[10px] text-slate-400 mt-0.5">منذ بداية الاشتراك</div>
+        </div>
+        <div class="bg-white rounded-2xl p-4 shadow-sm">
+          <div class="text-xs text-slate-500">حسابي مع المعمل</div>
+          <div class="font-black text-2xl ${myProfile.balanceIqd >= 0 ? 'text-leaf-600' : 'text-danger-600'} num mt-1">${myProfile.balanceIqd >= 0 ? 'مدفوع' : fmt(-myProfile.balanceIqd)}</div>
+          <div class="text-[10px] text-slate-400 mt-0.5">${myProfile.balanceIqd >= 0 ? 'لا توجد متأخرات' : 'متأخر عليك'}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function custOrderRefill() {
+  myOrders.unshift({ id:'r-2026-129', date:'2026-05-10', kind:'REFILL', amount:tankPrice, status:'pending', driver:null });
+  toast('تم إرسال طلبك للمعمل ✓','success');
+  state.cust.tab='orders';
+  renderCustomer();
+}
+
+function custOrders() {
+  const statusLabel = s => ({completed:'مكتمل', pending:'بانتظار التأكيد', enroute:'في الطريق'})[s] || s;
+  const statusKlass = s => ({completed:'status-completed', pending:'status-pending', enroute:'status-enroute'})[s] || 'status-pending';
+  const kindLabel = k => ({REFILL:'تعبئة خزان', TANK_DELIVERY:'توصيل خزان جديد', TANK_RECLAIM:'سحب الخزان'})[k] || k;
+  return `
+    <div class="px-4 pt-4">
+      <h2 class="font-black text-xl mb-3">طلباتي</h2>
+      <div class="space-y-2.5">
+        ${myOrders.map(o => `
+          <div class="bg-white rounded-2xl p-4 shadow-sm">
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-black text-slate-900">${kindLabel(o.kind)}</span>
+              <div class="flex items-center gap-1.5">
+                ${o.customerConfirmedAt ? '<span class="chip-sm bg-leaf-50 text-leaf-700">✓ مؤكّد</span>' : ''}
+                ${o.customerDisputedAt ? '<span class="chip-sm bg-danger-50 text-danger-700">⚠ اعتراض</span>' : ''}
+                ${o.awaitingConfirm ? '<span class="chip-sm bg-warn-400/20 text-warn-600">يحتاج تأكيد</span>' : ''}
+                <span class="chip-sm ${statusKlass(o.status)}">${statusLabel(o.status)}</span>
+              </div>
+            </div>
+            <div class="text-xs text-slate-500 num">${o.id} • ${o.date}</div>
+            <div class="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
+              <span class="text-xs text-slate-500">${o.driver ? 'السائق: ' + o.driver : 'لم يُسنَد بعد'}</span>
+              <span class="font-bold text-aqua-700 num">${o.amount > 0 ? fmt(o.amount) : 'مجاناً'}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+/* Sponsored partner ads on the customer's home screen. Targeted by
+   neighbourhood, not individual identity. Customer can disable from settings. */
+const customerAds = [
+  { id:'a1', advertiser:'غاز الأمين',           cat:'GAS',      emoji:'🔥', title:'توصيل غاز منزلي',        body:'أسطوانة ١٢ كغ — يصلك خلال ساعة', cta:'اطلب', color:'from-orange-500 to-red-500' },
+  { id:'a2', advertiser:'تنظيف خزانات الصفا',   cat:'CLEANING', emoji:'🧹', title:'تنظيف خزان الماء',      body:'خصم ٢٠٪ لزبائن ماء — احجز اليوم', cta:'احجز', color:'from-sky-500 to-blue-600' },
+  { id:'a3', advertiser:'فلاتر AquaBest',       cat:'FILTERS',  emoji:'🧪', title:'فلاتر RO جديدة',         body:'بدّل فلتر منزلك بسعر مخفّض',     cta:'تفاصيل', color:'from-emerald-500 to-teal-600' },
+];
+
+function custPartnerAds() {
+  return `
+    <div>
+      <div class="flex items-center justify-between text-xs text-slate-500 mb-2 px-1">
+        <span class="font-bold">خدمات شركاء قريبة منك</span>
+        <button class="text-slate-400 text-[10px]">⚙️ إخفاء</button>
+      </div>
+      <div class="space-y-2">
+        ${customerAds.map(a => `
+          <div class="bg-white rounded-2xl shadow-sm overflow-hidden flex active:scale-[0.99] transition">
+            <div class="w-16 bg-gradient-to-br ${a.color} flex items-center justify-center text-3xl">${a.emoji}</div>
+            <div class="flex-1 p-3 flex items-center gap-2">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-1.5">
+                  <span class="font-black text-sm truncate">${a.title}</span>
+                  <span class="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md font-bold flex-shrink-0">إعلان</span>
+                </div>
+                <div class="text-[11px] text-slate-500 truncate">${a.body}</div>
+                <div class="text-[10px] text-aqua-700 font-bold mt-0.5">${a.advertiser}</div>
+              </div>
+              <button onclick="custClickAd('${a.id}')" class="bg-slate-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex-shrink-0">${a.cta}</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function custClickAd(id) {
+  const a = customerAds.find(x=>x.id===id);
+  if (a) toast(`فتح ${a.advertiser}`,'success');
+}
+
+/* Card shown on home when there is a refill awaiting customer confirmation.
+   This is the customer-side half of the anti-fraud loop: the driver claims
+   they refilled, the customer says yes/no within 24h. */
+function custUnconfirmedCard() {
+  const pending = myOrders.find(o => o.awaitingConfirm && !o.customerConfirmedAt && !o.customerDisputedAt);
+  if (!pending) return '';
+  return `
+    <div class="bg-white rounded-2xl shadow-md border-2 border-warn-400 p-4">
+      <div class="flex items-center gap-2 mb-2">
+        <div class="w-9 h-9 rounded-xl bg-warn-gradient flex items-center justify-center text-white">⚠️</div>
+        <div class="flex-1">
+          <div class="font-black text-sm text-slate-900">تأكيد التعبئة</div>
+          <div class="text-[11px] text-slate-500 num">السائق ${pending.driver} • ${pending.time}</div>
+        </div>
+      </div>
+      <div class="text-xs text-slate-600 leading-relaxed mb-3">
+        يقول السائق إنه قام بتعبئة خزانك. ساعدنا في التأكيد:
+      </div>
+      <div class="flex items-center gap-1.5 text-[11px] text-leaf-600 mb-3 bg-leaf-50 rounded-lg px-2 py-1.5">
+        <span>✓</span><span>تم تأكيد الموقع GPS (${pending.gpsDistance} م من عنوانك)</span>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="custDisputeRefill('${pending.id}')" class="bg-danger-50 text-danger-700 rounded-xl py-2.5 font-black text-sm">لم يصل ✗</button>
+        <button onclick="custConfirmRefill('${pending.id}')" class="bg-leaf-500 text-white rounded-xl py-2.5 font-black text-sm">نعم تم ✓</button>
+      </div>
+    </div>
+  `;
+}
+
+function custConfirmRefill(id) {
+  const o = myOrders.find(x => x.id === id);
+  if (o) { o.customerConfirmedAt = '2026-05-11'; o.awaitingConfirm = false; }
+  toast('شكراً، تم التأكيد ✓','success');
+  renderCustomer();
+}
+
+function custDisputeRefill(id) {
+  const o = myOrders.find(x => x.id === id);
+  if (o) { o.customerDisputedAt = '2026-05-11'; o.awaitingConfirm = false; o.disputeReason = 'لم يصل السائق'; }
+  toast('تم تسجيل الاعتراض، سيتواصل المعمل معك','warn');
+  renderCustomer();
+}
+
+function custProfile() {
+  const captured = ({DRIVER_AT_INSTALL:'السائق عند التركيب',CUSTOMER_PIN:'وضعتُه أنا',ADMIN_MANUAL:'المعمل أدخله',OFFLINE_SYNC:'تعبئة سابقة'})[myProfile.locationCapturedBy] || '—';
+  return `
+    <div class="px-4 pt-4 space-y-3">
+      <div class="bg-aqua-gradient rounded-2xl p-5 text-white text-center">
+        <div class="w-20 h-20 mx-auto rounded-full bg-white/20 backdrop-blur flex items-center justify-center text-3xl mb-2">👩</div>
+        <div class="font-black text-lg">${myProfile.fullName}</div>
+        <div class="text-xs opacity-90 num">${myProfile.phone}</div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 shadow-sm space-y-3 text-sm">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+          <span class="text-slate-500">العنوان</span>
+          <span class="font-bold text-slate-900">${myProfile.addressLine}</span>
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+          <span class="text-slate-500">المنطقة</span>
+          <span class="font-bold text-slate-900">${myProfile.district}</span>
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+          <span class="text-slate-500">الخزان</span>
+          <span class="font-bold text-slate-900 num">${myProfile.tank.capacity} لتر</span>
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+          <span class="text-slate-500">المعمل</span>
+          <span class="font-bold text-slate-900">معمل النقاء</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-slate-500">إجمالي التعبئات</span>
+          <span class="font-black text-aqua-700 num">${myProfile.totalRefills}</span>
+        </div>
+      </div>
+
+      <!-- Location accuracy card -->
+      <div class="bg-leaf-50 border border-leaf-200 rounded-2xl p-4">
+        <div class="flex items-start gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-leaf-500 flex items-center justify-center text-white text-sm shrink-0">📍</div>
+          <div class="flex-1">
+            <div class="font-black text-sm text-leaf-800">موقع بيتك مسجّل</div>
+            <div class="text-[11px] text-leaf-700 mt-0.5 num">المصدر: ${captured} • ${myProfile.locationCapturedAt}</div>
+            <div class="text-[10px] text-slate-500 mt-1.5">هذا الموقع يُستخدم لتوصيل الماء — حتى لو طلبت من خارج البيت</div>
+          </div>
+        </div>
+      </div>
+
+      <button onclick="custMoveOpen()" class="w-full bg-white rounded-2xl py-4 shadow-sm font-bold text-warn-600 flex items-center justify-center gap-2">📦 انتقلت لبيت جديد</button>
+      <button onclick="custResetOnboard()" class="w-full bg-aqua-50 border border-aqua-200 rounded-2xl py-3 font-bold text-aqua-700 flex items-center justify-center gap-2 text-xs">🔁 إعادة عرض شاشة التسجيل الأولى (للتجربة)</button>
+      <button class="w-full bg-white rounded-2xl py-4 shadow-sm font-bold text-slate-700 flex items-center justify-center gap-2">⚙️ الإعدادات</button>
+      <button class="w-full bg-white rounded-2xl py-4 shadow-sm font-bold text-danger-600 flex items-center justify-center gap-2">↩️ تسجيل خروج</button>
+
+      ${state.cust.moveOpen ? custMoveSheet() : ''}
+    </div>
+  `;
+}
+
+function custMoveSheet() {
+  return `
+    <div class="absolute inset-0 z-30 bg-slate-900/70 backdrop-blur-sm flex items-end" onclick="custMoveClose(event)">
+      <div class="bg-white w-full rounded-t-3xl p-5" onclick="event.stopPropagation()">
+        <div class="text-center mb-4">
+          <div class="w-14 h-14 mx-auto rounded-2xl bg-warn-gradient flex items-center justify-center text-white text-2xl mb-2">📦</div>
+          <div class="font-black text-lg text-slate-900">انتقلت لبيت جديد؟</div>
+          <div class="text-xs text-slate-500 mt-0.5">سنحدّث عنوانك ونعلم المعمل</div>
+        </div>
+
+        <!-- Mock map -->
+        <div class="map-bg rounded-xl h-44 relative mb-3 border border-slate-200">
+          <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-full"><div class="text-2xl">📍</div></div>
+          <div class="absolute bottom-2 left-2 right-2 bg-white/95 backdrop-blur rounded-lg px-3 py-2 text-xs">
+            <div class="font-black">حرّك الخريطة لاختيار بيتك الجديد</div>
+            <div class="text-slate-500 text-[10px]">أو اضغط "موقعي الحالي"</div>
+          </div>
+        </div>
+
+        <div class="bg-slate-50 rounded-xl p-3 mb-3 text-xs text-slate-600 leading-relaxed">
+          <div class="font-black mb-1">ماذا يحدث بعد التأكيد؟</div>
+          <div>• المعمل يستلم طلبك ويوافق</div>
+          <div>• السائق يزور بيتك الجديد ليوصّل الخزان (أو يأخذه من البيت القديم)</div>
+          <div>• الموقع الجديد يُسجَّل تلقائياً عند وصول السائق</div>
+          <div>• شهر "نعومة": النظام يقبل العنوانين معاً</div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="custMoveClose()" class="bg-slate-100 text-slate-700 rounded-xl py-3 font-black text-sm">إلغاء</button>
+          <button onclick="custMoveConfirm()" class="bg-warn-500 text-white rounded-xl py-3 font-black text-sm">أرسل للمعمل</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function custMoveOpen() { state.cust.moveOpen = true; renderCustomer(); }
+function custMoveClose(e) { if (e && e.target !== e.currentTarget) return; state.cust.moveOpen = false; renderCustomer(); }
+function custMoveConfirm() {
+  state.cust.moveOpen = false;
+  myProfile.movedAt = '2026-05-11';
+  toast('تم إرسال طلب الانتقال للمعمل ✓ سيتواصل معك السائق','success');
+  renderCustomer();
+}
+
+/* ============================ WORKER (driver only — vendor flag off) ====== */
+function wrkGo(tab){ state.wrk.tab = tab; renderWorker(); }
+
+function renderWorker() {
+  document.querySelectorAll('.wrk-tab').forEach(t => {
+    t.classList.toggle('tab-active', t.dataset.tab === state.wrk.tab);
+  });
+  const root = document.getElementById('wrk-content');
+  if (state.wrk.tab==='home')    root.innerHTML = wrkHome();
+  if (state.wrk.tab==='history') root.innerHTML = wrkHistory();
+  if (state.wrk.tab==='wallet')  root.innerHTML = wrkWallet();
+  if (state.wrk.tab==='profile') root.innerHTML = wrkProfile();
+}
+
+function wrkHeader() {
+  return `
+    <div class="bg-slate-900 text-white px-4 pt-3 pb-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-[11px] text-slate-400">سائق ${workerProfile.driver.plant}</div>
+          <div class="font-black text-base">${workerProfile.name}</div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="wrkToggleOnline()" class="text-[10px] font-black px-2.5 py-1 rounded-lg flex items-center gap-1 ${state.wrk.online?'bg-leaf-500/20 text-leaf-300':'bg-warn-500/20 text-warn-300'}">
+            <span class="w-1.5 h-1.5 rounded-full ${state.wrk.online?'bg-leaf-400':'bg-warn-400'}"></span>
+            ${state.wrk.online?'متصل':'بدون إنترنت'}
+          </button>
+          <button class="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">🔔</button>
+        </div>
+      </div>
+      ${!state.wrk.online ? `
+        <div class="bg-warn-500/15 border border-warn-500/30 rounded-lg px-3 py-2 mt-3 flex items-center gap-2">
+          <span class="text-warn-300 text-lg">📡</span>
+          <div class="flex-1">
+            <div class="text-[11px] font-black text-warn-200">يعمل بدون إنترنت</div>
+            <div class="text-[10px] text-warn-200/80">GPS والصور تعمل عادي، التزامن عند عودة الإنترنت</div>
+          </div>
+          ${state.wrk.queuedCount > 0 ? `<span class="bg-warn-500 text-white text-[10px] font-black px-2 py-1 rounded-full num">${state.wrk.queuedCount} في الانتظار</span>` : ''}
+        </div>
+      ` : state.wrk.queuedCount > 0 ? `
+        <div class="bg-aqua-500/15 border border-aqua-500/30 rounded-lg px-3 py-2 mt-3 flex items-center gap-2">
+          <span class="animate-pulse">🔄</span>
+          <div class="flex-1 text-[11px] font-black text-aqua-200">جاري مزامنة ${state.wrk.queuedCount} عملية…</div>
+          <button onclick="wrkFlushQueue()" class="text-[10px] text-aqua-100 underline">مزامنة الآن</button>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function wrkToggleOnline() {
+  state.wrk.online = !state.wrk.online;
+  if (state.wrk.online && state.wrk.queuedCount > 0) {
+    toast(`عاد الإنترنت — جاري مزامنة ${state.wrk.queuedCount} عملية…`,'success');
+    setTimeout(() => wrkFlushQueue(), 1200);
+  } else if (!state.wrk.online) {
+    toast('انقطع الإنترنت — التطبيق ينتقل لوضع Offline','warn');
+  }
+  renderWorker();
+}
+
+function wrkFlushQueue() {
+  state.wrk.queuedCount = 0;
+  toast('تمت مزامنة كل العمليات ✓','success');
+  renderWorker();
+}
+
+function wrkHome() {
+  return wrkHeader() + wrkDriverHome();
+}
+
+function wrkDriverHome() {
+  const total = driverTasks.length;
+  const done = driverTasks.filter(t=>t.status==='COMPLETED').length;
+  const queued = state.wrk.queuedCount;
+  const enRoute = driverTasks.find(t=>t.status==='EN_ROUTE');
+  const others = driverTasks.filter(t=>t.status!=='EN_ROUTE');
+  const kindEmoji = k => k==='REFILL'?'💧':k==='TANK_DELIVERY'?'📦':'↩️';
+  const kindLabel = k => k==='REFILL'?'تعبئة':k==='TANK_DELIVERY'?'توصيل خزان':'سحب خزان';
+
+  return `
+    <div class="px-4 -mt-2">
+      <!-- progress -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm mb-3">
+        <div class="flex items-center justify-between mb-2">
+          <div class="font-black text-slate-900">جولة اليوم</div>
+          <div class="text-xs text-slate-500 num">${done} / ${total} مهمة</div>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${(done/total)*100}%"></div></div>
+        <div class="grid grid-cols-3 gap-2 mt-3">
+          <div class="bg-aqua-50 rounded-xl p-2 text-center relative">
+            <div class="text-[10px] text-aqua-700">منجز</div>
+            <div class="font-black text-aqua-700 num text-lg">${done}</div>
+            ${queued > 0 ? `<span class="absolute -top-1 -left-1 bg-warn-500 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center">🔴</span>` : ''}
+          </div>
+          <div class="bg-warn-400/10 rounded-xl p-2 text-center">
+            <div class="text-[10px] text-warn-600">المتبقي</div>
+            <div class="font-black text-warn-600 num text-lg">${total-done}</div>
+          </div>
+          <div class="bg-leaf-50 rounded-xl p-2 text-center">
+            <div class="text-[10px] text-leaf-600">عمولة</div>
+            <div class="font-black text-leaf-600 num text-lg">${done*workerProfile.driver.commissionPerRefill/1000}ك</div>
+          </div>
+        </div>
+        ${queued > 0 ? `<div class="text-[10px] text-warn-600 mt-2 text-center">🔴 ${queued} عملية محفوظة محلياً — ستُزامَن عند عودة الإنترنت</div>` : ''}
+      </div>
+
+      ${enRoute ? `
+        <!-- active task -->
+        <div class="bg-aqua-gradient rounded-2xl p-4 text-white shadow-lg mb-3 ripple-bg">
+          <div class="flex items-center justify-between mb-2">
+            <span class="chip-sm bg-white/25">قيد التنفيذ</span>
+            <span class="text-[11px] opacity-90 num">⏰ ${enRoute.scheduledAt}</span>
+          </div>
+          <div class="text-2xl mb-1">${kindEmoji(enRoute.kind)} ${kindLabel(enRoute.kind)}</div>
+          <div class="font-black text-lg">${enRoute.customer}</div>
+          <div class="text-xs opacity-90">${enRoute.district} • ${enRoute.address}</div>
+          <div class="text-[11px] opacity-80 mt-1 num">QR: ${enRoute.tankQR}</div>
+
+          <!-- map placeholder -->
+          <div class="map-bg h-32 rounded-xl mt-3 relative overflow-hidden border border-white/20">
+            <div class="absolute top-1/2 right-1/3 -translate-y-1/2"><div class="pulse-dot"></div></div>
+            <div class="absolute bottom-3 left-3 bg-white/95 px-3 py-1.5 rounded-lg text-aqua-700 font-black text-xs num">${enRoute.distance} • ٤ د</div>
+          </div>
+
+          <!-- Arrival auto-detection banner -->
+          <div class="bg-white/20 backdrop-blur rounded-xl p-2.5 mt-3 flex items-center gap-2">
+            <div class="w-7 h-7 rounded-full bg-leaf-500 flex items-center justify-center text-white text-xs">📍</div>
+            <div class="flex-1 text-xs">
+              <div class="font-black text-white">وصلت إلى الزبون</div>
+              <div class="text-[10px] opacity-90 num">١٨ م من العنوان المسجّل</div>
+            </div>
+          </div>
+
+          <button onclick="wrkArrive('ok')" class="w-full bg-white text-aqua-700 rounded-xl py-3 mt-3 font-black text-sm flex items-center justify-center gap-2 shadow-lg">
+            ✓ تم التعبئة — أكّد الآن
+          </button>
+
+          <div class="mt-2 text-[10px] text-white/70 text-center">جرّب سيناريوهات أخرى:</div>
+          <div class="grid grid-cols-2 gap-1.5 mt-1.5 text-[10px] font-bold">
+            <button onclick="wrkArrive('gps-far')" class="bg-white/15 text-white rounded-lg py-1.5">⚠ GPS بعيد عن العنوان</button>
+            <button onclick="wrkArrive('no-photo')" class="bg-white/15 text-white rounded-lg py-1.5">⚠ بدون صورة</button>
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- upcoming -->
+      <div class="text-xs font-bold text-slate-600 mb-2 px-1">المهام القادمة</div>
+      <div class="space-y-2.5">
+        ${others.map(t => `
+          <div class="bg-white rounded-2xl p-3.5 shadow-sm">
+            <div class="flex items-center gap-3">
+              <div class="w-11 h-11 rounded-xl ${t.kind==='TANK_RECLAIM'?'bg-danger-50':'bg-aqua-50'} flex items-center justify-center text-xl">${kindEmoji(t.kind)}</div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between">
+                  <div class="font-black text-sm truncate">${t.customer}</div>
+                  <span class="text-[11px] text-slate-500 num">${t.scheduledAt}</span>
+                </div>
+                <div class="text-[11px] text-slate-500 truncate">${t.district} • ${t.distance}</div>
+                <div class="text-[10px] ${t.kind==='TANK_RECLAIM'?'text-danger-600':'text-aqua-700'} font-bold">${kindLabel(t.kind)}</div>
+              </div>
+            </div>
+            ${t.kind==='TANK_RECLAIM' ? `
+              <button onclick="wrkReclaimOpen('${t.id}')" class="w-full mt-2.5 bg-danger-500 text-white rounded-xl py-2 text-xs font-black">↩️ ابدأ سحب الخزان</button>
+            ` : ''}
+          </div>
+        `).join('')}
+      </div>
+
+      <!-- Walk-in / new customer button -->
+      <button onclick="wrkWalkinOpen()" class="w-full mt-4 bg-white border-2 border-dashed border-aqua-300 rounded-2xl py-4 flex flex-col items-center gap-1 font-bold text-aqua-700 active:scale-[0.99]">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">+</span>
+          <span class="text-sm">بيع فوري أو تسجيل زبون جديد</span>
+        </div>
+        <span class="text-[10px] text-slate-500 font-normal">للجار أو الزبون الذي لم يطلب من التطبيق</span>
+      </button>
+    </div>
+    ${wrkScanOverlay()}
+    ${wrkWalkinSheet()}
+    ${wrkReclaimSheet()}
+  `;
+}
+
+/* ============================ DRIVER: WALK-IN ============================ */
+function wrkWalkinOpen() {
+  state.wrk.walkin = { open:true, mode:null, search:'', selectedId:null };
+  renderWorker();
+}
+function wrkWalkinClose(e) {
+  if (e && e.target !== e.currentTarget) return;
+  state.wrk.walkin = { open:false, mode:null, search:'', selectedId:null };
+  renderWorker();
+}
+function wrkWalkinPickMode(mode) {
+  state.wrk.walkin.mode = mode;
+  state.wrk.walkin.selectedId = null;
+  state.wrk.walkin.search = '';
+  renderWorker();
+}
+function wrkWalkinSetSearch(val) {
+  state.wrk.walkin.search = val;
+  // Targeted re-render: refresh the results list and customer card,
+  // but keep the input focused so the user can keep typing.
+  const list = document.getElementById('walkin-results');
+  if (list) list.outerHTML = wrkWalkinResultsHTML();
+}
+function wrkWalkinSelectCustomer(id) {
+  state.wrk.walkin.selectedId = id;
+  renderWorker();
+}
+function wrkWalkinBackToSearch() {
+  state.wrk.walkin.selectedId = null;
+  renderWorker();
+}
+function wrkWalkinConfirmRefill() {
+  const c = driverKnownCustomers.find(x => x.id === state.wrk.walkin.selectedId);
+  if (!c) return;
+  walkinSalesToday.unshift({
+    id:'w'+Date.now(),
+    driver:'علي عبد الله',
+    customer:c.name,
+    district:c.district,
+    tankQR:c.tankQR,
+    amount:1000,
+    time:'الآن',
+  });
+  // Find this customer in driverTasks history; mark a refill happened.
+  // For demo we just close the sheet and toast.
+  state.wrk.walkin = { open:false, mode:null, search:'', selectedId:null };
+  if (!state.wrk.online) state.wrk.queuedCount += 1;
+  toast(state.wrk.online ? `تم تعبئة خزان ${c.name} ✓ ١,٠٠٠ د.ع` : 'محفوظ محلياً ✓ سيُزامَن لاحقاً','success');
+  renderWorker();
+}
+function wrkWalkinConfirmRegister() {
+  pendingApprovals.unshift({
+    id:'pc'+Date.now(),
+    name:'الجار الجديد',
+    phone:'07710099003',
+    district:'الكرادة',
+    byDriver:'علي عبد الله',
+    time:'الآن',
+    gps:'موقع مأخوذ',
+  });
+  state.wrk.walkin = { open:false, mode:null };
+  toast('تم إرسال طلب التسجيل للمعمل ✓ مكافأة ٥٬٠٠٠ د.ع عند الموافقة','success');
+  renderWorker();
+}
+
+function wrkWalkinSheet() {
+  const w = state.wrk.walkin;
+  if (!w.open) return '';
+  return `
+    <div class="absolute inset-0 z-30 bg-slate-900/70 backdrop-blur-sm flex items-end" onclick="wrkWalkinClose(event)">
+      <div class="bg-white w-full rounded-t-3xl p-5 max-h-[92%] overflow-y-auto scroll-area" onclick="event.stopPropagation()">
+        ${w.mode === null ? wrkWalkinPicker() : ''}
+        ${w.mode === 'lookup' ? wrkWalkinLookupForm() : ''}
+        ${w.mode === 'register' ? wrkWalkinRegisterForm() : ''}
+      </div>
+    </div>
+  `;
+}
+
+function wrkWalkinPicker() {
+  return `
+    <div class="text-center mb-4">
+      <div class="font-black text-lg text-slate-900">ما هي الحالة؟</div>
+      <div class="text-xs text-slate-500 mt-0.5">اختر النوع المناسب لإكمال العملية</div>
+    </div>
+    <div class="space-y-2">
+      <button onclick="wrkWalkinPickMode('lookup')" class="w-full bg-aqua-50 hover:bg-aqua-100 border-2 border-aqua-300 rounded-2xl p-4 text-right flex items-center gap-3 transition">
+        <div class="w-12 h-12 rounded-xl bg-aqua-gradient flex items-center justify-center text-white text-2xl shrink-0">💧</div>
+        <div class="flex-1">
+          <div class="font-black text-slate-900">بيع فوري — تعبئة زبون مسجّل</div>
+          <div class="text-[11px] text-slate-600 mt-0.5">الزبون مسجّل عندنا لكنه لم يطلب من التطبيق — السيارة قربه</div>
+          <div class="text-[10px] text-aqua-700 font-bold mt-1">ابحث بالاسم أو رقم الخزان</div>
+        </div>
+      </button>
+
+      <button onclick="wrkWalkinPickMode('register')" class="w-full bg-leaf-50 hover:bg-leaf-100 border-2 border-leaf-300 rounded-2xl p-4 text-right flex items-center gap-3 transition">
+        <div class="w-12 h-12 rounded-xl bg-leaf-gradient flex items-center justify-center text-white text-2xl shrink-0">👤</div>
+        <div class="flex-1">
+          <div class="font-black text-slate-900">تسجيل زبون جديد</div>
+          <div class="text-[11px] text-slate-600 mt-0.5">شخص غير مسجّل عندنا، يريد خزاناً ويصبح زبوناً منتظماً</div>
+          <div class="text-[10px] text-leaf-700 font-bold mt-1">مكافأة ٥,٠٠٠ د.ع عند موافقة المعمل</div>
+        </div>
+      </button>
+    </div>
+    <button onclick="wrkWalkinClose()" class="w-full bg-slate-100 text-slate-600 rounded-xl py-3 mt-3 font-bold text-sm">إلغاء</button>
+  `;
+}
+
+function wrkWalkinFilteredCustomers() {
+  const q = state.wrk.walkin.search.trim().toLowerCase();
+  if (!q) return driverKnownCustomers.slice(0, 5);
+  return driverKnownCustomers.filter(c =>
+    c.name.toLowerCase().includes(q) ||
+    c.phone.includes(q) ||
+    c.tankQR.toLowerCase().includes(q)
+  ).slice(0, 8);
+}
+
+function wrkWalkinResultsHTML() {
+  const results = wrkWalkinFilteredCustomers();
+  return `
+    <div id="walkin-results" class="space-y-1.5 max-h-56 overflow-y-auto scroll-area">
+      ${results.length === 0 ? `
+        <div class="text-center py-6 text-slate-400 text-sm">
+          لا يوجد زبون بهذا الاسم أو رقم<br>
+          <span class="text-xs">جرّب "تسجيل زبون جديد" بدلاً منه</span>
+        </div>
+      ` : results.map(c => `
+        <button onclick="wrkWalkinSelectCustomer('${c.id}')" class="w-full text-right bg-white border border-slate-200 rounded-xl p-3 hover:bg-aqua-50 transition flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-aqua-50 text-aqua-700 flex items-center justify-center font-black text-sm">${c.name[0]}</div>
+          <div class="flex-1 min-w-0">
+            <div class="font-bold text-sm truncate">${c.name}</div>
+            <div class="text-[10px] text-slate-500 num">${c.district} • ${c.tankQR}</div>
+          </div>
+          <div class="text-[10px] ${c.lastDays > 30 ? 'text-danger-600' : c.lastDays > 20 ? 'text-warn-600' : 'text-slate-500'} text-left">
+            <div class="num">${c.lastDays}ي</div>
+            <div>منذ تعبئة</div>
+          </div>
+        </button>
+      `).join('')}
+    </div>
+  `;
+}
+
+function wrkWalkinLookupForm() {
+  const selectedId = state.wrk.walkin.selectedId;
+  if (selectedId) {
+    const c = driverKnownCustomers.find(x => x.id === selectedId);
+    const urgent = c.lastDays > 30;
+    return `
+      <div class="text-center mb-3">
+        <div class="w-12 h-12 mx-auto rounded-xl bg-aqua-gradient flex items-center justify-center text-white text-2xl mb-2">💧</div>
+        <div class="font-black text-lg">تأكيد التعبئة</div>
+        <div class="text-[11px] text-slate-500">معلومات الزبون كاملة — اضغط تأكيد للبدء</div>
+      </div>
+
+      <div class="bg-aqua-50 border border-aqua-200 rounded-2xl p-4 mb-3">
+        <div class="flex items-center justify-between mb-2">
+          <div class="font-black text-lg text-slate-900">${c.name}</div>
+          <span class="chip-sm bg-white text-aqua-700 num">${c.capacity} لتر</span>
+        </div>
+        <div class="space-y-1.5 text-sm">
+          <div class="flex justify-between"><span class="text-slate-500">الهاتف</span><span class="font-bold num" dir="ltr">${c.phone}</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">المنطقة</span><span class="font-bold">${c.district}</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">العنوان</span><span class="font-bold text-left">${c.addressLine}</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">رقم الخزان</span><span class="font-bold num font-mono text-xs">${c.tankQR}</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">آخر تعبئة</span><span class="font-bold ${urgent?'text-danger-600':'text-slate-900'} num">منذ ${c.lastDays} يوم${urgent?' ⚠':''}</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">الرصيد</span><span class="font-bold ${c.balance < 0 ? 'text-danger-600' : 'text-leaf-600'} num">${c.balance === 0 ? 'مدفوع' : c.balance < 0 ? fmt(-c.balance) + ' متأخر' : fmt(c.balance) + ' دائن'}</span></div>
+        </div>
+      </div>
+
+      <div class="bg-slate-50 rounded-xl p-3 mb-4 text-[11px] text-slate-600 space-y-1.5">
+        <div class="flex items-center gap-1.5"><span class="text-leaf-500">✓</span><span>GPS سيُؤخذ تلقائياً</span></div>
+        <div class="flex items-center gap-1.5"><span class="text-leaf-500">✓</span><span>صورة الخزان بعد التعبئة (إلزامية)</span></div>
+        <div class="flex items-center gap-1.5"><span class="text-leaf-500">✓</span><span>سيستلم الزبون تأكيد واتساب تلقائياً</span></div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="wrkWalkinBackToSearch()" class="bg-slate-100 text-slate-700 rounded-xl py-3 font-black text-sm">رجوع للبحث</button>
+        <button onclick="wrkWalkinConfirmRefill()" class="bg-aqua-gradient text-white rounded-xl py-3 font-black text-sm">📷 صوّر وأكّد التعبئة</button>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="text-center mb-3">
+      <div class="w-12 h-12 mx-auto rounded-xl bg-aqua-gradient flex items-center justify-center text-white text-2xl mb-2">🔍</div>
+      <div class="font-black text-lg">بحث عن زبون مسجّل</div>
+      <div class="text-[11px] text-slate-500">ابحث بالاسم، الهاتف، أو رقم الخزان</div>
+    </div>
+
+    <div class="relative mb-3">
+      <input
+        autofocus
+        value="${state.wrk.walkin.search}"
+        oninput="wrkWalkinSetSearch(this.value)"
+        placeholder="مثال: أم محمد أو T-1024 أو 07710000001"
+        class="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm border border-slate-200 pr-10"
+      />
+      <span class="absolute top-1/2 right-3 -translate-y-1/2 text-slate-400">🔍</span>
+    </div>
+
+    ${wrkWalkinResultsHTML()}
+
+    <button onclick="wrkWalkinPickMode(null)" class="w-full bg-slate-100 text-slate-600 rounded-xl py-3 mt-3 font-bold text-sm">رجوع</button>
+  `;
+}
+
+/* ============================ DRIVER: TANK RECLAIM ============================ */
+const reclaimReasons = [
+  { id:'NON_COMPLIANCE',     label:'عدم التزام بتعليمات الشركة', desc:'لم يعبّأ شهرياً، تجاوز ٤٥ يوم، تجاهل التنبيهات', icon:'⚠️', color:'danger' },
+  { id:'MAINTENANCE',         label:'خزان للصيانة',              desc:'تنظيف، تعقيم، صيانة دورية أو طارئة',          icon:'🔧', color:'warn' },
+  { id:'CUSTOMER_MOVED',      label:'الزبون انتقل لمعمل آخر',     desc:'موافقة الزبون على نقل اشتراكه',              icon:'📦', color:'aqua' },
+  { id:'CUSTOMER_CANCELLED',  label:'الزبون ألغى الاشتراك',       desc:'طلب الإلغاء طوعاً',                          icon:'❌', color:'slate' },
+  { id:'TANK_DAMAGED',        label:'الخزان تالف',                desc:'كسر، تلف، تسرّب — يُسحب للاستبدال',          icon:'💔', color:'danger' },
+];
+
+/* Mock reclaim history for the demo admin view. */
+const reclaimHistory = [
+  { tankSerial:'T-1003', customer:'حسين العامري',  driver:'كريم محمود',   reason:'NON_COMPLIANCE', date:'2026-05-04', notes:'مر ٥٠ يوم بدون تعبئة، لا ردّ على التنبيهات' },
+  { tankSerial:'T-1018', customer:'أم زهراء',       driver:'علي عبد الله', reason:'MAINTENANCE',    date:'2026-05-02', notes:'تنظيف دوري — سيُعاد بعد ٣ أيام' },
+  { tankSerial:'T-0987', customer:'كاظم الجبوري',  driver:'حسين رياض',     reason:'CUSTOMER_MOVED', date:'2026-04-28', notes:'انتقل إلى البصرة' },
+];
+
+function wrkReclaimOpen(taskId) {
+  state.wrk.reclaim = { open:true, reason:null, taskId };
+  renderWorker();
+}
+function wrkReclaimClose(e) {
+  if (e && e.target !== e.currentTarget) return;
+  state.wrk.reclaim = { open:false, reason:null, taskId:null };
+  renderWorker();
+}
+function wrkReclaimPickReason(id) {
+  state.wrk.reclaim.reason = id;
+  renderWorker();
+}
+function wrkReclaimConfirm() {
+  const r = state.wrk.reclaim;
+  if (!r.reason) return;
+  const task = driverTasks.find(t => t.id === r.taskId);
+  const reason = reclaimReasons.find(x => x.id === r.reason);
+  if (task) {
+    task.status = 'COMPLETED';
+    reclaimHistory.unshift({
+      tankSerial: task.tankQR.replace('MAA-DEMO-', 'T-').slice(0,8),
+      customer: task.customer,
+      driver: workerProfile.name,
+      reason: r.reason,
+      date: '2026-05-11',
+      notes: 'سُحب اليوم',
+    });
+  }
+  state.wrk.reclaim = { open:false, reason:null, taskId:null };
+  toast(`تم سحب الخزان ✓ السبب: ${reason.label}`,'success');
+  renderWorker();
+}
+
+function wrkReclaimSheet() {
+  const r = state.wrk.reclaim;
+  if (!r.open) return '';
+  const task = driverTasks.find(t => t.id === r.taskId);
+  if (!task) return '';
+  return `
+    <div class="absolute inset-0 z-30 bg-slate-900/70 backdrop-blur-sm flex items-end" onclick="wrkReclaimClose(event)">
+      <div class="bg-white w-full rounded-t-3xl p-5 max-h-[90%] overflow-y-auto scroll-area" onclick="event.stopPropagation()">
+        <div class="text-center mb-3">
+          <div class="w-12 h-12 mx-auto rounded-xl bg-danger-gradient flex items-center justify-center text-white text-2xl mb-2">↩️</div>
+          <div class="font-black text-lg text-slate-900">سحب الخزان من ${task.customer}</div>
+          <div class="text-[11px] text-slate-500 num">${task.district} • ${task.tankQR}</div>
+        </div>
+
+        <div class="text-xs font-bold text-slate-700 mb-2">اختر سبب السحب:</div>
+        <div class="space-y-2 mb-3">
+          ${reclaimReasons.map(rs => `
+            <button onclick="wrkReclaimPickReason('${rs.id}')" class="w-full text-right rounded-xl p-3 border-2 transition flex items-center gap-3 ${r.reason===rs.id ? `border-${rs.color}-500 bg-${rs.color}-50` : 'border-slate-200 bg-white'}">
+              <div class="w-9 h-9 rounded-lg bg-${rs.color}-50 flex items-center justify-center text-lg shrink-0">${rs.icon}</div>
+              <div class="flex-1">
+                <div class="font-black text-sm text-slate-900">${rs.label}</div>
+                <div class="text-[11px] text-slate-500">${rs.desc}</div>
+              </div>
+              <div class="w-5 h-5 rounded-full border-2 ${r.reason===rs.id ? `border-${rs.color}-500 bg-${rs.color}-500` : 'border-slate-300'} flex items-center justify-center text-white text-[10px] shrink-0">${r.reason===rs.id ? '✓' : ''}</div>
+            </button>
+          `).join('')}
+        </div>
+
+        <textarea placeholder="ملاحظات إضافية (اختياري)" rows="2" class="w-full bg-slate-50 rounded-xl px-3 py-2.5 text-sm border border-slate-200 resize-none mb-3"></textarea>
+
+        <div class="bg-slate-50 rounded-xl p-3 mb-4 text-[11px] text-slate-600 space-y-1.5">
+          <div class="flex items-center gap-1.5"><span class="text-leaf-500">✓</span><span>GPS مأخوذ تلقائياً</span></div>
+          <div class="flex items-center gap-1.5"><span class="${r.reason?'text-leaf-500':'text-slate-300'}">✓</span><span>صورة الخزان المسحوب (إلزامية)</span></div>
+          <div class="flex items-center gap-1.5"><span class="text-aqua-500">→</span><span>سيُسجّل اسمك (${workerProfile.name}) كسائق السحب</span></div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="wrkReclaimClose()" class="bg-slate-100 text-slate-700 rounded-xl py-3 font-black text-sm">إلغاء</button>
+          <button onclick="wrkReclaimConfirm()" ${r.reason?'':'disabled'} class="${r.reason?'bg-danger-500 text-white':'bg-slate-300 text-white'} rounded-xl py-3 font-black text-sm transition disabled:cursor-not-allowed">
+            📷 صوّر وأكّد السحب
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function wrkWalkinRegisterForm() {
+  return `
+    <div class="text-center mb-3">
+      <div class="w-12 h-12 mx-auto rounded-xl bg-aqua-gradient flex items-center justify-center text-white text-2xl mb-2">👤</div>
+      <div class="font-black text-lg">تسجيل زبون جديد</div>
+      <div class="text-[11px] text-slate-500">سيُراجع المعمل ويوافق خلال ساعات</div>
+    </div>
+
+    <div class="space-y-2 mb-3">
+      <input placeholder="الاسم الكامل" class="w-full bg-slate-50 rounded-xl px-3 py-2.5 text-sm border border-slate-200" />
+      <input placeholder="رقم الهاتف 07XXXXXXXXX" class="w-full bg-slate-50 rounded-xl px-3 py-2.5 text-sm border border-slate-200" />
+      <input placeholder="الحي / المنطقة" class="w-full bg-slate-50 rounded-xl px-3 py-2.5 text-sm border border-slate-200" />
+      <textarea placeholder="ملاحظات (اختياري)" rows="2" class="w-full bg-slate-50 rounded-xl px-3 py-2.5 text-sm border border-slate-200 resize-none"></textarea>
+    </div>
+
+    <!-- Coverage check -->
+    <div class="bg-leaf-50 border border-leaf-200 rounded-xl p-3 mb-3 flex items-center gap-2">
+      <span class="text-leaf-500 text-lg">✓</span>
+      <div class="text-xs text-leaf-800 leading-relaxed flex-1">
+        <strong>العنوان ضمن تغطية معملك</strong> (٢.١ كم من المعمل) — يمكن التسجيل
+      </div>
+    </div>
+
+    <div class="bg-slate-50 rounded-xl p-3 mb-4 text-[11px] text-slate-600 space-y-1.5">
+      <div class="flex items-center gap-1.5"><span class="text-leaf-500">✓</span><span>GPS مأخوذ (سيكون عنوان البيت لاحقاً)</span></div>
+      <div class="flex items-center gap-1.5"><span class="text-leaf-500">✓</span><span>صورة وثيقة هوية الزبون</span></div>
+      <div class="flex items-center gap-1.5"><span class="text-aqua-500">→</span><span>المعمل يستلم التنبيه ويوافق خلال ساعات</span></div>
+      <div class="flex items-center gap-1.5"><span class="text-aqua-500">→</span><span>بعد الموافقة: تحجز موعد توصيل خزان جديد</span></div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-2">
+      <button onclick="wrkWalkinPickMode(null)" class="bg-slate-100 text-slate-700 rounded-xl py-3 font-black text-sm">رجوع</button>
+      <button onclick="wrkWalkinConfirmRegister()" class="bg-aqua-500 text-white rounded-xl py-3 font-black text-sm">📤 أرسل للمعمل</button>
+    </div>
+  `;
+}
+
+/**
+ * GPS-based arrival flow — replaces the older QR-scan workflow.
+ *
+ * UX is three quick steps with no manual typing or aiming:
+ *   1. Confirm GPS — driver is within geofence of the customer address
+ *   2. Capture proof — one photo of the filled tank
+ *   3. Record — backend writes the refill, then WhatsApps the customer
+ *
+ *   scenarios:
+ *     'ok'        — all good, refill recorded
+ *     'gps-far'   — driver is too far from the customer's registered address
+ *     'no-photo'  — driver tries to skip the photo step (rejected)
+ */
+function wrkArrive(scenario = 'ok') {
+  state.wrk.scan = { phase:'capturing', step:2, scenario };
+  renderWorker();
+
+  setTimeout(() => {
+    if (scenario === 'gps-far') {
+      state.wrk.scan = {
+        phase:'fail', step:1,
+        error:'أنت على بُعد ٤١٢م من عنوان الزبون المسجّل. تجاوز الحد المسموح (٥٠م). تأكد أنك عند البيت الصحيح.',
+        scenario,
+      };
+      renderWorker();
+      return;
+    }
+    if (scenario === 'no-photo') {
+      state.wrk.scan = {
+        phase:'fail', step:2,
+        error:'الصورة إلزامية — هي دليل التعبئة في حال أي نزاع. حاول مرة أخرى.',
+        scenario,
+      };
+      renderWorker();
+      return;
+    }
+    state.wrk.scan = { phase:'recording', step:3, scenario };
+    renderWorker();
+  }, 1100);
+
+  setTimeout(() => {
+    if (state.wrk.scan.phase !== 'recording') return;
+    state.wrk.scan = { phase:'complete', step:3, scenario };
+    const enRoute = driverTasks.find(t=>t.status==='EN_ROUTE');
+    if (enRoute) enRoute.status = 'COMPLETED';
+    const nextAssigned = driverTasks.find(t=>t.status==='ASSIGNED');
+    if (nextAssigned) nextAssigned.status = 'EN_ROUTE';
+    renderWorker();
+  }, 2200);
+
+  setTimeout(() => {
+    if (state.wrk.scan.phase === 'complete') {
+      state.wrk.scan = { phase:'idle', error:null };
+      if (!state.wrk.online) {
+        state.wrk.queuedCount += 1;
+        toast('تم حفظ التعبئة في الهاتف ✓ ستُزامَن عند عودة الإنترنت','warn');
+      } else {
+        toast('تم تأكيد التعبئة ✓ ١٠٠٠ د.ع — وأُرسل تأكيد واتساب للزبون','success');
+      }
+      renderWorker();
+    }
+  }, 4500);
+}
+
+function wrkCloseScan() {
+  state.wrk.scan = { phase:'idle', error:null };
+  renderWorker();
+}
+
+/* Returns the verification overlay HTML during an arrival/completion flow. */
+function wrkScanOverlay() {
+  const s = state.wrk.scan;
+  if (s.phase === 'idle') return '';
+
+  const step = (n, label) => {
+    let icon = '○', klass = 'step-pending';
+    if (s.phase === 'complete' || s.step > n) { icon = '✓'; klass = 'step-done'; }
+    else if (s.step === n && s.phase !== 'fail') { icon = '⋯'; klass = 'step-active'; }
+    else if (s.step === n && s.phase === 'fail') { icon = '✗'; klass = 'bg-danger-500 text-white'; }
+    return `
+      <div class="flex items-center gap-3 py-1.5">
+        <div class="w-7 h-7 rounded-full ${klass} flex items-center justify-center text-xs font-black ring-step">${icon}</div>
+        <div class="text-xs font-bold ${s.step > n ? 'text-leaf-700' : s.step === n && s.phase === 'fail' ? 'text-danger-700' : 'text-slate-700'}">${label}</div>
+      </div>
+    `;
+  };
+
+  const isFail = s.phase === 'fail';
+  const isDone = s.phase === 'complete';
+  const phaseLabel = ({
+    capturing:'جاري التقاط صورة الخزان…',
+    recording:'جاري تسجيل التعبئة…',
+  })[s.phase] || (isDone?'تمت التعبئة':isFail?'تم رفض التعبئة':'');
+
+  return `
+    <div class="absolute inset-0 z-30 bg-slate-900/70 backdrop-blur-sm flex items-end">
+      <div class="bg-white w-full rounded-t-3xl p-5">
+        <div class="text-center mb-3">
+          <div class="w-14 h-14 mx-auto rounded-2xl ${isDone?'bg-leaf-gradient':isFail?'bg-danger-gradient':'bg-aqua-gradient'} flex items-center justify-center text-white text-2xl mb-2">
+            ${isDone?'✓':isFail?'✗':'📍'}
+          </div>
+          <div class="font-black text-lg text-slate-900">${phaseLabel}</div>
+          <div class="text-xs text-slate-500 mt-0.5">${isDone?'تم تسجيل العملية بنجاح':isFail?'صحّح الخطأ وحاول مجدداً':'تأكيد بدون مسح QR'}</div>
+        </div>
+
+        <div class="bg-slate-50 rounded-xl p-3 space-y-1">
+          ${step(1, 'موقعك يطابق عنوان الزبون (GPS)')}
+          ${step(2, 'صورة الخزان كدليل')}
+          ${step(3, 'تسجيل التعبئة وإرسال تأكيد للزبون')}
+        </div>
+
+        ${s.phase === 'capturing' ? `
+          <div class="bg-slate-900 rounded-xl mt-3 aspect-[4/3] flex items-center justify-center relative overflow-hidden">
+            <div class="absolute inset-0 map-bg opacity-30"></div>
+            <div class="relative text-center text-white">
+              <div class="text-5xl mb-2">🛢️</div>
+              <div class="text-xs opacity-80">وجّه الكاميرا للخزان</div>
+            </div>
+            <div class="absolute inset-3 border-2 border-white/40 border-dashed rounded-lg"></div>
+          </div>
+        ` : ''}
+
+        ${isFail ? `
+          <div class="bg-danger-50 border border-danger-200 rounded-xl p-3 mt-3">
+            <div class="text-xs font-black text-danger-700 mb-1">⚠ سبب الرفض</div>
+            <div class="text-xs text-danger-700 leading-relaxed">${s.error}</div>
+          </div>
+        ` : ''}
+
+        ${isDone ? `
+          <div class="bg-leaf-50 border border-leaf-200 rounded-xl p-3 mt-3 text-xs text-leaf-700 leading-relaxed">
+            ✓ سُجّلت التعبئة بـ ١٠٠٠ د.ع<br>
+            ✓ الصورة محفوظة كدليل<br>
+            ✓ أُرسل "أكّد التعبئة" للزبون عبر WhatsApp
+          </div>
+        ` : ''}
+
+        <button onclick="wrkCloseScan()" class="w-full mt-4 ${isFail||isDone?'bg-slate-900':'bg-slate-200'} ${isFail||isDone?'text-white':'text-slate-500'} rounded-xl py-3 font-black text-sm">
+          ${isDone?'إغلاق':isFail?'إعادة المحاولة':'إلغاء'}
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function wrkHistory() {
+  return wrkHeader() + `
+    <div class="px-4 pt-3">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-black text-lg">سجلي</h2>
+        <select class="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white">
+          <option>اليوم</option><option>الأسبوع</option><option>الشهر</option>
+        </select>
+      </div>
+      <div class="space-y-2">
+        ${workerHistory.map(h => `
+          <div class="bg-white rounded-xl p-3 shadow-sm flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-aqua-50 text-aqua-700 flex items-center justify-center text-lg">${h.kind.includes('توصيل')?'📦':'💧'}</div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between">
+                <div class="font-bold text-sm truncate">${h.customer}</div>
+                <div class="font-black text-xs text-aqua-700 num">${h.amount > 0 ? fmt(h.amount) : 'مجاناً'}</div>
+              </div>
+              <div class="text-[11px] text-slate-500 num">${h.kind} • ${h.date}</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function wrkWallet() {
+  return wrkHeader() + `
+    <div class="px-4 pt-3 space-y-3">
+      <div class="bg-aqua-gradient rounded-2xl p-5 text-white ripple-bg">
+        <div class="text-xs opacity-90">الدخل المتوقع هذا الشهر</div>
+        <div class="font-black text-3xl num mt-1">${fmt(workerProfile.driver.baseSalary + 18_200)}</div>
+        <div class="text-xs opacity-90 mt-1">يُدفع نهاية الشهر</div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 shadow-sm space-y-2.5 text-sm">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+          <span class="text-slate-500">الراتب الأساسي</span>
+          <span class="font-black num">${fmt(workerProfile.driver.baseSalary)}</span>
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+          <span class="text-slate-500">عمولة (١٨٢ تعبئة × ١٠٠)</span>
+          <span class="font-black text-leaf-600 num">${fmt(18_200)}</span>
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+          <span class="text-slate-500">مكافآت</span>
+          <span class="font-black num">—</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="font-bold">الصافي المتوقع</span>
+          <span class="font-black text-aqua-700 num">${fmt(518_200)}</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function wrkProfile() {
+  return wrkHeader() + `
+    <div class="px-4 pt-3 space-y-3">
+      <div class="bg-white rounded-2xl p-5 shadow-sm text-center">
+        <div class="w-20 h-20 mx-auto rounded-full bg-aqua-gradient flex items-center justify-center text-white text-3xl mb-2">👨</div>
+        <div class="font-black text-lg">${workerProfile.name}</div>
+        <div class="text-xs text-slate-500 num">${workerProfile.phone}</div>
+        <div class="flex justify-center gap-2 mt-3">
+          <span class="chip bg-aqua-50 text-aqua-700">🚛 سائق ${workerProfile.driver.plant}</span>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 shadow-sm space-y-2.5 text-sm">
+        <div class="flex justify-between border-b border-slate-100 pb-2.5"><span class="text-slate-500">المركبة</span><span class="font-bold num">${workerProfile.plate}</span></div>
+        <div class="flex justify-between border-b border-slate-100 pb-2.5"><span class="text-slate-500">الراتب الأساسي</span><span class="font-bold num">${fmt(workerProfile.driver.baseSalary)}</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">عمولة لكل تعبئة</span><span class="font-bold num">${fmt(workerProfile.driver.commissionPerRefill)}</span></div>
+      </div>
+
+      <button class="w-full bg-white rounded-2xl py-4 shadow-sm font-bold text-slate-700">⚙️ الإعدادات</button>
+      <button class="w-full bg-white rounded-2xl py-4 shadow-sm font-bold text-danger-600">↩️ تسجيل خروج</button>
+    </div>
+  `;
+}
+
+/* ============================ ADMIN ============================ */
+function admGo(nav){ state.adm.nav = nav; renderAdmin(); }
+
+function renderAdmin() {
+  document.querySelectorAll('.adm-nav').forEach(n => {
+    if (n.dataset.nav === state.adm.nav) { n.classList.add('nav-active'); n.classList.remove('text-slate-300'); }
+    else { n.classList.remove('nav-active'); n.classList.add('text-slate-300'); }
+  });
+
+  // Live subscription badge in sidebar
+  const badge = document.getElementById('adm-sub-badge');
+  if (badge) {
+    const d = state.adm.subscription.daysLeft;
+    if (d <= 7) {
+      badge.classList.remove('hidden');
+      badge.textContent = d < 0 ? 'منتهي' : `${d}ي`;
+      badge.className = badge.className.replace(/bg-(warn|danger)-500/, '') + ' ' + (d < 0 ? 'bg-danger-500' : d <= 3 ? 'bg-danger-500' : 'bg-warn-500');
+    } else {
+      badge.classList.add('hidden');
+    }
+  }
+
+  const root = document.getElementById('adm-content');
+  if (state.adm.nav==='overview')      root.innerHTML = admPlantBar() + admExpiryBanner() + admOverview();
+  if (state.adm.nav==='tanks')         root.innerHTML = admPlantBar() + admExpiryBanner() + admTanks();
+  if (state.adm.nav==='customers')     root.innerHTML = admPlantBar() + admExpiryBanner() + admCustomers();
+  if (state.adm.nav==='drivers')       root.innerHTML = admPlantBar() + admExpiryBanner() + admDrivers();
+  if (state.adm.nav==='orders')        root.innerHTML = admPlantBar() + admExpiryBanner() + admOrders();
+  if (state.adm.nav==='accounting')    root.innerHTML = admPlantBar() + admExpiryBanner() + admAccounting();
+  if (state.adm.nav==='bonuses')       root.innerHTML = admPlantBar() + admExpiryBanner() + admBonuses();
+  if (state.adm.nav==='ai')            root.innerHTML = admPlantBar() + admExpiryBanner() + admAI();
+  if (state.adm.nav==='marketplace')   root.innerHTML = admPlantBar() + admExpiryBanner() + admMarketplace();
+  if (state.adm.nav==='subscription')  root.innerHTML = admPlantBar() + admSubscription();
+  if (state.adm.nav==='notifications') root.innerHTML = admPlantBar() + admExpiryBanner() + admNotifications();
+}
+
+/* Subscription expiry banner shown on every admin page (except the
+   subscription page itself, which has its own full UI). */
+function admExpiryBanner() {
+  const s = state.adm.subscription;
+  if (!s || s.daysLeft > 7) return '';
+  const urgent = s.daysLeft <= 3;
+  const expired = s.daysLeft < 0;
+  return `
+    <div class="${expired ? 'bg-danger-50 border-danger-300' : urgent ? 'bg-warn-50 border-warn-300' : 'bg-amber-50 border-amber-200'} border-r-4 px-6 py-3 flex items-center gap-3">
+      <div class="text-2xl">${expired ? '🚫' : urgent ? '⚠️' : '⏰'}</div>
+      <div class="flex-1">
+        <div class="font-black text-sm ${expired ? 'text-danger-800' : urgent ? 'text-warn-800' : 'text-amber-900'}">
+          ${expired
+            ? 'انتهى اشتراكك — الحساب معلّق'
+            : urgent
+              ? `⚠️ اشتراكك ينتهي خلال ${s.daysLeft} ${s.daysLeft === 1 ? 'يوم' : 'أيام'} فقط — جدّد فوراً لتجنّب توقّف الخدمة`
+              : `اشتراكك ينتهي خلال ${s.daysLeft} أيام — مبلغ التجديد ${fmt(s.priceIqd)}`}
+        </div>
+        <div class="text-[11px] mt-0.5 ${expired ? 'text-danger-700' : 'text-slate-600'}">
+          خطة ${s.plan} • تنتهي يوم ${s.endsAt}
+        </div>
+      </div>
+      <button onclick="admGo('subscription')" class="${expired || urgent ? 'bg-danger-500' : 'bg-amber-500'} text-white px-4 py-2 rounded-xl text-sm font-black shadow">
+        ${expired ? 'أعد تفعيل الحساب' : 'جدّد الآن'}
+      </button>
+    </div>
+  `;
+}
+
+/* Plant switcher shown above every admin page when the owner has multiple
+   branches. Choosing "all" rolls up across the group. */
+function admPlantBar() {
+  const active = myPlants.find(p => p.id === state.adm.activePlant);
+  const isAll = state.adm.activePlant === 'all';
+  return `
+    <div class="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-10">
+      <div class="relative">
+        <button onclick="admToggleSwitcher()" class="flex items-center gap-2 bg-aqua-50 hover:bg-aqua-100 transition border border-aqua-200 rounded-xl px-3 py-2 font-bold text-sm">
+          <span class="text-aqua-700">🏭</span>
+          <span class="text-slate-900">${isAll?'كل المعامل (مجمّع)':active.name}</span>
+          <span class="text-aqua-400">▾</span>
+        </button>
+        ${state.adm.plantSwitcherOpen ? `
+          <div class="absolute top-full mt-1 right-0 bg-white border border-slate-200 rounded-xl shadow-lg w-72 z-20 overflow-hidden">
+            <button onclick="admPickPlant('all')" class="w-full text-right px-4 py-2.5 hover:bg-slate-50 border-b border-slate-100 ${isAll?'bg-aqua-50':''}">
+              <div class="font-black text-sm flex items-center gap-2"><span>📊</span><span>كل المعامل (تقارير مجمّعة)</span></div>
+              <div class="text-[11px] text-slate-500 mt-0.5">${myPlants.length} معامل • ${myPlants.reduce((s,p)=>s+p.customers,0)} زبون</div>
+            </button>
+            ${myPlants.map(p => `
+              <button onclick="admPickPlant('${p.id}')" class="w-full text-right px-4 py-2.5 hover:bg-slate-50 border-b border-slate-100 last:border-0 ${state.adm.activePlant===p.id?'bg-aqua-50':''}">
+                <div class="font-black text-sm">${p.name}</div>
+                <div class="text-[11px] text-slate-500 mt-0.5 num">${p.city} • ${p.customers} زبون • ${fmtShort(p.revenue)}</div>
+              </button>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+      <div class="flex items-center gap-2 text-xs">
+        ${myPlants.length > 1 ? `<span class="bg-aqua-100 text-aqua-700 px-2.5 py-1 rounded-full font-bold">${myPlants.length} معامل في حسابك</span>` : ''}
+      </div>
+    </div>
+  `;
+}
+function admToggleSwitcher() { state.adm.plantSwitcherOpen = !state.adm.plantSwitcherOpen; renderAdmin(); }
+function admPickPlant(id) {
+  state.adm.activePlant = id;
+  state.adm.plantSwitcherOpen = false;
+  const p = id==='all' ? null : myPlants.find(x=>x.id===id);
+  toast(`عرض: ${p ? p.name : 'كل المعامل (مجمّع)'}`,'success');
+  renderAdmin();
+}
+
+function admOverview() {
+  return `
+    <div class="p-6 space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="font-black text-2xl text-slate-900">الرئيسية</h1>
+          <p class="text-sm text-slate-500 mt-0.5">نظرة عامة على عمل المعمل اليوم — ${new Date('2026-05-10').toLocaleDateString('ar-IQ', { dateStyle:'long' })}</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold flex items-center gap-2">📥 تصدير</button>
+          <button class="bg-aqua-gradient text-white rounded-xl px-4 py-2 text-sm font-bold shadow flex items-center gap-2">+ زبون جديد</button>
+        </div>
+      </div>
+
+      <!-- KPI cards -->
+      <div class="grid grid-cols-4 gap-4">
+        <div class="gcard-1 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">إجمالي الزبائن</div>
+          <div class="font-black text-3xl num mt-1">${adminStats.customers}</div>
+          <div class="text-[11px] opacity-90 mt-1">نشط: ${adminStats.customers - adminStats.atRiskCustomers}</div>
+        </div>
+        <div class="gcard-2 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">تعبئات اليوم</div>
+          <div class="font-black text-3xl num mt-1">${adminStats.todayRefills}</div>
+          <div class="text-[11px] opacity-90 mt-1">+${(adminStats.todayRefills*tankPrice/1000).toFixed(0)}ك دخل اليوم</div>
+        </div>
+        <div class="gcard-3 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">في خطر السحب</div>
+          <div class="font-black text-3xl num mt-1">${adminStats.atRiskCustomers}</div>
+          <div class="text-[11px] opacity-90 mt-1">يحتاجون متابعة</div>
+        </div>
+        <div class="gcard-4 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">إيراد الشهر</div>
+          <div class="font-black text-3xl num mt-1">${fmtShort(adminStats.monthRevenue)}</div>
+          <div class="text-[11px] opacity-90 mt-1">+9.9% مقارنة بالشهر الماضي</div>
+        </div>
+      </div>
+
+      <!-- Charts row -->
+      <div class="grid grid-cols-3 gap-4">
+        <div class="col-span-2 bg-white rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-black text-slate-900">الإيرادات الشهرية</h3>
+            <span class="text-xs text-slate-500">آخر ٥ أشهر</span>
+          </div>
+          <div class="flex items-end gap-6 h-40">
+            ${monthRevenueData.map((m,i) => `
+              <div class="bar-chart-col flex-1">
+                <div class="text-[11px] font-black text-aqua-700 num">${fmtShort(m.v)}</div>
+                <div class="bar ${i===monthRevenueData.length-1?'active':''}" style="height:${(m.v/40_000_000)*140}px"></div>
+                <div class="text-xs text-slate-500 mt-1">${m.m}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        <div class="bg-white rounded-2xl p-5 shadow-sm">
+          <h3 class="font-black text-slate-900 mb-4">جرد الخزانات</h3>
+          <div class="space-y-3 text-sm">
+            ${[
+              {label:'موزّعة عند الزبائن', count:tankInventory.ASSIGNED, color:'bg-aqua-500', pct:tankInventory.ASSIGNED/354*100},
+              {label:'في المعمل (احتياطي)', count:tankInventory.IN_PLANT, color:'bg-leaf-500', pct:tankInventory.IN_PLANT/354*100},
+              {label:'في خطر السحب',         count:tankInventory.AT_RISK, color:'bg-warn-500', pct:tankInventory.AT_RISK/354*100},
+              {label:'مسحوبة',               count:tankInventory.RECLAIMED, color:'bg-slate-400', pct:tankInventory.RECLAIMED/354*100},
+              {label:'تالفة',                count:tankInventory.DAMAGED, color:'bg-danger-500', pct:tankInventory.DAMAGED/354*100},
+            ].map(r => `
+              <div>
+                <div class="flex justify-between mb-1"><span class="text-slate-600">${r.label}</span><span class="font-black num">${r.count}</span></div>
+                <div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="${r.color} h-full rounded-full" style="width:${r.pct}%"></div></div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="mt-4 pt-3 border-t border-slate-100 flex justify-between text-sm">
+            <span class="text-slate-500">الإجمالي</span>
+            <span class="font-black text-slate-900 num">${Object.values(tankInventory).reduce((a,b)=>a+b,0)} خزان</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent orders + at-risk customers + pending approvals + unconfirmed refills -->
+      <div class="grid grid-cols-4 gap-4">
+        <div class="bg-white rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-black text-slate-900">آخر الطلبات</h3>
+            <button onclick="admGo('orders')" class="text-xs text-aqua-600 font-bold">عرض الكل ←</button>
+          </div>
+          <div class="space-y-2 text-sm">
+            ${adminOrders.slice(0,4).map(o => `
+              <div class="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
+                <div>
+                  <div class="font-bold">${o.customer}</div>
+                  <div class="text-[11px] text-slate-500 num">${o.code} • ${o.time}</div>
+                </div>
+                <span class="chip-sm status-${o.status.toLowerCase().replace('_','')}">${admOrderLabel(o.status)}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        <div class="bg-white rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-black text-slate-900">زبائن في خطر السحب</h3>
+            <button onclick="admGo('customers')" class="text-xs text-aqua-600 font-bold">المتابعة ←</button>
+          </div>
+          <div class="space-y-2 text-sm">
+            ${adminCustomers.filter(c=>c.status==='AT_RISK').map(c => `
+              <div class="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
+                <div>
+                  <div class="font-bold">${c.name}</div>
+                  <div class="text-[11px] text-slate-500">${c.district} • مر ${c.lastDays} يوم</div>
+                </div>
+                <button class="bg-warn-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">تنبيه واتساب</button>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        <div class="bg-white rounded-2xl p-5 shadow-sm border-2 border-aqua-400">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="font-black text-slate-900">زبائن جدد بانتظار موافقتك</h3>
+              <div class="text-[11px] text-aqua-600 font-bold">سجّلهم سائقوك في الميدان</div>
+            </div>
+          </div>
+          <div class="space-y-2 text-sm">
+            ${pendingApprovals.map(c => `
+              <div class="py-2 border-b border-slate-100 last:border-0">
+                <div class="flex items-center justify-between">
+                  <div class="font-bold">${c.name}</div>
+                  <span class="text-[10px] text-slate-500">${c.time}</span>
+                </div>
+                <div class="text-[11px] text-slate-500 num">${c.phone} • ${c.district}</div>
+                <div class="flex items-center justify-between mt-2">
+                  <span class="text-[10px] text-slate-400">سجّله: ${c.byDriver}</span>
+                  <div class="flex gap-1">
+                    <button onclick="admRejectCustomer('${c.id}')" class="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-1 rounded-md">رفض</button>
+                    <button onclick="admApproveCustomer('${c.id}')" class="text-[10px] bg-leaf-500 text-white font-bold px-2 py-1 rounded-md">موافق ✓</button>
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+            ${pendingApprovals.length===0 ? '<div class="text-center text-slate-400 text-xs py-4">لا توجد طلبات حالياً</div>' : ''}
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-5 shadow-sm border-2 border-warn-400">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="font-black text-slate-900">تعبئات بانتظار التأكيد</h3>
+              <div class="text-[11px] text-warn-600 font-bold">يقول السائق نعم — الزبون لم يؤكد بعد</div>
+            </div>
+          </div>
+          <div class="space-y-2 text-sm">
+            ${unconfirmedRefills.map(u => `
+              <div class="py-2 border-b border-slate-100 last:border-0">
+                <div class="flex items-center justify-between">
+                  <div class="font-bold">${u.customer}</div>
+                  <span class="text-[10px] text-slate-500 num">${u.hoursAgo}س</span>
+                </div>
+                <div class="flex items-center justify-between mt-1">
+                  <div class="text-[11px] text-slate-500 num">${u.code} • ${u.driver}</div>
+                  ${u.gpsOk ? '<span class="chip-sm bg-leaf-50 text-leaf-700 text-[9px]">GPS ✓</span>' : `<span class="chip-sm bg-danger-50 text-danger-700 text-[9px]">GPS ⚠ ${u.gpsDistance}م</span>`}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function admOrderLabel(s) {
+  return ({PENDING:'قيد الانتظار',ASSIGNED:'مُسنَد',EN_ROUTE:'في الطريق',COMPLETED:'مكتمل',CANCELLED:'ملغى'})[s] || s;
+}
+
+function admTanks() {
+  return `
+    <div class="p-6 space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="font-black text-2xl text-slate-900">الخزانات</h1>
+          <p class="text-sm text-slate-500 mt-0.5">جرد كامل بحالة كل خزان</p>
+        </div>
+        <button class="bg-aqua-gradient text-white rounded-xl px-4 py-2 text-sm font-bold shadow flex items-center gap-2">+ خزان جديد</button>
+      </div>
+
+      <div class="grid grid-cols-5 gap-3">
+        ${[
+          {label:'الإجمالي', count:Object.values(tankInventory).reduce((a,b)=>a+b,0), color:'text-slate-900'},
+          {label:'في المعمل', count:tankInventory.IN_PLANT, color:'text-leaf-600'},
+          {label:'موزّعة',  count:tankInventory.ASSIGNED, color:'text-aqua-600'},
+          {label:'في خطر',  count:tankInventory.AT_RISK, color:'text-warn-600'},
+          {label:'تالفة',   count:tankInventory.DAMAGED, color:'text-danger-600'},
+        ].map(s => `
+          <div class="bg-white rounded-2xl p-4 shadow-sm">
+            <div class="text-xs text-slate-500">${s.label}</div>
+            <div class="font-black text-3xl num mt-1 ${s.color}">${s.count}</div>
+          </div>
+        `).join('')}
+      </div>
+
+      <!-- Recently reclaimed tanks audit -->
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden border-r-4 border-danger-400">
+        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 class="font-black">↩️ الخزانات المسحوبة مؤخراً</h3>
+            <div class="text-[11px] text-slate-500">لتتبع: مع أي سائق ولماذا</div>
+          </div>
+          <span class="chip-sm bg-danger-50 text-danger-700 num">${reclaimHistory.length} هذا الشهر</span>
+        </div>
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-600 text-xs">
+            <tr>
+              <th class="text-right px-5 py-3">رقم الخزان</th>
+              <th class="text-right px-5 py-3">سُحب من</th>
+              <th class="text-right px-5 py-3">السائق</th>
+              <th class="text-right px-5 py-3">السبب</th>
+              <th class="text-right px-5 py-3">التاريخ</th>
+              <th class="text-right px-5 py-3">ملاحظات</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${reclaimHistory.map(r => {
+              const reason = reclaimReasons.find(x => x.id === r.reason) || { label:r.reason, color:'slate', icon:'•' };
+              return `
+                <tr class="border-t border-slate-100 row-hov">
+                  <td class="px-5 py-3 font-bold num">${r.tankSerial}</td>
+                  <td class="px-5 py-3">${r.customer}</td>
+                  <td class="px-5 py-3 font-bold text-aqua-700">${r.driver}</td>
+                  <td class="px-5 py-3"><span class="chip-sm bg-${reason.color}-50 text-${reason.color}-700">${reason.icon} ${reason.label}</span></td>
+                  <td class="px-5 py-3 text-slate-500 num">${r.date}</td>
+                  <td class="px-5 py-3 text-slate-600 text-xs max-w-xs truncate">${r.notes}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h3 class="font-black">عيّنة من الخزانات</h3>
+          <input placeholder="بحث برقم QR…" class="border border-slate-200 rounded-lg px-3 py-1.5 text-sm w-64" />
+        </div>
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-600">
+            <tr>
+              <th class="text-right px-5 py-3">الرقم التسلسلي</th>
+              <th class="text-right px-5 py-3">QR</th>
+              <th class="text-right px-5 py-3">السعة</th>
+              <th class="text-right px-5 py-3">الحالة</th>
+              <th class="text-right px-5 py-3">الزبون</th>
+              <th class="text-right px-5 py-3">آخر تعبئة</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${[
+              {sn:'T-1024', qr:'MAA-DEMO-A1B2C3D4', cap:500, status:'ASSIGNED', customer:'أم محمد', last:'منذ 17 يوم'},
+              {sn:'T-1023', qr:'MAA-DEMO-E5F6G7H8', cap:350, status:'ASSIGNED', customer:'أبو حسن', last:'منذ 23 يوم'},
+              {sn:'T-1022', qr:'MAA-DEMO-K9L0M1N2', cap:500, status:'AT_RISK', customer:'سارة محمد', last:'منذ 32 يوم'},
+              {sn:'T-1021', qr:'MAA-DEMO-XYZ12345', cap:500, status:'IN_PLANT', customer:'—', last:'—'},
+              {sn:'T-1020', qr:'MAA-DEMO-OLD0099X', cap:350, status:'ASSIGNED', customer:'أبو فاطمة', last:'منذ 41 يوم'},
+            ].map(t => `
+              <tr class="border-t border-slate-100 row-hov">
+                <td class="px-5 py-3 font-bold num">${t.sn}</td>
+                <td class="px-5 py-3 text-slate-500 font-mono text-xs num">${t.qr}</td>
+                <td class="px-5 py-3 num">${t.cap} لتر</td>
+                <td class="px-5 py-3"><span class="chip-sm status-${t.status.toLowerCase().replace('_','')}">${tankStatusLabel(t.status)}</span></td>
+                <td class="px-5 py-3">${t.customer}</td>
+                <td class="px-5 py-3 text-slate-500">${t.last}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+function tankStatusLabel(s) {
+  return ({IN_PLANT:'في المعمل',ASSIGNED:'موزّع',AT_RISK:'في خطر',RECLAIMED:'مسحوب',DAMAGED:'تالف'})[s] || s;
+}
+
+function admCustomers() {
+  const statusLabel = s => ({ACTIVE:'نشط',AT_RISK:'في خطر',NEW:'جديد',INACTIVE:'متوقف',CHURNED:'فقدنا الزبون'})[s] || s;
+  const statusKlass = s => ({ACTIVE:'status-active',AT_RISK:'status-atrisk',NEW:'status-assigned',INACTIVE:'status-pending',CHURNED:'status-cancelled'})[s] || 'status-pending';
+  return `
+    <div class="p-6 space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="font-black text-2xl text-slate-900">الزبائن</h1>
+          <p class="text-sm text-slate-500 mt-0.5">${adminStats.customers} زبون — ${adminStats.atRiskCustomers} في خطر السحب</p>
+        </div>
+        <div class="flex gap-2">
+          <button class="bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold">📥 استيراد Excel</button>
+          <button class="bg-aqua-gradient text-white rounded-xl px-4 py-2 text-sm font-bold shadow">+ زبون جديد</button>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div class="flex gap-2">
+            <button class="pill bg-aqua-50 text-aqua-700">الكل</button>
+            <button class="pill bg-slate-100 text-slate-600">نشطون</button>
+            <button class="pill bg-warn-400/10 text-warn-600">في خطر</button>
+            <button class="pill bg-slate-100 text-slate-600">جدد</button>
+          </div>
+          <input placeholder="بحث بالاسم أو الهاتف…" class="border border-slate-200 rounded-lg px-3 py-1.5 text-sm w-64" />
+        </div>
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-600">
+            <tr>
+              <th class="text-right px-5 py-3">الاسم</th>
+              <th class="text-right px-5 py-3">الهاتف</th>
+              <th class="text-right px-5 py-3">المنطقة</th>
+              <th class="text-right px-5 py-3">الحالة</th>
+              <th class="text-right px-5 py-3">عدد التعبئات</th>
+              <th class="text-right px-5 py-3">آخر تعبئة</th>
+              <th class="text-right px-5 py-3">العقد</th>
+              <th class="text-right px-5 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${adminCustomers.map(c => `
+              <tr class="border-t border-slate-100 row-hov">
+                <td class="px-5 py-3 font-bold">${c.name}</td>
+                <td class="px-5 py-3 text-slate-500 num" dir="ltr">${c.phone}</td>
+                <td class="px-5 py-3">${c.district}</td>
+                <td class="px-5 py-3"><span class="chip-sm ${statusKlass(c.status)}">${statusLabel(c.status)}</span></td>
+                <td class="px-5 py-3 num">${c.refills}</td>
+                <td class="px-5 py-3 text-slate-500">${c.lastDays > 0 ? `منذ ${c.lastDays} يوم` : '—'}</td>
+                <td class="px-5 py-3">
+                  ${c.termsAcceptedAt
+                    ? `<span class="chip-sm bg-leaf-50 text-leaf-700">📝 وقّع ${c.termsAcceptedAt}</span>`
+                    : `<span class="chip-sm bg-danger-50 text-danger-700">⚠ لم يوقّع</span>`}
+                </td>
+                <td class="px-5 py-3">
+                  ${c.status==='AT_RISK' ? '<button class="bg-warn-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">تنبيه</button>' : '<button class="text-slate-400 hover:text-slate-600">⋯</button>'}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function admDrivers() {
+  return `
+    <div class="p-6 space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="font-black text-2xl text-slate-900">السائقون</h1>
+          <p class="text-sm text-slate-500 mt-0.5">${adminDrivers.length} سائقون — ${adminDrivers.filter(d=>d.status==='AVAILABLE').length} متاح الآن</p>
+        </div>
+        <button class="bg-aqua-gradient text-white rounded-xl px-4 py-2 text-sm font-bold shadow">+ سائق جديد</button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        ${adminDrivers.map(d => `
+          <div class="bg-white rounded-2xl shadow-sm p-5">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-full bg-aqua-gradient flex items-center justify-center text-white font-black">${d.name[0]}</div>
+                <div>
+                  <div class="font-black">${d.name}</div>
+                  <div class="text-xs text-slate-500 num" dir="ltr">${d.phone}</div>
+                </div>
+              </div>
+              <span class="chip-sm ${d.status==='AVAILABLE'?'status-active':d.status==='ON_ROUTE'?'status-enroute':'status-pending'}">${({AVAILABLE:'متاح',ON_ROUTE:'في طريق',ON_BREAK:'استراحة',OFFLINE:'خارج'})[d.status]}</span>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 text-center text-xs mb-3">
+              <div class="bg-slate-50 rounded-xl py-2">
+                <div class="text-slate-500 text-[10px]">تعبئات الشهر</div>
+                <div class="font-black text-aqua-700 num">${d.refills}</div>
+              </div>
+              <div class="bg-slate-50 rounded-xl py-2">
+                <div class="text-slate-500 text-[10px]">عمولة</div>
+                <div class="font-black text-leaf-600 num">${fmtShort(d.commission)}</div>
+              </div>
+              <div class="bg-slate-50 rounded-xl py-2">
+                <div class="text-slate-500 text-[10px]">راتب أساسي</div>
+                <div class="font-black num">${fmtShort(d.salary)}</div>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2">
+                <span class="chip-sm bg-slate-100 text-slate-700 num">🚐 ${d.plate}</span>
+              </div>
+              <button class="text-aqua-600 font-bold">تتبع لحظي ←</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function admOrders() {
+  return `
+    <div class="p-6 space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="font-black text-2xl text-slate-900">الطلبات</h1>
+          <p class="text-sm text-slate-500 mt-0.5">يتم تحديثها تلقائياً • ${adminOrders.length} طلب اليوم</p>
+        </div>
+        <div class="flex gap-2">
+          <button class="bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold">📥 تصدير</button>
+          <button class="bg-aqua-gradient text-white rounded-xl px-4 py-2 text-sm font-bold shadow">+ طلب يدوي</button>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+          <button class="pill bg-aqua-50 text-aqua-700">الكل (${adminOrders.length})</button>
+          <button class="pill bg-slate-100 text-slate-600">قيد الانتظار</button>
+          <button class="pill bg-slate-100 text-slate-600">في الطريق</button>
+          <button class="pill bg-slate-100 text-slate-600">مكتمل</button>
+        </div>
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-600">
+            <tr>
+              <th class="text-right px-5 py-3">الكود</th>
+              <th class="text-right px-5 py-3">الزبون</th>
+              <th class="text-right px-5 py-3">المنطقة</th>
+              <th class="text-right px-5 py-3">السائق</th>
+              <th class="text-right px-5 py-3">الحالة</th>
+              <th class="text-right px-5 py-3">المبلغ</th>
+              <th class="text-right px-5 py-3">الوقت</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${adminOrders.map(o => `
+              <tr class="border-t border-slate-100 row-hov">
+                <td class="px-5 py-3 font-bold num">${o.code}</td>
+                <td class="px-5 py-3">${o.customer}</td>
+                <td class="px-5 py-3">${o.district}</td>
+                <td class="px-5 py-3 ${!o.driver?'text-slate-400':''}">${o.driver || 'غير مُسنَد'}</td>
+                <td class="px-5 py-3"><span class="chip-sm status-${o.status.toLowerCase().replace('_','')}">${admOrderLabel(o.status)}</span></td>
+                <td class="px-5 py-3 font-bold num">${o.amount > 0 ? fmt(o.amount) : 'مجاني'}</td>
+                <td class="px-5 py-3 text-slate-500 num">${o.time}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function admAccounting() {
+  const totalSalaries = adminDrivers.reduce((s,d)=>s+d.salary+d.commission,0);
+  const expenses = 4_120_000;
+  const walkinTotal = walkinSalesToday.reduce((s,w)=>s+w.amount,0);
+  const net = adminStats.monthRevenue + walkinTotal - expenses - totalSalaries;
+  return `
+    <div class="p-6 space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="font-black text-2xl text-slate-900">المحاسبة</h1>
+          <p class="text-sm text-slate-500 mt-0.5">تقرير الأرباح والخسائر للشهر الحالي</p>
+        </div>
+        <select class="bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold">
+          <option>أيار 2026</option><option>نيسان 2026</option><option>آذار 2026</option>
+        </select>
+      </div>
+
+      <div class="grid grid-cols-4 gap-4">
+        <div class="bg-white rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-slate-500">إيرادات</span>
+            <span class="text-leaf-600">📈</span>
+          </div>
+          <div class="font-black text-2xl text-leaf-600 num">${fmtShort(adminStats.monthRevenue)}</div>
+          <div class="text-[10px] text-slate-400 mt-1">+9.9% عن الشهر السابق</div>
+        </div>
+        <div class="bg-white rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-slate-500">مصاريف تشغيلية</span>
+            <span class="text-danger-500">📉</span>
+          </div>
+          <div class="font-black text-2xl text-danger-600 num">${fmtShort(expenses)}</div>
+          <div class="text-[10px] text-slate-400 mt-1">وقود + صيانة + فواتير</div>
+        </div>
+        <div class="bg-white rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-slate-500">رواتب + عمولات</span>
+            <span class="text-violet-500">💼</span>
+          </div>
+          <div class="font-black text-2xl text-violet-600 num">${fmtShort(totalSalaries)}</div>
+          <div class="text-[10px] text-slate-400 mt-1">${adminDrivers.length} سائقون</div>
+        </div>
+        <div class="bg-aqua-gradient rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">صافي الربح</div>
+          <div class="font-black text-2xl num mt-1">${fmtShort(net)}</div>
+          <div class="text-[11px] opacity-90 mt-1">هامش ${(net/adminStats.monthRevenue*100).toFixed(1)}%</div>
+        </div>
+      </div>
+
+      <!-- Refills without prior app order (walk-by refills) -->
+      <div class="bg-white rounded-2xl p-5 shadow-sm border-r-4 border-aqua-400">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h3 class="font-black">💧 تعبئات بدون طلب مسبق اليوم</h3>
+            <div class="text-[11px] text-slate-500">زبائن مسجّلون لكن لم يطلبوا من التطبيق — السائق كان قريباً منهم فعبّأ لهم مباشرة</div>
+          </div>
+          <div class="text-left">
+            <div class="text-[10px] text-slate-500">الإجمالي اليوم</div>
+            <div class="font-black text-xl text-aqua-700 num">${fmt(walkinTotal)}</div>
+          </div>
+        </div>
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-600 text-[11px]">
+            <tr>
+              <th class="text-right px-3 py-2">الوقت</th>
+              <th class="text-right px-3 py-2">السائق</th>
+              <th class="text-right px-3 py-2">الزبون</th>
+              <th class="text-right px-3 py-2">رقم الخزان</th>
+              <th class="text-right px-3 py-2">المنطقة</th>
+              <th class="text-right px-3 py-2">المبلغ</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${walkinSalesToday.map(w => `
+              <tr class="border-t border-slate-100">
+                <td class="px-3 py-2 num text-slate-500">${w.time}</td>
+                <td class="px-3 py-2 font-bold">${w.driver}</td>
+                <td class="px-3 py-2">${w.customer}</td>
+                <td class="px-3 py-2 font-mono text-xs num">${w.tankQR}</td>
+                <td class="px-3 py-2 text-slate-600">${w.district}</td>
+                <td class="px-3 py-2 font-black text-aqua-700 num">${fmt(w.amount)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="bg-white rounded-2xl p-5 shadow-sm">
+          <h3 class="font-black mb-3">آخر المصاريف</h3>
+          <div class="space-y-2 text-sm">
+            ${[
+              {cat:'وقود', amt:780_000, date:'2026-05-09', emoji:'⛽'},
+              {cat:'صيانة سيارات', amt:420_000, date:'2026-05-08', emoji:'🔧'},
+              {cat:'فلاتر RO', amt:1_200_000, date:'2026-05-05', emoji:'🧪'},
+              {cat:'كهرباء', amt:680_000, date:'2026-05-03', emoji:'⚡'},
+              {cat:'إيجار المعمل', amt:1_000_000, date:'2026-05-01', emoji:'🏢'},
+            ].map(e => `
+              <div class="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center">${e.emoji}</div>
+                  <div>
+                    <div class="font-bold">${e.cat}</div>
+                    <div class="text-[11px] text-slate-500 num">${e.date}</div>
+                  </div>
+                </div>
+                <span class="font-black text-danger-600 num">${fmt(e.amt)}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        <div class="bg-white rounded-2xl p-5 shadow-sm">
+          <h3 class="font-black mb-3">رواتب السائقين (مايو)</h3>
+          <div class="space-y-2 text-sm">
+            ${adminDrivers.map(d => `
+              <div class="py-2 border-b border-slate-100 last:border-0">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold">${d.name}</span>
+                  <span class="font-black text-aqua-700 num">${fmt(d.salary + d.commission)}</span>
+                </div>
+                <div class="flex items-center justify-between text-[11px] text-slate-500 mt-0.5 num">
+                  <span>${d.refills} تعبئة</span>
+                  <span>أساسي ${fmtShort(d.salary)} + عمولة ${fmtShort(d.commission)}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function admNotifications() {
+  return `
+    <div class="p-6 space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="font-black text-2xl text-slate-900">سجل التنبيهات</h1>
+          <p class="text-sm text-slate-500 mt-0.5">يتم إرسالها يومياً 9 صباحاً تلقائياً • WhatsApp + SMS كاحتياط</p>
+        </div>
+        <button class="bg-aqua-gradient text-white rounded-xl px-4 py-2 text-sm font-bold shadow">+ تنبيه يدوي</button>
+      </div>
+
+      <div class="grid grid-cols-4 gap-4">
+        <div class="bg-white rounded-2xl p-5 shadow-sm">
+          <div class="text-xs text-slate-500">تنبيهات اليوم</div>
+          <div class="font-black text-3xl text-aqua-700 num mt-1">14</div>
+        </div>
+        <div class="bg-white rounded-2xl p-5 shadow-sm">
+          <div class="text-xs text-slate-500">تذكيرات صديقة</div>
+          <div class="font-black text-3xl text-leaf-600 num mt-1">9</div>
+        </div>
+        <div class="bg-white rounded-2xl p-5 shadow-sm">
+          <div class="text-xs text-slate-500">إنذارات سحب</div>
+          <div class="font-black text-3xl text-warn-600 num mt-1">4</div>
+        </div>
+        <div class="bg-white rounded-2xl p-5 shadow-sm">
+          <div class="text-xs text-slate-500">فشلت الإرسال</div>
+          <div class="font-black text-3xl text-danger-600 num mt-1">1</div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-600">
+            <tr>
+              <th class="text-right px-5 py-3">الوقت</th>
+              <th class="text-right px-5 py-3">النوع</th>
+              <th class="text-right px-5 py-3">المُستلم</th>
+              <th class="text-right px-5 py-3">القناة</th>
+              <th class="text-right px-5 py-3">الحالة</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${adminNotifications.map(n => `
+              <tr class="border-t border-slate-100 row-hov">
+                <td class="px-5 py-3 num">${n.time}</td>
+                <td class="px-5 py-3">${({REFILL_REMINDER:'تذكير شهري',REFILL_WARNING:'إنذار سحب الخزان',SUBSCRIPTION_REMINDER_14D:'تذكير اشتراك (١٤ يوم)',SUBSCRIPTION_REMINDER_7D:'تذكير تجديد (٧ أيام)',SUBSCRIPTION_EXPIRING_3D:'تنبيه عاجل (٣ أيام)',SUBSCRIPTION_EXPIRED:'انتهى الاشتراك'})[n.kind] || n.kind}</td>
+                <td class="px-5 py-3 font-bold">${n.recipient}</td>
+                <td class="px-5 py-3"><span class="chip-sm ${n.channel==='WhatsApp'?'bg-leaf-50 text-leaf-700':'bg-aqua-50 text-aqua-700'}">${n.channel}</span></td>
+                <td class="px-5 py-3"><span class="chip-sm ${n.status==='FAILED'?'status-cancelled':n.status==='SENT'?'status-pending':'status-active'}">${({SENT:'أُرسلت',DELIVERED:'وصلت',FAILED:'فشلت'})[n.status]}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+/* ============================ ADMIN: SUBSCRIPTION ============================ */
+function admSubscription() {
+  const s = state.adm.subscription;
+  const expired = s.daysLeft < 0;
+  const urgent = s.daysLeft >= 0 && s.daysLeft <= 7;
+  return `
+    <div class="p-6 space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="font-black text-2xl text-slate-900">اشتراكي</h1>
+          <p class="text-sm text-slate-500 mt-0.5">حالة الاشتراك وموعد التجديد</p>
+        </div>
+        <div class="flex gap-1.5 text-[10px]">
+          <span class="text-slate-400">جرّب حالة:</span>
+          <button onclick="admSetExpiry(14)" class="bg-slate-100 text-slate-600 px-2 py-1 rounded-md font-bold">١٤ يوم</button>
+          <button onclick="admSetExpiry(6)"  class="bg-amber-100 text-amber-700 px-2 py-1 rounded-md font-bold">٦ أيام</button>
+          <button onclick="admSetExpiry(2)"  class="bg-warn-100 text-warn-700 px-2 py-1 rounded-md font-bold">يومين</button>
+          <button onclick="admSetExpiry(-2)" class="bg-danger-100 text-danger-700 px-2 py-1 rounded-md font-bold">منتهي</button>
+        </div>
+      </div>
+
+      <!-- Status hero card -->
+      <div class="${expired ? 'bg-danger-gradient' : urgent ? 'bg-warn-gradient' : 'bg-aqua-gradient'} rounded-2xl p-6 text-white ripple-bg">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="chip-sm bg-white/25 text-white">خطة ${s.plan}</span>
+              <span class="chip-sm bg-white/25 text-white">${expired ? 'منتهي' : urgent ? 'يحتاج تجديد' : 'نشط'}</span>
+            </div>
+            <div class="font-black text-3xl mt-2 num">${fmt(s.priceIqd)}/شهر</div>
+            <div class="text-sm opacity-90 mt-1">
+              ${expired
+                ? `انتهى منذ ${Math.abs(s.daysLeft)} ${Math.abs(s.daysLeft) === 1 ? 'يوم' : 'أيام'} — الحساب معلّق`
+                : `ينتهي خلال <strong class="num">${s.daysLeft}</strong> ${s.daysLeft === 1 ? 'يوم' : 'أيام'}`}
+            </div>
+          </div>
+          <div class="text-7xl opacity-50">${expired ? '🚫' : urgent ? '⏰' : '✓'}</div>
+        </div>
+
+        <!-- Visual countdown bar -->
+        <div class="mt-4">
+          <div class="bg-white/20 rounded-full h-2 overflow-hidden">
+            <div class="bg-white h-full transition-all" style="width: ${Math.max(0, Math.min(100, (s.daysLeft / 30) * 100))}%"></div>
+          </div>
+          <div class="flex justify-between text-[11px] opacity-80 mt-1 num">
+            <span>${s.startsAt}</span>
+            <span>${s.endsAt}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reminders timeline -->
+      <div class="bg-white rounded-2xl p-5 shadow-sm">
+        <h3 class="font-black mb-3">📨 جدول التذكيرات</h3>
+        <div class="space-y-3 text-sm">
+          ${[
+            {at:14, label:'تذكير ودّي', desc:'رسالة WhatsApp للعلم — لا إجراء مطلوب', sent:s.daysLeft <= 14},
+            {at:7,  label:'تذكير بالتجديد', desc:'رسالة WhatsApp + إشعار في التطبيق', sent:s.daysLeft <= 7},
+            {at:3,  label:'تنبيه عاجل', desc:'تنبيه قوي — جدّد لتجنب توقف الخدمة', sent:s.daysLeft <= 3},
+            {at:0,  label:'تعليق الحساب', desc:'تعليق تلقائي عند انتهاء اليوم الأخير', sent:s.daysLeft < 0},
+          ].map((r,i,arr) => `
+            <div class="flex items-start gap-3">
+              <div class="w-7 h-7 rounded-full ${r.sent ? 'bg-aqua-500 text-white' : 'bg-slate-100 text-slate-400'} flex items-center justify-center text-xs font-black mt-0.5">${r.sent ? '✓' : i+1}</div>
+              <div class="flex-1 ${r.sent ? '' : 'opacity-60'} ${i < arr.length - 1 ? 'pb-3 border-b border-slate-100' : ''}">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold">${r.label}</span>
+                  <span class="text-[11px] text-slate-500 num">${r.at === 0 ? 'يوم الانتهاء' : `قبل ${r.at} ${r.at === 1 ? 'يوم' : 'أيام'}`}</span>
+                </div>
+                <div class="text-[11px] text-slate-500 mt-0.5">${r.desc}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- Renewal options -->
+      <div class="bg-white rounded-2xl p-5 shadow-sm">
+        <h3 class="font-black mb-3">جدّد أو غيّر خطتك</h3>
+        <div class="grid grid-cols-4 gap-3">
+          ${Object.entries(planPrices).map(([plan, price]) => {
+            const isCurrent = plan === s.plan;
+            return `
+              <div class="border-2 ${isCurrent ? 'border-aqua-400 bg-aqua-50' : 'border-slate-200'} rounded-xl p-4 text-center">
+                <div class="font-black text-sm">${plan}</div>
+                <div class="font-black text-aqua-700 num text-lg mt-1">${fmt(price)}</div>
+                <div class="text-[10px] text-slate-500">/شهر</div>
+                <button onclick="admRenew('${plan}')" class="w-full mt-3 ${isCurrent ? 'bg-aqua-500' : 'bg-slate-100 hover:bg-aqua-100'} ${isCurrent ? 'text-white' : 'text-slate-700'} rounded-lg py-2 text-xs font-black transition">
+                  ${isCurrent ? 'جدّد (نفس الخطة)' : 'ترقية'}
+                </button>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- Payment methods -->
+      <div class="bg-slate-50 rounded-xl p-4 text-xs text-slate-600 leading-relaxed">
+        <div class="font-black text-slate-700 mb-2">💳 طرق الدفع المتاحة</div>
+        <div class="grid grid-cols-3 gap-2">
+          <div class="bg-white border border-slate-200 rounded-lg p-2 text-center">
+            <div class="font-bold">ZainCash</div>
+            <div class="text-[10px] text-slate-500 mt-0.5">إلكتروني فوري</div>
+          </div>
+          <div class="bg-white border border-slate-200 rounded-lg p-2 text-center">
+            <div class="font-bold">حوالة بنكية</div>
+            <div class="text-[10px] text-slate-500 mt-0.5">يوم عمل واحد</div>
+          </div>
+          <div class="bg-white border border-slate-200 rounded-lg p-2 text-center">
+            <div class="font-bold">نقد للمندوب</div>
+            <div class="text-[10px] text-slate-500 mt-0.5">يأتي مندوبنا لمعملك</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function admSetExpiry(days) {
+  state.adm.subscription.daysLeft = days;
+  renderAdmin();
+}
+
+function admRenew(plan) {
+  state.adm.subscription.plan = plan;
+  state.adm.subscription.priceIqd = planPrices[plan];
+  state.adm.subscription.daysLeft = 30;
+  toast(`تم تجديد الاشتراك على خطة ${plan} ✓ شهر آخر مدفوع`,'success');
+  renderAdmin();
+}
+
+/* ============================ ADMIN: BONUSES ============================ */
+function admBonuses() {
+  const b = state.adm.bonuses;
+  const projected = {
+    refill:     b.refill * 800,   // ~800 refills/month
+    delivery:   b.delivery * 18,   // ~18 new deliveries
+    newCustomer:b.newCustomer * 12, // ~12 new customers
+  };
+  const total = projected.refill + projected.delivery + projected.newCustomer;
+  return `
+    <div class="p-6 space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="font-black text-2xl text-slate-900">المكافآت والحوافز</h1>
+          <p class="text-sm text-slate-500 mt-0.5">مبلغ إضافي يحصل عليه السائق عن كل عملية — يحفّزهم على الإنجاز</p>
+        </div>
+        <button onclick="admSaveBonuses()" class="bg-aqua-gradient text-white rounded-xl px-5 py-2 text-sm font-bold shadow">حفظ التغييرات</button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        ${[
+          {key:'refill',      icon:'💧', color:'aqua',   label:'مكافأة عن كل تعبئة',         hint:'إضافة على عمولة التعبئة الأساسية'},
+          {key:'delivery',    icon:'📦', color:'leaf',   label:'مكافأة توصيل خزان جديد',     hint:'تشجيع توسيع قاعدة الزبائن'},
+          {key:'newCustomer', icon:'⭐', color:'warn',   label:'مكافأة جلب زبون جديد',       hint:'السائق سجّل الزبون وكسب ولاءه'},
+          {key:'reclaim',     icon:'↩️', color:'danger', label:'مكافأة سحب خزان (إنذار)',     hint:'لتشجيع استعادة الخزانات قبل ضياعها'},
+        ].map(item => `
+          <div class="bg-white rounded-2xl p-5 shadow-sm">
+            <div class="flex items-center gap-3 mb-3">
+              <div class="w-11 h-11 rounded-xl bg-${item.color}-50 flex items-center justify-center text-2xl">${item.icon}</div>
+              <div>
+                <div class="font-black text-slate-900">${item.label}</div>
+                <div class="text-[11px] text-slate-500">${item.hint}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 bg-slate-50 rounded-xl p-2">
+              <button onclick="admBonusAdjust('${item.key}', -50)" class="w-9 h-9 rounded-lg bg-white border border-slate-200 font-black">−</button>
+              <input id="bonus-${item.key}" value="${b[item.key]}" onchange="admBonusSet('${item.key}', this.value)" class="flex-1 bg-transparent text-center font-black text-2xl text-slate-900 num focus:outline-none" />
+              <span class="text-xs text-slate-500 font-bold">د.ع</span>
+              <button onclick="admBonusAdjust('${item.key}', 50)" class="w-9 h-9 rounded-lg bg-white border border-slate-200 font-black">+</button>
+            </div>
+            <div class="grid grid-cols-3 gap-1 mt-2 text-[10px]">
+              ${[0, 50, 100, 200, 500, 1000].map(v => `
+                <button onclick="admBonusSet('${item.key}', ${v})" class="px-2 py-1 rounded-md ${b[item.key]===v?'bg-aqua-500 text-white':'bg-slate-100 text-slate-600'}">${v===0?'إيقاف':v.toLocaleString()}</button>
+              `).join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      <!-- Projection card -->
+      <div class="bg-aqua-gradient rounded-2xl p-5 text-white ripple-bg">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <div class="text-xs opacity-90">التكلفة الشهرية المتوقعة</div>
+            <div class="font-black text-3xl num mt-1">${fmt(total)}</div>
+            <div class="text-xs opacity-90 mt-2">بناءً على متوسط نشاط الشهر السابق</div>
+          </div>
+          <div class="text-left text-xs space-y-1.5">
+            <div class="flex justify-between gap-8"><span class="opacity-80">تعبئات (~800)</span><span class="font-black num">${fmt(projected.refill)}</span></div>
+            <div class="flex justify-between gap-8"><span class="opacity-80">توصيل خزانات (~18)</span><span class="font-black num">${fmt(projected.delivery)}</span></div>
+            <div class="flex justify-between gap-8"><span class="opacity-80">زبائن جدد (~12)</span><span class="font-black num">${fmt(projected.newCustomer)}</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-slate-50 rounded-xl p-4 text-xs text-slate-600 leading-relaxed">
+        <div class="font-black text-slate-700 mb-1.5">💡 كيف تعمل المكافآت؟</div>
+        المكافأة تُسجَّل تلقائياً مع كل عملية مكتملة، وتُجمع في راتب السائق نهاية الشهر. لا حاجة لتسجيل يدوي — النظام يحسبها فور تأكيد التعبئة. السائق يرى مكافأته اليومية في "محفظتي".
+      </div>
+    </div>
+  `;
+}
+function admApproveCustomer(id) {
+  const i = pendingApprovals.findIndex(c => c.id === id);
+  if (i >= 0) {
+    const c = pendingApprovals[i];
+    pendingApprovals.splice(i, 1);
+    toast(`تمت الموافقة على ${c.name} ✓ مكافأة ٥٬٠٠٠ د.ع للسائق`, 'success');
+    renderAdmin();
+  }
+}
+function admRejectCustomer(id) {
+  const i = pendingApprovals.findIndex(c => c.id === id);
+  if (i >= 0) {
+    pendingApprovals.splice(i, 1);
+    toast('تم رفض الطلب', 'warn');
+    renderAdmin();
+  }
+}
+
+function admBonusAdjust(key, delta) {
+  state.adm.bonuses[key] = Math.max(0, (state.adm.bonuses[key]||0) + delta);
+  renderAdmin();
+}
+function admBonusSet(key, val) {
+  state.adm.bonuses[key] = Math.max(0, Number(val) || 0);
+  renderAdmin();
+}
+function admSaveBonuses() { toast('تم حفظ إعدادات المكافآت ✓','success'); }
+
+/* ============================ PLATFORM ADMIN ============================ */
+function platGo(nav) { state.plat.nav = nav; renderPlatform(); }
+
+function renderPlatform() {
+  document.querySelectorAll('.plat-nav').forEach(n => {
+    if (n.dataset.nav === state.plat.nav) { n.classList.add('nav-active'); n.classList.remove('text-slate-300'); }
+    else { n.classList.remove('nav-active'); n.classList.add('text-slate-300'); }
+  });
+  const root = document.getElementById('plat-content');
+  if (state.plat.nav==='overview')      root.innerHTML = platOverview();
+  if (state.plat.nav==='plants')        root.innerHTML = platPlants();
+  if (state.plat.nav==='subscriptions') root.innerHTML = platSubscriptions();
+  if (state.plat.nav==='revenue')       root.innerHTML = platRevenue();
+  if (state.plat.nav==='data')          root.innerHTML = platData();
+  if (state.plat.nav==='ads')           root.innerHTML = platAds();
+  if (state.plat.nav==='marketplace')   root.innerHTML = platMarketplace();
+  if (state.plat.nav==='support')       root.innerHTML = platSupport();
+}
+
+function platOverview() {
+  const totalPlants = platformPlants.length;
+  const active = platformPlants.filter(p=>p.status==='ACTIVE').length;
+  const totalCustomers = platformPlants.reduce((s,p)=>s+p.customers,0);
+  const mrr = platformPlants
+    .filter(p => p.status==='ACTIVE' || p.status==='PAST_DUE')
+    .reduce((s,p) => s + planPrices[p.plan], 0);
+  return `
+    <div class="p-6 space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="font-black text-2xl text-slate-900">نظرة عامة على المنصة</h1>
+          <p class="text-sm text-slate-500 mt-0.5">كل المعامل، الإيرادات، حالة الاشتراكات</p>
+        </div>
+        <button onclick="platOpenPlant()" class="bg-gradient-to-br from-amber-500 to-amber-600 text-white rounded-xl px-5 py-2 text-sm font-bold shadow">+ افتح معمل جديد</button>
+      </div>
+
+      <div class="grid grid-cols-4 gap-4">
+        <div class="gcard-1 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">إجمالي المعامل</div>
+          <div class="font-black text-3xl num mt-1">${totalPlants}</div>
+          <div class="text-[11px] opacity-90 mt-1">نشط: ${active} • تجريبي: ${platformPlants.filter(p=>p.status==='TRIAL').length}</div>
+        </div>
+        <div class="gcard-2 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">إجمالي الزبائن في المنصة</div>
+          <div class="font-black text-3xl num mt-1">${totalCustomers.toLocaleString()}</div>
+          <div class="text-[11px] opacity-90 mt-1">عبر كل المعامل</div>
+        </div>
+        <div class="bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">إيراد المنصة الشهري (MRR)</div>
+          <div class="font-black text-3xl num mt-1">${fmtShort(mrr)}</div>
+          <div class="text-[11px] opacity-90 mt-1">من اشتراكات المعامل</div>
+        </div>
+        <div class="gcard-4 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">اشتراكات تحتاج متابعة</div>
+          <div class="font-black text-3xl num mt-1">${platformPlants.filter(p => p.monthsToRenew < 0 || p.status==='PAST_DUE').length}</div>
+          <div class="text-[11px] opacity-90 mt-1">PAST_DUE أو منتهية الصلاحية</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-4">
+        <div class="col-span-2 bg-white rounded-2xl p-5 shadow-sm">
+          <h3 class="font-black mb-3">نمو المعامل (آخر ٥ أشهر)</h3>
+          <div class="flex items-end gap-6 h-40">
+            ${[
+              {m:'كانون', v:2},
+              {m:'شباط',  v:3},
+              {m:'آذار',  v:4},
+              {m:'نيسان', v:5},
+              {m:'أيار',  v:7},
+            ].map((m,i,a) => `
+              <div class="bar-chart-col flex-1">
+                <div class="text-[11px] font-black text-aqua-700 num">${m.v}</div>
+                <div class="bar ${i===a.length-1?'active':''}" style="height:${(m.v/10)*140}px"></div>
+                <div class="text-xs text-slate-500 mt-1">${m.m}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        <div class="bg-white rounded-2xl p-5 shadow-sm">
+          <h3 class="font-black mb-3">توزيع الخطط</h3>
+          ${['STARTER','PRO','BUSINESS','ENTERPRISE'].map(plan => {
+            const count = platformPlants.filter(p=>p.plan===plan).length;
+            const pct = (count/totalPlants*100);
+            const colors = {STARTER:'bg-slate-400', PRO:'bg-aqua-500', BUSINESS:'bg-amber-500', ENTERPRISE:'bg-violet-600'};
+            return `
+              <div class="mb-2.5">
+                <div class="flex justify-between text-sm mb-1"><span class="font-bold">${plan}</span><span class="num">${count} • ${fmt(planPrices[plan])}</span></div>
+                <div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="${colors[plan]} h-full" style="width:${pct}%"></div></div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- Renewal reminders widget -->
+      <div class="bg-white rounded-2xl p-5 shadow-sm border-r-4 border-warn-400">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h3 class="font-black">تنبيهات تجديد الاشتراك المُرسَلة آلياً</h3>
+            <div class="text-[11px] text-slate-500">المنصة ترسل تذكيرات WhatsApp قبل ١٤، ٧، ٣ أيام من الانتهاء</div>
+          </div>
+          <button onclick="platGo('subscriptions')" class="text-xs text-aqua-600 font-bold">عرض الكل ←</button>
+        </div>
+        <div class="space-y-2">
+          ${[
+            {plant:'معمل الينابيع',  owner:'فاضل علي',  status:'EXPIRED',   daysAgo:9, plan:'STARTER', sent:'SUBSCRIPTION_EXPIRED'},
+            {plant:'مياه الرافدين', owner:'سعد محمود', status:'EXPIRING',  daysAhead:3, plan:'PRO',   sent:'SUBSCRIPTION_EXPIRING_3D'},
+            {plant:'مياه الفرات',   owner:'حيدر عبد', status:'REMINDER',  daysAhead:6, plan:'STARTER', sent:'SUBSCRIPTION_REMINDER_7D'},
+          ].map(r => `
+            <div class="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-lg ${r.status==='EXPIRED'?'bg-danger-50 text-danger-600':r.status==='EXPIRING'?'bg-warn-50 text-warn-600':'bg-amber-50 text-amber-600'} flex items-center justify-center text-lg">${r.status==='EXPIRED'?'🚫':r.status==='EXPIRING'?'⚠️':'⏰'}</div>
+                <div>
+                  <div class="font-bold text-sm">${r.plant}</div>
+                  <div class="text-[11px] text-slate-500">${r.owner} • ${r.plan} • ${r.status==='EXPIRED'?`منتهي منذ ${r.daysAgo} يوم`:`ينتهي بعد ${r.daysAhead} أيام`}</div>
+                </div>
+              </div>
+              <div class="text-left">
+                <span class="chip-sm bg-leaf-50 text-leaf-700 num">📨 ${({SUBSCRIPTION_EXPIRED:'أُرسل إشعار تعليق',SUBSCRIPTION_EXPIRING_3D:'تنبيه عاجل أُرسل',SUBSCRIPTION_REMINDER_7D:'تذكير ٧ أيام أُرسل'})[r.sent]}</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-5 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-black">آخر المعامل المسجّلة</h3>
+          <button onclick="platGo('plants')" class="text-xs text-aqua-600 font-bold">عرض الكل ←</button>
+        </div>
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-600 text-xs">
+            <tr>
+              <th class="text-right px-4 py-2.5">المعمل</th>
+              <th class="text-right px-4 py-2.5">المالك</th>
+              <th class="text-right px-4 py-2.5">الخطة</th>
+              <th class="text-right px-4 py-2.5">الزبائن</th>
+              <th class="text-right px-4 py-2.5">الحالة</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${platformPlants.slice(0,5).map(p => `
+              <tr class="border-t border-slate-100 row-hov">
+                <td class="px-4 py-2.5 font-bold">${p.name}</td>
+                <td class="px-4 py-2.5 text-slate-600">${p.owner}</td>
+                <td class="px-4 py-2.5"><span class="chip-sm bg-aqua-50 text-aqua-700">${p.plan}</span></td>
+                <td class="px-4 py-2.5 num">${p.customers}</td>
+                <td class="px-4 py-2.5"><span class="chip-sm ${p.status==='ACTIVE'?'status-active':p.status==='TRIAL'?'status-pending':'status-cancelled'}">${({ACTIVE:'نشط',TRIAL:'تجريبي',PAST_DUE:'متأخر',SUSPENDED:'موقوف'})[p.status]||p.status}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function platPlants() {
+  return `
+    <div class="p-6 space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="font-black text-2xl text-slate-900">المعامل (${platformPlants.length})</h1>
+          <p class="text-sm text-slate-500 mt-0.5">إدارة جميع المعامل المسجّلة في المنصة</p>
+        </div>
+        <button onclick="platOpenPlant()" class="bg-gradient-to-br from-amber-500 to-amber-600 text-white rounded-xl px-5 py-2 text-sm font-bold shadow">+ افتح معمل جديد</button>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+          <button class="pill bg-aqua-50 text-aqua-700">الكل (${platformPlants.length})</button>
+          <button class="pill bg-slate-100 text-slate-600">نشط</button>
+          <button class="pill bg-slate-100 text-slate-600">تجريبي</button>
+          <button class="pill bg-slate-100 text-slate-600">متأخر/موقوف</button>
+          <input placeholder="بحث…" class="border border-slate-200 rounded-lg px-3 py-1.5 text-sm w-64 mr-auto" />
+        </div>
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-600 text-xs">
+            <tr>
+              <th class="text-right px-5 py-3">المعمل</th>
+              <th class="text-right px-5 py-3">المجموعة</th>
+              <th class="text-right px-5 py-3">المالك</th>
+              <th class="text-right px-5 py-3">الخطة</th>
+              <th class="text-right px-5 py-3">الزبائن</th>
+              <th class="text-right px-5 py-3">التجديد</th>
+              <th class="text-right px-5 py-3">الحالة</th>
+              <th class="text-right px-5 py-3">إجراء</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${platformPlants.map(p => `
+              <tr class="border-t border-slate-100 row-hov">
+                <td class="px-5 py-3 font-bold">${p.name}</td>
+                <td class="px-5 py-3 text-slate-500">${p.group||'—'}</td>
+                <td class="px-5 py-3 text-slate-600">${p.owner}</td>
+                <td class="px-5 py-3"><span class="chip-sm bg-aqua-50 text-aqua-700">${p.plan}</span></td>
+                <td class="px-5 py-3 num">${p.customers}</td>
+                <td class="px-5 py-3 num ${p.monthsToRenew < 0 ? 'text-danger-600 font-bold' : p.monthsToRenew < 0.2 ? 'text-warn-600 font-bold' : 'text-slate-500'}">${p.monthsToRenew >= 0 ? `بعد ${Math.round(p.monthsToRenew*30)} يوم` : `متأخر ${Math.abs(Math.round(p.monthsToRenew*30))} يوم`}</td>
+                <td class="px-5 py-3"><span class="chip-sm ${p.status==='ACTIVE'?'status-active':p.status==='TRIAL'?'status-pending':'status-cancelled'}">${({ACTIVE:'نشط',TRIAL:'تجريبي',PAST_DUE:'متأخر',SUSPENDED:'موقوف'})[p.status]||p.status}</span></td>
+                <td class="px-5 py-3 flex gap-1">
+                  <button onclick="platAct('renew','${p.id}')" class="text-xs bg-aqua-500 text-white px-2.5 py-1 rounded-lg font-bold">جدّد</button>
+                  <button onclick="platAct('impersonate','${p.id}')" class="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg font-bold">دخول كمالك</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+function platAct(action, id) {
+  const p = platformPlants.find(x=>x.id===id);
+  if (action==='renew') toast(`تم تجديد اشتراك ${p.name} لشهر آخر ✓`,'success');
+  if (action==='impersonate') toast(`دخول مؤقت كصاحب ${p.name}`,'success');
+}
+function platOpenPlant() { toast('فتح نموذج إنشاء معمل جديد','success'); }
+
+function platSubscriptions() {
+  const due = platformPlants.filter(p => p.monthsToRenew < 0.2);
+  return `
+    <div class="p-6 space-y-5">
+      <div>
+        <h1 class="font-black text-2xl text-slate-900">إدارة الاشتراكات</h1>
+        <p class="text-sm text-slate-500 mt-0.5">${due.length} اشتراك يحتاج تجديد قريباً</p>
+      </div>
+
+      <div class="grid grid-cols-4 gap-4">
+        ${Object.entries(planPrices).map(([plan, price]) => {
+          const count = platformPlants.filter(p => p.plan===plan).length;
+          return `
+            <div class="bg-white rounded-2xl p-5 shadow-sm border-2 ${plan==='PRO'?'border-aqua-400':'border-slate-100'}">
+              <div class="flex items-center justify-between mb-1">
+                <div class="font-black text-lg">${plan}</div>
+                ${plan==='PRO'?'<span class="chip-sm bg-aqua-500 text-white">★ الأكثر طلباً</span>':''}
+              </div>
+              <div class="font-black text-2xl text-aqua-700 num mt-1">${fmt(price)}</div>
+              <div class="text-xs text-slate-500">شهرياً</div>
+              <div class="mt-3 pt-3 border-t border-slate-100">
+                <div class="text-[11px] text-slate-500">${count} معمل مشترك</div>
+                <div class="font-black text-leaf-600 num text-sm mt-0.5">${fmtShort(count*price)}/شهر</div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h3 class="font-black">اشتراكات تحتاج تجديد</h3>
+          <span class="text-xs text-slate-500">قريباً أو منتهية</span>
+        </div>
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-600 text-xs">
+            <tr>
+              <th class="text-right px-5 py-3">المعمل</th>
+              <th class="text-right px-5 py-3">الخطة</th>
+              <th class="text-right px-5 py-3">المبلغ</th>
+              <th class="text-right px-5 py-3">التجديد</th>
+              <th class="text-right px-5 py-3">الإجراء</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${due.length===0 ? '<tr><td colspan=5 class="px-5 py-8 text-center text-slate-400">كل الاشتراكات حالياً سارية ✓</td></tr>' : due.map(p => `
+              <tr class="border-t border-slate-100 row-hov">
+                <td class="px-5 py-3 font-bold">${p.name}</td>
+                <td class="px-5 py-3"><span class="chip-sm bg-aqua-50 text-aqua-700">${p.plan}</span></td>
+                <td class="px-5 py-3 font-black num">${fmt(planPrices[p.plan])}</td>
+                <td class="px-5 py-3 num ${p.monthsToRenew < 0 ? 'text-danger-600 font-bold' : 'text-warn-600 font-bold'}">${p.monthsToRenew >= 0 ? `بعد ${Math.round(p.monthsToRenew*30)} يوم` : `متأخر ${Math.abs(Math.round(p.monthsToRenew*30))} يوم`}</td>
+                <td class="px-5 py-3 flex gap-1">
+                  <button onclick="platAct('renew','${p.id}')" class="text-xs bg-leaf-500 text-white px-3 py-1.5 rounded-lg font-bold">تجديد</button>
+                  <button onclick="platAct('remind','${p.id}')" class="text-xs bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-bold">تذكير</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function platRevenue() {
+  const mrr = platformPlants.filter(p=>p.status==='ACTIVE'||p.status==='PAST_DUE').reduce((s,p)=>s+planPrices[p.plan],0);
+  const arr = mrr * 12;
+  return `
+    <div class="p-6 space-y-5">
+      <div>
+        <h1 class="font-black text-2xl text-slate-900">إيرادات المنصة</h1>
+        <p class="text-sm text-slate-500 mt-0.5">دخلك الشهري والسنوي من الاشتراكات</p>
+      </div>
+
+      <div class="grid grid-cols-3 gap-4">
+        <div class="gcard-2 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">MRR (دخل شهري متكرر)</div>
+          <div class="font-black text-3xl num mt-1">${fmtShort(mrr)}</div>
+          <div class="text-[11px] opacity-90 mt-1">${fmt(mrr)}</div>
+        </div>
+        <div class="bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">ARR (دخل سنوي متكرر)</div>
+          <div class="font-black text-3xl num mt-1">${fmtShort(arr)}</div>
+          <div class="text-[11px] opacity-90 mt-1">≈ $${Math.round(arr/1300/1000)}k USD</div>
+        </div>
+        <div class="gcard-1 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">متوسط الإيراد لكل معمل</div>
+          <div class="font-black text-3xl num mt-1">${fmtShort(mrr/platformPlants.length)}</div>
+          <div class="text-[11px] opacity-90 mt-1">ARPU شهرياً</div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-5 shadow-sm">
+        <h3 class="font-black mb-3">نمو الإيراد الشهري (آخر ٦ أشهر)</h3>
+        <div class="flex items-end gap-6 h-44">
+          ${[
+            {m:'كانون', v:120_000},
+            {m:'شباط',  v:240_000},
+            {m:'آذار',  v:380_000},
+            {m:'نيسان', v:520_000},
+            {m:'أيار',  v:mrr},
+          ].map((m,i,a) => `
+            <div class="bar-chart-col flex-1">
+              <div class="text-[11px] font-black text-amber-700 num">${fmtShort(m.v)}</div>
+              <div class="bar ${i===a.length-1?'active':''}" style="height:${(m.v/mrr)*150}px"></div>
+              <div class="text-xs text-slate-500 mt-1">${m.m}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="bg-slate-50 rounded-2xl p-5 text-sm">
+        <h3 class="font-black mb-2">💡 تحليل سريع</h3>
+        <ul class="space-y-1.5 text-slate-600 leading-relaxed">
+          <li>• معدل النمو الشهري: <span class="font-black text-leaf-600">+12.8%</span> — صحي جداً</li>
+          <li>• معدل البقاء (Retention): <span class="font-black text-aqua-700">~94%</span> — المعامل لا تترك بسرعة</li>
+          <li>• الهدف القادم: ١٠٠ معمل في نهاية السنة الأولى = <span class="font-black num">~8M د.ع/شهر</span></li>
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
+function platSupport() {
+  return `
+    <div class="p-6 space-y-5">
+      <div>
+        <h1 class="font-black text-2xl text-slate-900">الدعم الفني</h1>
+        <p class="text-sm text-slate-500 mt-0.5">طلبات الدعم من المعامل + أدوات إصلاح الأخطاء</p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="bg-white rounded-2xl p-5 shadow-sm">
+          <h3 class="font-black mb-3">تذاكر مفتوحة</h3>
+          ${[
+            {plant:'مياه الفرات', issue:'لا تصل تنبيهات WhatsApp', age:'منذ ساعة', sev:'high'},
+            {plant:'معمل الزلال', issue:'تقرير P&L يظهر بأرقام خاطئة', age:'منذ ٣ ساعات', sev:'medium'},
+            {plant:'معمل النقاء — البصرة', issue:'سؤال عن المكافآت', age:'منذ يوم', sev:'low'},
+          ].map(t => `
+            <div class="py-3 border-b border-slate-100 last:border-0">
+              <div class="flex items-center justify-between">
+                <div class="font-bold text-sm">${t.plant}</div>
+                <span class="chip-sm ${t.sev==='high'?'status-cancelled':t.sev==='medium'?'status-pending':'status-active'}">${({high:'حرج',medium:'متوسط',low:'عادي'})[t.sev]}</span>
+              </div>
+              <div class="text-xs text-slate-500 mt-1">${t.issue} • ${t.age}</div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="bg-white rounded-2xl p-5 shadow-sm">
+          <h3 class="font-black mb-3">أدوات سريعة</h3>
+          <button class="w-full text-right bg-slate-50 hover:bg-slate-100 rounded-xl p-3 mb-2 text-sm font-bold flex items-center justify-between">
+            <span>🔧 إصلاح حساب زبون مكرر</span><span class="text-slate-400">←</span>
+          </button>
+          <button class="w-full text-right bg-slate-50 hover:bg-slate-100 rounded-xl p-3 mb-2 text-sm font-bold flex items-center justify-between">
+            <span>📨 إعادة إرسال رسائل فاشلة</span><span class="text-slate-400">←</span>
+          </button>
+          <button class="w-full text-right bg-slate-50 hover:bg-slate-100 rounded-xl p-3 mb-2 text-sm font-bold flex items-center justify-between">
+            <span>🗄️ سجلات النظام (Logs)</span><span class="text-slate-400">←</span>
+          </button>
+          <button class="w-full text-right bg-slate-50 hover:bg-slate-100 rounded-xl p-3 text-sm font-bold flex items-center justify-between">
+            <span>💾 نسخ احتياطي يدوي</span><span class="text-slate-400">←</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* ============================ ADMIN: AI ANALYTICS ============================ */
+const aiChurnRisks = [
+  { name:'سارة محمد',  district:'المنصور',   risk:0.82, reason:'لم تعبّأ منذ ٣٢ يوم، تأخّرت سابقاً مرتين' },
+  { name:'أبو فاطمة',  district:'البياع',     risk:0.74, reason:'انخفض معدل التعبئة ٤٠٪ آخر شهرين' },
+  { name:'فاضل حسن',  district:'الكاظمية',   risk:0.61, reason:'لم يردّ على آخر تذكيرين' },
+  { name:'كرار جواد', district:'الجادرية',   risk:0.55, reason:'فترة بين التعبئات تتزايد' },
+];
+
+const aiDemandForecast = [
+  { day:'الإثنين',  expected:36, confidence:0.91 },
+  { day:'الثلاثاء', expected:42, confidence:0.88 },
+  { day:'الأربعاء', expected:45, confidence:0.86 },
+  { day:'الخميس',  expected:48, confidence:0.84 },
+  { day:'الجمعة',  expected:31, confidence:0.92 },
+  { day:'السبت',   expected:40, confidence:0.87 },
+  { day:'الأحد',   expected:44, confidence:0.85 },
+];
+
+const aiVehicleAlerts = [
+  { driver:'حسين رياض', plate:'33221 بغداد', issue:'نمط تباطؤ غير طبيعي — احتمال مشكلة بريك',  km:1820, urgency:'high' },
+  { driver:'كريم محمود', plate:'87654 بغداد', issue:'استهلاك وقود زاد ١٨٪ آخر أسبوع — صيانة محرك', km:980,  urgency:'medium' },
+];
+
+function admAI() {
+  return `
+    <div class="p-6 space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="font-black text-2xl text-slate-900">🧠 تحليلات AI</h1>
+          <p class="text-sm text-slate-500 mt-0.5">توقعات ذكية مبنية على بيانات معملك — تساعدك تحرّك قبل المشكلة</p>
+        </div>
+        <span class="chip-sm bg-gradient-to-br from-violet-500 to-violet-700 text-white">يحدّث كل ساعة</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <!-- Churn prediction -->
+        <div class="bg-white rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="font-black">زبائن في خطر التسرّب</h3>
+              <div class="text-[11px] text-slate-500">احتمال أن يتركوا الخدمة الشهر القادم</div>
+            </div>
+            <div class="text-[10px] text-warn-600 font-black bg-warn-50 px-2 py-1 rounded-full">${aiChurnRisks.length} زبون</div>
+          </div>
+          <div class="space-y-2.5">
+            ${aiChurnRisks.map(c => `
+              <div class="bg-slate-50 rounded-xl p-3">
+                <div class="flex items-center justify-between mb-1.5">
+                  <div>
+                    <div class="font-bold text-sm">${c.name}</div>
+                    <div class="text-[11px] text-slate-500">${c.district}</div>
+                  </div>
+                  <div class="text-left">
+                    <div class="font-black text-2xl ${c.risk > 0.7 ? 'text-danger-600' : c.risk > 0.5 ? 'text-warn-600' : 'text-amber-500'} num">${Math.round(c.risk*100)}%</div>
+                  </div>
+                </div>
+                <div class="text-[11px] text-slate-600 mb-2">${c.reason}</div>
+                <div class="flex gap-2">
+                  <button class="flex-1 bg-aqua-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">📞 اتصل به</button>
+                  <button class="flex-1 bg-leaf-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">🎁 عرض خاص</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Demand forecast -->
+        <div class="bg-white rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="font-black">توقّع الطلب الأسبوع القادم</h3>
+              <div class="text-[11px] text-slate-500">جهّز السائقين والإنتاج وفقاً للأرقام</div>
+            </div>
+            <div class="text-[10px] text-aqua-600 font-black bg-aqua-50 px-2 py-1 rounded-full">${aiDemandForecast.reduce((s,d)=>s+d.expected,0)} تعبئة</div>
+          </div>
+          <div class="space-y-2">
+            ${aiDemandForecast.map(d => `
+              <div class="flex items-center gap-3 text-sm">
+                <div class="w-16 text-slate-500">${d.day}</div>
+                <div class="flex-1 progress-bar h-3"><div class="progress-fill" style="width:${(d.expected/50)*100}%"></div></div>
+                <div class="w-12 text-left font-black text-slate-900 num">${d.expected}</div>
+                <div class="w-12 text-left text-[10px] text-slate-400 num">${Math.round(d.confidence*100)}%</div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500 leading-relaxed">
+            💡 الخميس سيكون الأعلى — اجعل سائقين إضافيين متاحين، حضّر ٤٨ ألف لتر RO
+          </div>
+        </div>
+      </div>
+
+      <!-- Dynamic pricing suggestion -->
+      <div class="bg-white rounded-2xl p-5 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h3 class="font-black">💰 اقتراح تسعير ذكي</h3>
+            <div class="text-[11px] text-slate-500">بناءً على الموسم والطلب والمنافسين في منطقتك</div>
+          </div>
+          <button class="bg-aqua-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">طبّق</button>
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <div class="bg-slate-50 rounded-xl p-4">
+            <div class="text-xs text-slate-500">السعر الحالي</div>
+            <div class="font-black text-xl num text-slate-900 mt-1">١,٠٠٠ د.ع</div>
+            <div class="text-[10px] text-slate-400">تعبئة الخزان</div>
+          </div>
+          <div class="bg-leaf-50 rounded-xl p-4 border-2 border-leaf-300">
+            <div class="text-xs text-leaf-700 font-bold">السعر المقترح للصيف</div>
+            <div class="font-black text-xl num text-leaf-700 mt-1">١,١٠٠ د.ع</div>
+            <div class="text-[10px] text-leaf-600">+١٠٪ • أيار - أيلول</div>
+          </div>
+          <div class="bg-aqua-50 rounded-xl p-4">
+            <div class="text-xs text-aqua-700">الإيراد الإضافي المتوقع</div>
+            <div class="font-black text-xl num text-aqua-700 mt-1">+٣٫٢م د.ع</div>
+            <div class="text-[10px] text-aqua-600">شهرياً • هامش +١٠٪</div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-3 leading-relaxed">
+          🧪 الأساس: استهلاك الصيف يزيد ٣٥٪، منافسوك في الكرادة بـ ١,١٥٠-١,٢٠٠ د.ع، زبائنك أوفياء (٩٤٪ retention).
+        </div>
+      </div>
+
+      <!-- Vehicle health alerts -->
+      <div class="bg-white rounded-2xl p-5 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-black">🔧 تنبيهات صحة المركبات</h3>
+          <div class="text-[10px] text-slate-500">من تحليل أنماط GPS واستهلاك الوقود</div>
+        </div>
+        <div class="space-y-2.5">
+          ${aiVehicleAlerts.map(v => `
+            <div class="flex items-center gap-3 bg-slate-50 rounded-xl p-3">
+              <div class="w-10 h-10 rounded-lg ${v.urgency==='high'?'bg-danger-100 text-danger-600':'bg-warn-100 text-warn-600'} flex items-center justify-center text-lg">${v.urgency==='high'?'🚨':'⚠️'}</div>
+              <div class="flex-1">
+                <div class="flex items-center justify-between">
+                  <div class="font-bold text-sm">${v.driver} <span class="text-slate-500 num font-normal">• ${v.plate}</span></div>
+                  <div class="text-[11px] text-slate-500 num">منذ ${v.km} كم</div>
+                </div>
+                <div class="text-[11px] text-slate-600 mt-0.5">${v.issue}</div>
+              </div>
+              <button class="bg-aqua-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">احجز صيانة</button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- Smart routes -->
+      <div class="bg-aqua-gradient rounded-2xl p-5 text-white ripple-bg">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="font-black text-lg">🗺️ مسار اليوم محسّن AI</div>
+            <div class="text-xs opacity-90 mt-1">٤ سائقين • ٣٨ تعبئة • ٢١٥ كم بدل ٣٠٢ كم (-٢٩٪)</div>
+            <div class="grid grid-cols-3 gap-3 mt-3">
+              <div>
+                <div class="text-[10px] opacity-80">توفير بنزين</div>
+                <div class="font-black text-xl num">~٤٥ ألف د.ع</div>
+              </div>
+              <div>
+                <div class="text-[10px] opacity-80">توفير وقت</div>
+                <div class="font-black text-xl num">٢ س ٤٠ د</div>
+              </div>
+              <div>
+                <div class="text-[10px] opacity-80">تعبئات إضافية</div>
+                <div class="font-black text-xl num">+٦</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* ============================ ADMIN: MARKETPLACE ============================ */
+const bulkDeals = [
+  { id:'d1', title:'فلاتر RO Pentair الأصلية', supplier:'Pentair Iraq', cat:'filters', unit:18_000, retail:24_000, savings:25, minOrder:10,  participating:34, total:80, daysLeft:6,  emoji:'🧪' },
+  { id:'d2', title:'زجاجات بلاستيك ٥٠٠ مل', supplier:'مصنع البلاستيك العراقي', cat:'bottles', unit:140,  retail:200,  savings:30, minOrder:1000, participating:12, total:30, daysLeft:4,  emoji:'🥤' },
+  { id:'d3', title:'بطاقات وقود بنزين',     supplier:'NRC Fuel Cards', cat:'fuel',   unit:95_000, retail:100_000, savings:5,  minOrder:5,   participating:48, total:50, daysLeft:12, emoji:'⛽' },
+  { id:'d4', title:'صيانة سيارات بالاتفاق',  supplier:'كراج النور', cat:'maintenance', unit:75_000, retail:120_000, savings:38, minOrder:1, participating:8,  total:25, daysLeft:9, emoji:'🔧' },
+];
+
+function admMarketplace() {
+  return `
+    <div class="p-6 space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="font-black text-2xl text-slate-900">🛍️ عروض الجملة</h1>
+          <p class="text-sm text-slate-500 mt-0.5">المنصة تجمّع طلبات المعامل لتفاوض خصومات أكبر من المورّدين</p>
+        </div>
+        <button class="bg-aqua-gradient text-white rounded-xl px-5 py-2 text-sm font-bold shadow">🔔 تنبيهات العروض الجديدة</button>
+      </div>
+
+      <div class="grid grid-cols-3 gap-3">
+        <div class="bg-leaf-50 rounded-xl p-4">
+          <div class="text-xs text-leaf-700">وفّرت هذا الشهر</div>
+          <div class="font-black text-2xl text-leaf-700 num mt-1">١٫٤م د.ع</div>
+          <div class="text-[10px] text-leaf-600">من ٣ عروض شاركت فيها</div>
+        </div>
+        <div class="bg-aqua-50 rounded-xl p-4">
+          <div class="text-xs text-aqua-700">عروض نشطة الآن</div>
+          <div class="font-black text-2xl text-aqua-700 num mt-1">${bulkDeals.length}</div>
+          <div class="text-[10px] text-aqua-600">منها ${bulkDeals.filter(d=>d.daysLeft<=7).length} تنتهي خلال أسبوع</div>
+        </div>
+        <div class="bg-amber-50 rounded-xl p-4">
+          <div class="text-xs text-amber-700">معدل الخصم المتاح</div>
+          <div class="font-black text-2xl text-amber-700 num mt-1">~٢٥٪</div>
+          <div class="text-[10px] text-amber-600">عن أسعار التجزئة</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        ${bulkDeals.map(d => `
+          <div class="bg-white rounded-2xl shadow-sm p-5">
+            <div class="flex items-start gap-3 mb-3">
+              <div class="w-12 h-12 rounded-xl bg-aqua-50 flex items-center justify-center text-2xl">${d.emoji}</div>
+              <div class="flex-1">
+                <div class="font-black text-slate-900">${d.title}</div>
+                <div class="text-[11px] text-slate-500">${d.supplier}</div>
+              </div>
+              <div class="text-left">
+                <div class="font-black text-xl num text-aqua-700">${fmt(d.unit)}</div>
+                <div class="text-[11px] text-slate-400 line-through num">${fmt(d.retail)}</div>
+                <div class="chip-sm bg-leaf-50 text-leaf-700 mt-1">-${d.savings}%</div>
+              </div>
+            </div>
+
+            <div class="bg-slate-50 rounded-xl p-3 mb-3">
+              <div class="flex items-center justify-between text-[11px] mb-1">
+                <span class="text-slate-500">${d.participating} من ${d.total} معمل اشترك</span>
+                <span class="font-bold text-warn-600 num">⏰ ${d.daysLeft} أيام</span>
+              </div>
+              <div class="progress-bar"><div class="progress-fill" style="width:${(d.participating/d.total)*100}%"></div></div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div class="text-[11px] text-slate-500">الحد الأدنى: <span class="font-bold text-slate-900 num">${d.minOrder}</span></div>
+              <button class="bg-aqua-gradient text-white rounded-lg py-2 text-xs font-black shadow">اشترك في الصفقة</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="bg-slate-50 rounded-xl p-4 text-xs text-slate-600 leading-relaxed">
+        <div class="font-black text-slate-700 mb-1.5">💡 كيف تعمل عروض الجملة؟</div>
+        المنصة تجمع طلبات عدة معامل في صفقة واحدة، تتفاوض على الخصم مع المورّد، وتوصل البضاعة مباشرة لكل معمل. المنصة تأخذ عمولة بسيطة (٥-١٠٪) من الخصم — أنت لا تدفع زيادة، بل توفّر مال.
+      </div>
+    </div>
+  `;
+}
+
+/* ============================ PLATFORM: DATA PRODUCTS ============================ */
+const dataReports = [
+  { id:'r1', title:'حالة سوق ماء العراق ٢٠٢٦',           category:'MARKET_ANNUAL',     price:5_200_000, sold:18, ongoing:23 },
+  { id:'r2', title:'أين الفرص: الأحياء غير المخدومة',     category:'OPPORTUNITY_ZONES', price:1_500_000, sold:12, ongoing:8 },
+  { id:'r3', title:'تحليل أسعار المنافسين في بغداد',       category:'COMPETITOR_PRICING',price:500_000,   sold:34, ongoing:14 },
+  { id:'r4', title:'تقرير ربع سنوي مفصّل لمعملك',          category:'PLANT_PERFORMANCE', price:200_000,   sold:62, ongoing:0  },
+];
+
+function platData() {
+  const totalReportRevenue = dataReports.reduce((s,r)=>s+r.price*r.sold,0);
+  return `
+    <div class="p-6 space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="font-black text-2xl text-slate-900">📊 منتجات البيانات</h1>
+          <p class="text-sm text-slate-500 mt-0.5">تقارير قابلة للبيع — بيانات مُجمّعة فقط (لا معلومات شخصية لأي زبون)</p>
+        </div>
+        <button class="bg-amber-500 text-white rounded-xl px-5 py-2 text-sm font-bold shadow">+ تقرير جديد</button>
+      </div>
+
+      <div class="grid grid-cols-4 gap-4">
+        <div class="gcard-1 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">إيراد التقارير الإجمالي</div>
+          <div class="font-black text-2xl num mt-1">${fmtShort(totalReportRevenue)}</div>
+          <div class="text-[11px] opacity-90 mt-1">منذ بدء البرنامج</div>
+        </div>
+        <div class="bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">إيراد هذا الشهر</div>
+          <div class="font-black text-2xl num mt-1">${fmtShort(8_400_000)}</div>
+          <div class="text-[11px] opacity-90 mt-1">+٢٢٪ عن الشهر السابق</div>
+        </div>
+        <div class="gcard-2 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">طلبات في الانتظار</div>
+          <div class="font-black text-2xl num mt-1">${dataReports.reduce((s,r)=>s+r.ongoing,0)}</div>
+          <div class="text-[11px] opacity-90 mt-1">عبر كل التقارير</div>
+        </div>
+        <div class="gcard-4 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">عدد التقارير المعروضة</div>
+          <div class="font-black text-2xl num mt-1">${dataReports.length}</div>
+          <div class="text-[11px] opacity-90 mt-1">في ٤ فئات</div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h3 class="font-black">مكتبة التقارير</h3>
+        </div>
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-600 text-xs">
+            <tr>
+              <th class="text-right px-5 py-3">التقرير</th>
+              <th class="text-right px-5 py-3">الفئة</th>
+              <th class="text-right px-5 py-3">السعر</th>
+              <th class="text-right px-5 py-3">المبيعات</th>
+              <th class="text-right px-5 py-3">طلبات معلّقة</th>
+              <th class="text-right px-5 py-3">إيراد كلي</th>
+              <th class="text-right px-5 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${dataReports.map(r => `
+              <tr class="border-t border-slate-100 row-hov">
+                <td class="px-5 py-3 font-bold">${r.title}</td>
+                <td class="px-5 py-3"><span class="chip-sm bg-amber-50 text-amber-700">${({MARKET_ANNUAL:'سنوي',OPPORTUNITY_ZONES:'فرص',COMPETITOR_PRICING:'منافسين',PLANT_PERFORMANCE:'أداء معمل',CUSTOM:'مخصّص'})[r.category]}</span></td>
+                <td class="px-5 py-3 font-black num">${fmt(r.price)}</td>
+                <td class="px-5 py-3 num">${r.sold}</td>
+                <td class="px-5 py-3 num text-warn-600 font-bold">${r.ongoing}</td>
+                <td class="px-5 py-3 font-black text-leaf-600 num">${fmtShort(r.price*r.sold)}</td>
+                <td class="px-5 py-3 flex gap-1">
+                  <button class="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg font-bold">تعديل</button>
+                  <button class="text-xs bg-aqua-500 text-white px-2.5 py-1 rounded-lg font-bold">معاينة</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800 leading-relaxed">
+        <div class="font-black mb-1.5">⚠️ قواعد البيانات الذهبية</div>
+        • التقارير تحوي بيانات **مُجمّعة فقط** على مستوى الحي والمدينة — لا أسماء أو أرقام هواتف.<br>
+        • لا تُكشَف هوية أي زبون أو معمل بدون موافقته الصريحة.<br>
+        • العملاء (المشترون) يوقّعون اتفاقية عدم إعادة التوزيع.
+      </div>
+    </div>
+  `;
+}
+
+/* ============================ PLATFORM: ADS ============================ */
+const adCampaigns = [
+  { id:'a1', advertiser:'غاز الأمين',         category:'GAS',     status:'ACTIVE', budget:2_000_000, spent:1_240_000, impressions:34_200, clicks:1_820, cpc:50 },
+  { id:'a2', advertiser:'تنظيف خزانات الصفا', category:'CLEANING',status:'ACTIVE', budget:800_000,   spent:620_000,   impressions:18_400, clicks:980,   cpc:75 },
+  { id:'a3', advertiser:'فلاتر AquaBest',     category:'FILTERS', status:'ACTIVE', budget:1_200_000, spent:340_000,   impressions:9_100,  clicks:480,   cpc:80 },
+  { id:'a4', advertiser:'إنترنت آسيا',       category:'TELECOM', status:'PAUSED', budget:1_500_000, spent:1_500_000, impressions:42_000, clicks:2_400, cpc:60 },
+];
+
+function platAds() {
+  const totalSpent = adCampaigns.reduce((s,a)=>s+a.spent,0);
+  const totalClicks = adCampaigns.reduce((s,a)=>s+a.clicks,0);
+  return `
+    <div class="p-6 space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="font-black text-2xl text-slate-900">📣 الإعلانات</h1>
+          <p class="text-sm text-slate-500 mt-0.5">إعلانات مستهدفة في تطبيق الزبون — توجد فقط إذا وافق الزبون في الإعدادات</p>
+        </div>
+        <button class="bg-amber-500 text-white rounded-xl px-5 py-2 text-sm font-bold shadow">+ حملة إعلانية</button>
+      </div>
+
+      <div class="grid grid-cols-4 gap-4">
+        <div class="gcard-3 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">إيراد الإعلانات هذا الشهر</div>
+          <div class="font-black text-2xl num mt-1">${fmtShort(totalSpent)}</div>
+          <div class="text-[11px] opacity-90 mt-1">من ${adCampaigns.length} حملات</div>
+        </div>
+        <div class="bg-gradient-to-br from-violet-500 to-violet-700 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">معدل النقر (CTR)</div>
+          <div class="font-black text-2xl num mt-1">5.4%</div>
+          <div class="text-[11px] opacity-90 mt-1">أعلى من متوسط Display Ads</div>
+        </div>
+        <div class="gcard-2 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">نقرات مدفوعة</div>
+          <div class="font-black text-2xl num mt-1">${totalClicks.toLocaleString()}</div>
+          <div class="text-[11px] opacity-90 mt-1">في كل الحملات</div>
+        </div>
+        <div class="bg-gradient-to-br from-slate-700 to-slate-900 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">معلنون نشطون</div>
+          <div class="font-black text-2xl num mt-1">${adCampaigns.filter(a=>a.status==='ACTIVE').length}</div>
+          <div class="text-[11px] opacity-90 mt-1">+ ${adCampaigns.filter(a=>a.status==='PAUSED').length} موقوف</div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-600 text-xs">
+            <tr>
+              <th class="text-right px-5 py-3">المعلن</th>
+              <th class="text-right px-5 py-3">الفئة</th>
+              <th class="text-right px-5 py-3">الحالة</th>
+              <th class="text-right px-5 py-3">الميزانية</th>
+              <th class="text-right px-5 py-3">المنفَق</th>
+              <th class="text-right px-5 py-3">ظهور</th>
+              <th class="text-right px-5 py-3">نقرات</th>
+              <th class="text-right px-5 py-3">CPC</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${adCampaigns.map(a => `
+              <tr class="border-t border-slate-100 row-hov">
+                <td class="px-5 py-3 font-bold">${a.advertiser}</td>
+                <td class="px-5 py-3"><span class="chip-sm bg-amber-50 text-amber-700">${({GAS:'غاز',CLEANING:'تنظيف',FILTERS:'فلاتر',TELECOM:'اتصالات',GROCERY:'تموين',FINANCE:'مالية',OTHER:'أخرى'})[a.category]}</span></td>
+                <td class="px-5 py-3"><span class="chip-sm ${a.status==='ACTIVE'?'status-active':'status-pending'}">${a.status==='ACTIVE'?'نشط':'موقوف'}</span></td>
+                <td class="px-5 py-3 num">${fmtShort(a.budget)}</td>
+                <td class="px-5 py-3 font-bold num">${fmtShort(a.spent)}</td>
+                <td class="px-5 py-3 num">${a.impressions.toLocaleString()}</td>
+                <td class="px-5 py-3 font-black text-leaf-600 num">${a.clicks.toLocaleString()}</td>
+                <td class="px-5 py-3 num">${fmt(a.cpc)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="bg-slate-50 rounded-xl p-4 text-xs text-slate-600 leading-relaxed">
+        <div class="font-black text-slate-700 mb-1.5">⚙️ كيف تعمل الإعلانات؟</div>
+        • تظهر في تطبيق الزبون كبطاقات لطيفة — لا تنبيهات مزعجة.<br>
+        • مستهدفة جغرافياً (الحي/المنطقة) فقط — لا تستخدم بيانات فردية.<br>
+        • الزبون يقدر يطفئها كاملةً من الإعدادات.<br>
+        • فئات ممنوعة: الأدوية، الكحول، القمار، أي شيء غير ملائم للعائلة.
+      </div>
+    </div>
+  `;
+}
+
+/* ============================ PLATFORM: MARKETPLACE OPS ============================ */
+function platMarketplace() {
+  return `
+    <div class="p-6 space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="font-black text-2xl text-slate-900">🤝 اتفاقيات الجملة</h1>
+          <p class="text-sm text-slate-500 mt-0.5">تجميع طلبات المعامل والتفاوض مع المورّدين — المنصة تأخذ ٥-١٠٪ من قيمة الصفقة</p>
+        </div>
+        <button class="bg-amber-500 text-white rounded-xl px-5 py-2 text-sm font-bold shadow">+ صفقة جديدة</button>
+      </div>
+
+      <div class="grid grid-cols-4 gap-4">
+        <div class="gcard-1 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">عمولات هذا الشهر</div>
+          <div class="font-black text-2xl num mt-1">${fmtShort(3_200_000)}</div>
+          <div class="text-[11px] opacity-90 mt-1">من ٤ صفقات</div>
+        </div>
+        <div class="gcard-2 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">معامل مشاركة</div>
+          <div class="font-black text-2xl num mt-1">${bulkDeals.reduce((s,d)=>s+d.participating,0)}</div>
+          <div class="text-[11px] opacity-90 mt-1">عبر كل الصفقات</div>
+        </div>
+        <div class="bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">قيمة الصفقات الجارية</div>
+          <div class="font-black text-2xl num mt-1">${fmtShort(bulkDeals.reduce((s,d)=>s+d.unit*d.participating,0))}</div>
+          <div class="text-[11px] opacity-90 mt-1">حتى الآن</div>
+        </div>
+        <div class="gcard-4 rounded-2xl p-5 text-white ripple-bg">
+          <div class="text-xs opacity-90">مورّدون شركاء</div>
+          <div class="font-black text-2xl num mt-1">12</div>
+          <div class="text-[11px] opacity-90 mt-1">في ٤ فئات</div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+          <button class="pill bg-aqua-50 text-aqua-700">الكل</button>
+          <button class="pill bg-slate-100 text-slate-600">فلاتر</button>
+          <button class="pill bg-slate-100 text-slate-600">زجاجات</button>
+          <button class="pill bg-slate-100 text-slate-600">وقود</button>
+          <button class="pill bg-slate-100 text-slate-600">صيانة</button>
+        </div>
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-600 text-xs">
+            <tr>
+              <th class="text-right px-5 py-3">الصفقة</th>
+              <th class="text-right px-5 py-3">المورّد</th>
+              <th class="text-right px-5 py-3">السعر للوحدة</th>
+              <th class="text-right px-5 py-3">المعامل</th>
+              <th class="text-right px-5 py-3">يبقى</th>
+              <th class="text-right px-5 py-3">عمولة المنصة</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${bulkDeals.map(d => {
+              const commission = Math.round(d.unit * d.participating * 0.075);
+              return `
+                <tr class="border-t border-slate-100 row-hov">
+                  <td class="px-5 py-3 font-bold">${d.emoji} ${d.title}</td>
+                  <td class="px-5 py-3 text-slate-600">${d.supplier}</td>
+                  <td class="px-5 py-3 font-bold num">${fmt(d.unit)}</td>
+                  <td class="px-5 py-3 num">${d.participating}/${d.total}</td>
+                  <td class="px-5 py-3 num ${d.daysLeft<=3?'text-danger-600 font-bold':'text-slate-500'}">${d.daysLeft} يوم</td>
+                  <td class="px-5 py-3 font-black text-leaf-600 num">${fmt(commission)}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+/* ============================ INIT ============================ */
+setView('customer');
+</script>
+</body>
+</html>
