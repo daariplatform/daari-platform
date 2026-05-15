@@ -22,6 +22,16 @@
       },
       "android": { "buildType": "apk" }
     },
+    "staging": {
+      "//": "Real backend, installable APK for BlueStacks/sideload testing.",
+      "//demo": "Demo mode OFF — the app hits api.phi-bit.com for real.",
+      "distribution": "internal",
+      "channel": "staging",
+      "env": {
+        "EXPO_PUBLIC_DEMO_MODE": "false"
+      },
+      "android": { "buildType": "apk" }
+    },
     "production": {
       "channel": "production",
       "autoIncrement": true,
