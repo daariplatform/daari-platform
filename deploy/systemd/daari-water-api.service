@@ -15,7 +15,9 @@ User=daari-water
 Group=daari-water
 WorkingDirectory=/var/www/daari-water-api
 EnvironmentFile=/var/www/daari-water-api/.env
-ExecStart=/usr/bin/node dist/main.js
+# nest build emits to dist/src/main.js (not dist/main.js) because the
+# tsconfig doesn't set rootDir — it preserves the src/ prefix.
+ExecStart=/usr/bin/node dist/src/main.js
 Restart=on-failure
 RestartSec=3
 
