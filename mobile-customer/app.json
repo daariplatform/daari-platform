@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "owner": "a7medal3ni",
     "description": "داري — منصّة خدمات منزلية شاملة في العراق. تبدأ بتوصيل مياه الشرب المعقّمة، وقريباً: الغاز المنزلي، تنظيف الخزانات، فلاتر RO، وخدمات أخرى. كل ما يحتاجه بيتك بضغطة زر.",
     "primaryColor": "#0891b2",
