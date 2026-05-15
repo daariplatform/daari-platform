@@ -8,7 +8,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
-    "owner": "phibit",
+    "owner": "a7medal3ni",
     "description": "داري — منصّة خدمات منزلية شاملة في العراق. تبدأ بتوصيل مياه الشرب المعقّمة، وقريباً: الغاز المنزلي، تنظيف الخزانات، فلاتر RO، وخدمات أخرى. كل ما يحتاجه بيتك بضغطة زر.",
     "primaryColor": "#0891b2",
     "splash": {
@@ -20,9 +20,6 @@
       "router": {
         "origin": false
       },
-      "eas": {
-        "projectId": "REPLACE_WITH_PROJECT_ID_AFTER_eas_init"
-      },
       "apiBaseUrl": "https://api.maa-iq.com/api/v1",
       "developer": {
         "name": "أحمد العاني",
@@ -30,11 +27,10 @@
         "website": "https://phi-bit.com",
         "supportEmail": "support@phi-bit.com",
         "supportPhone": "+964 0000 000 000"
+      },
+      "eas": {
+        "projectId": "cd9abee2-4ba4-426a-81b0-bbbaa864c980"
       }
-    },
-    "updates": {
-      "url": "https://u.expo.dev/REPLACE_WITH_PROJECT_ID_AFTER_eas_init",
-      "fallbackToCacheTimeout": 0
     },
     "runtimeVersion": {
       "policy": "appVersion"
@@ -69,7 +65,9 @@
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
       "blockedPermissions": [
         "ACCESS_BACKGROUND_LOCATION",
