@@ -2,8 +2,22 @@
 
 import axios from 'axios';
 
+// Next.js inlines NEXT_PUBLIC_* env vars at build time, so this string
+// has to be set when `next build` runs (during the deploy script on the
+// laptop), NOT just on the production server. See dashboard/.env.production
+// in the repo for the production value. The localhost fallback is only for
+// `next dev` against a local backend.
+//
+// We accept both NEXT_PUBLIC_API_BASE_URL (the canonical name in the
+// runbook + .env templates) and NEXT_PUBLIC_API_URL (legacy) so that
+// either flavor "just works" without a rebuild surprise.
+const apiBaseUrl =
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  process.env.NEXT_PUBLIC_API_URL ??
+  'http://localhost:3000/api/v1';
+
 export const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1',
+  baseURL: apiBaseUrl,
   withCredentials: false,
 });
 

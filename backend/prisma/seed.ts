@@ -69,11 +69,28 @@ async function main() {
   ];
 
   for (const c of customers) {
+    // Each demo customer also gets a User row so they can log into the
+    // mobile customer app with the standard demo password. Without this
+    // the seeded customers only exist as Customer records — they couldn't
+    // sign in, and the dashboard's "reset password" button would error
+    // out with "Customer has no login account yet".
+    const customerUser = await prisma.user.upsert({
+      where: { phone: c.phone },
+      update: {},
+      create: {
+        phone: c.phone,
+        passwordHash,
+        fullName: c.name,
+        role: UserRole.CUSTOMER,
+        tenantId: tenant.id,
+      },
+    });
     await prisma.customer.upsert({
       where: { tenantId_phone: { tenantId: tenant.id, phone: c.phone } },
       update: {},
       create: {
         tenantId: tenant.id,
+        userId: customerUser.id,
         fullName: c.name,
         phone: c.phone,
         whatsapp: c.phone,
