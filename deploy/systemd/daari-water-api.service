@@ -1,15 +1,20 @@
 [Unit]
-Description=Daari API (NestJS)
+Description=Daari (water plant edition) — NestJS API
 Documentation=https://github.com/a7medal3ni/daari-platform
+# The system Postgres unit on this VPS is named `postgresql`, not
+# `postgresql.service` in After= matters. Redis runs as `redis-server`.
 After=network-online.target postgresql.service redis-server.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=daari
-Group=daari
-WorkingDirectory=/var/www/daari-api
-EnvironmentFile=/var/www/daari-api/.env
+# Dedicated user — distinct from the existing `daari` (Dar Al-Safari) user
+# that already lives on this VPS. Keeping them isolated means our process
+# can never read /home/daari files or vice versa.
+User=daari-water
+Group=daari-water
+WorkingDirectory=/var/www/daari-water-api
+EnvironmentFile=/var/www/daari-water-api/.env
 ExecStart=/usr/bin/node dist/main.js
 Restart=on-failure
 RestartSec=3
@@ -19,7 +24,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/www/daari-api /var/log/daari
+ReadWritePaths=/var/www/daari-water-api /var/log/daari-water
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
@@ -30,8 +35,8 @@ LockPersonality=true
 # the VPS swap itself to death. Adjust upward if real traffic outgrows it.
 MemoryMax=1.5G
 
-StandardOutput=append:/var/log/daari/api.log
-StandardError=append:/var/log/daari/api.err.log
+StandardOutput=append:/var/log/daari-water/api.log
+StandardError=append:/var/log/daari-water/api.err.log
 
 [Install]
 WantedBy=multi-user.target

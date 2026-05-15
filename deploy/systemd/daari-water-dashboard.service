@@ -1,0 +1,32 @@
+[Unit]
+Description=Daari (water plant edition) — Next.js Dashboard
+Documentation=https://github.com/a7medal3ni/daari-platform
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=daari-water
+Group=daari-water
+WorkingDirectory=/var/www/daari-water-dashboard
+EnvironmentFile=/var/www/daari-water-dashboard/.env
+Environment=NODE_ENV=production
+# Port 3005 chosen per the multi-tenant VPS port allocation policy in
+# /root/PROJECTS.md — 3000 is taken by the existing daari (Dar Al-Safari)
+# project, 3001 is dr-cars-api, 3003 is phibit.
+ExecStart=/usr/bin/node node_modules/.bin/next start -p 3005
+Restart=on-failure
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/daari-water-dashboard /var/log/daari-water
+MemoryMax=1G
+
+StandardOutput=append:/var/log/daari-water/dashboard.log
+StandardError=append:/var/log/daari-water/dashboard.err.log
+
+[Install]
+WantedBy=multi-user.target
