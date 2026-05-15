@@ -20,7 +20,7 @@
       "router": {
         "origin": false
       },
-      "apiBaseUrl": "https://api.maa-iq.com/api/v1",
+      "apiBaseUrl": "https://api.phi-bit.com/api/v1",
       "developer": {
         "name": "أحمد العاني",
         "company": "Phi-Bit",

@@ -79,7 +79,7 @@ For the dashboard:
 
 ```bash
 cat > /var/www/daari-dashboard/.env <<EOF
-NEXT_PUBLIC_API_BASE_URL=https://api.maa-iq.com/api/v1
+NEXT_PUBLIC_API_BASE_URL=https://api.phi-bit.com/api/v1
 EOF
 ```
 
@@ -88,11 +88,11 @@ EOF
 In Cloudflare, add A records:
 
 ```
-api.maa-iq.com           A    45.84.138.119   (proxy: OFF for the cert step)
+api.phi-bit.com           A    45.84.138.119   (proxy: OFF for the cert step)
 daari-admin.phi-bit.com  A    45.84.138.119   (proxy: OFF for the cert step)
 ```
 
-Wait until `dig +short api.maa-iq.com` returns `45.84.138.119`.
+Wait until `dig +short api.phi-bit.com` returns `45.84.138.119`.
 
 ### 1.5 — Deploy from laptop
 
@@ -104,13 +104,13 @@ cd ~/Downloads/maa-platform
 ### 1.6 — Let's Encrypt (on VPS)
 
 ```bash
-certbot --nginx -d api.maa-iq.com -d daari-admin.phi-bit.com
+certbot --nginx -d api.phi-bit.com -d daari-admin.phi-bit.com
 ```
 
 ### 1.7 — Smoke test
 
 ```bash
-curl -i https://api.maa-iq.com/api/v1/auth/login -X POST \
+curl -i https://api.phi-bit.com/api/v1/auth/login -X POST \
   -H 'Content-Type: application/json' \
   -d '{"phone":"07700000000","password":"wrong"}'
 # Expect 401 (not 502 or timeout)
@@ -278,7 +278,7 @@ Security practices:
 | 2 | Get WhatsApp Business API access (Meta or Twilio) | Reminder messages |
 | 3 | Firebase project for FCM | Push notifications |
 | 4 | DigitalOcean Spaces buckets | Proof photo + backup storage |
-| 5 | Add DNS A records for `api.maa-iq.com` + `daari-admin.phi-bit.com` | Public access |
+| 5 | Add DNS A records for `api.phi-bit.com` + `daari-admin.phi-bit.com` | Public access |
 | 6 | Run the VPS bootstrap (it'll install Postgres+Redis+nginx) | Needs server root |
 | 7 | Capture 4-8 screenshots per app from BlueStacks | Play Store requires them |
 
