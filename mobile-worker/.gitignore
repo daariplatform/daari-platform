@@ -2,8 +2,14 @@ node_modules/
 .expo/
 dist/
 web-build/
-ios/
-android/
+# android/ and ios/ are committed (bare workflow with prebuild output
+# checked in). See mobile-customer/.gitignore for rationale.
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+ios/build/
+ios/Pods/
 .env
 .env.local
 *.log

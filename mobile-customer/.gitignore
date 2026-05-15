@@ -2,8 +2,16 @@ node_modules/
 .expo/
 dist/
 web-build/
-ios/
-android/
+# android/ and ios/ are committed (bare workflow with prebuild output
+# checked in). This guarantees EAS Build uses exactly the same Gradle
+# settings we tested locally, instead of re-running prebuild on the
+# cloud where the template can drift between releases.
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+ios/build/
+ios/Pods/
 .env
 .env.local
 *.log
