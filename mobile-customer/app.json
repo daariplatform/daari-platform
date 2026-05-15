@@ -32,9 +32,7 @@
         "projectId": "cd9abee2-4ba4-426a-81b0-bbbaa864c980"
       }
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "0.1.0",
     "assetBundlePatterns": [
       "**/*"
     ],
