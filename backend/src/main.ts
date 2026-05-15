@@ -1,10 +1,23 @@
+// MUST be imported before any other module so Sentry can instrument Node
+// (http, fs, db drivers) before NestJS resolves them.
+import './instrument';
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { SentryGlobalFilter } from '@sentry/nestjs/setup';
+import { APP_FILTER } from '@nestjs/core';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { cors: true });
+
+  // Catch any exception NestJS doesn't already handle so Sentry sees it.
+  // SentryGlobalFilter forwards to the default exception filter after
+  // capturing, so this is purely additive.
+  if (process.env.SENTRY_DSN) {
+    app.useGlobalFilters(new SentryGlobalFilter(app.getHttpAdapter()));
+  }
 
   app.setGlobalPrefix('api/v1');
   app.useGlobalPipes(

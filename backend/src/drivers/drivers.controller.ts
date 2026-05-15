@@ -15,8 +15,13 @@ class CreateDriverDto {
   @Matches(/^07\d{9}$/)
   phone!: string;
 
-  @IsString() @MinLength(8)
-  password!: string;
+  /**
+   * Optional. If omitted, the backend generates a random 6-char password
+   * and returns it once in the response. Plant admin hands it to the
+   * driver verbally or via WhatsApp.
+   */
+  @IsOptional() @IsString() @MinLength(6)
+  password?: string;
 
   @IsOptional() @IsString()
   vehiclePlate?: string;
@@ -26,6 +31,11 @@ class CreateDriverDto {
 
   @IsOptional() @IsInt() @Min(0)
   commissionPerRefillIqd?: number;
+}
+
+class ResetDriverPasswordDto {
+  @IsOptional() @IsString() @MinLength(6)
+  password?: string;
 }
 
 class PingLocationDto {
@@ -79,6 +89,20 @@ export class DriversController {
   async setStatus(@CurrentUser() user: AuthUser, @Body() dto: StatusDto) {
     const profile = await this.drivers.getMyDriverProfile(user.id);
     return this.drivers.setStatus(profile.id, dto.status);
+  }
+
+  /**
+   * Plant admin force-resets a driver's password. Returns the new value
+   * ONCE; existing sessions are revoked so the driver app signs out.
+   */
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @Post(':id/reset-password')
+  resetPassword(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: ResetDriverPasswordDto,
+  ) {
+    return this.drivers.resetPassword(user.tenantId!, id, dto.password);
   }
 
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)

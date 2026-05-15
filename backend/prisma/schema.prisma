@@ -37,11 +37,11 @@ enum SubscriptionStatus {
   EXPIRED
 }
 
-/**
- * A PlantGroup lets one owner manage multiple branches under one login.
- * Each branch (Tenant) keeps its own customers / tanks / accounting,
- * but the owner can switch between them or roll up reports across all.
- */
+//
+// A PlantGroup lets one owner manage multiple branches under one login.
+// Each branch (Tenant) keeps its own customers / tanks / accounting,
+// but the owner can switch between them or roll up reports across all.
+//
 model PlantGroup {
   id          String   @id @default(cuid())
   name        String
@@ -101,10 +101,10 @@ model Tenant {
   @@index([groupId])
 }
 
-/**
- * Subscription history per tenant. Newest row is the active subscription.
- * Platform admin renews / upgrades by inserting a new row.
- */
+//
+// Subscription history per tenant. Newest row is the active subscription.
+// Platform admin renews / upgrades by inserting a new row.
+//
 model Subscription {
   id          String             @id @default(cuid())
   tenantId    String
@@ -648,11 +648,11 @@ enum DataReportCategory {
   CUSTOM
 }
 
-/**
- * Aggregated reports sold to plants, investors, and partners.
- * Personally identifying data is never included — only neighbourhood-
- * level rollups and benchmarks.
- */
+//
+// Aggregated reports sold to plants, investors, and partners.
+// Personally identifying data is never included — only neighbourhood-
+// level rollups and benchmarks.
+//
 model DataReport {
   id          String              @id @default(cuid())
   title       String
@@ -699,11 +699,11 @@ enum AdCategory {
   OTHER
 }
 
-/**
- * Sponsored placements inside the customer app. Targets households by
- * neighbourhood — never by individual identity. The plant takes no cut;
- * platform earns the CPM/CPC directly.
- */
+//
+// Sponsored placements inside the customer app. Targets households by
+// neighbourhood — never by individual identity. The plant takes no cut;
+// platform earns the CPM/CPC directly.
+//
 model AdCampaign {
   id           String           @id @default(cuid())
   advertiser   String
@@ -749,11 +749,11 @@ enum BulkDealStatus {
   CANCELLED
 }
 
-/**
- * Group-buying for plants. Platform aggregates demand across many plants
- * (filters, bottles, fuel cards, vehicle maintenance) to negotiate
- * supplier discounts and take a commission.
- */
+//
+// Group-buying for plants. Platform aggregates demand across many plants
+// (filters, bottles, fuel cards, vehicle maintenance) to negotiate
+// supplier discounts and take a commission.
+//
 model BulkDeal {
   id            String         @id @default(cuid())
   title         String         // "فلاتر RO Pentair × 100"

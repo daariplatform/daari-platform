@@ -43,7 +43,9 @@ export class TenantsService {
           ownerName: input.ownerFullName,
           ownerPhone: input.ownerPhone,
           city: input.city,
-          plan: input.plan ?? SubscriptionPlan.BASIC,
+          // STARTER is the entry tier — used to be called BASIC in earlier
+          // pricing decks; the enum was renamed but this line wasn't.
+          plan: input.plan ?? SubscriptionPlan.STARTER,
           status: TenantStatus.TRIAL,
           trialEndsAt,
         },

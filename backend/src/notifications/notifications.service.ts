@@ -27,7 +27,9 @@ export class NotificationsService {
    * Each attempt is logged in NotificationLog so the dashboard can
    * show which messages reached the customer.
    */
-  async send(input: SendInput) {
+  async send(
+    input: SendInput,
+  ): Promise<{ ok: boolean; id: string; error?: string }> {
     const channel = input.channel ?? NotificationChannel.WHATSAPP;
     const log = await this.prisma.notificationLog.create({
       data: {

@@ -84,6 +84,31 @@ export class AuthService {
     });
   }
 
+  /**
+   * Self-service password change. Requires the current password — protects
+   * against a leaked access token being used to permanently lock the account
+   * out of the plant's reach. (Plant can still force-reset from the dashboard.)
+   *
+   * Does NOT revoke existing refresh tokens — the user is on a known good
+   * device and we'd rather keep them logged in. Plant-side resetPassword does
+   * revoke them (different threat model: helping a user who lost access).
+   */
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.passwordHash) {
+      throw new UnauthorizedException('Account not found');
+    }
+    const ok = await argon2.verify(user.passwordHash, currentPassword);
+    if (!ok) throw new UnauthorizedException('Current password is incorrect');
+
+    const newHash = await argon2.hash(newPassword);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: newHash },
+    });
+    return { ok: true };
+  }
+
   private async issueTokens(userId: string, phone: string, role: UserRole, tenantId: string | null) {
     const capabilities = await this.computeCapabilities(userId, role);
 
@@ -120,7 +145,11 @@ export class AuthService {
 
     if (role === UserRole.CUSTOMER) caps.push('customer');
     if (role === UserRole.PLATFORM_ADMIN) caps.push('platform_admin');
-    if ([UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT].includes(role)) {
+    // tsc-strict widens the array literal's type to UserRole[] but its
+    // own .includes() expects the narrower union; cast through unknown
+    // to silence the false positive without losing type safety on `role`.
+    const plantAdminRoles: UserRole[] = [UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT];
+    if (plantAdminRoles.includes(role)) {
       caps.push('plant_admin');
     }
 

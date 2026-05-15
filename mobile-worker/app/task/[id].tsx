@@ -88,17 +88,17 @@ export default function TaskDetail() {
 
       const body = {
         paymentMethod: 'CASH' as const,
-        paidAmountIqd: task.priceIqd,
+        paidAmountIqd: task!.priceIqd,
         proofPhotoUrl: photo, // backend uploader will rewrite to S3 URL
         completionLng: coords.lng,
         completionLat: coords.lat,
       };
 
       try {
-        await completeOrder.mutateAsync({ orderId: task.id, body });
+        await completeOrder.mutateAsync({ orderId: task!.id, body });
       } catch (e: any) {
         // Connection failed — queue and tell the user.
-        await enqueue('POST', `/orders/${task.id}/complete`, body);
+        await enqueue('POST', `/orders/${task!.id}/complete`, body);
         Alert.alert('محفوظ محلياً', 'سيُزامَن مع المعمل عند عودة الإنترنت');
       }
       router.back();
@@ -128,9 +128,9 @@ export default function TaskDetail() {
         reclaimReason,
       };
       try {
-        await reclaim.mutateAsync({ orderId: task.id, body });
+        await reclaim.mutateAsync({ orderId: task!.id, body });
       } catch {
-        await enqueue('POST', `/orders/${task.id}/complete`, body);
+        await enqueue('POST', `/orders/${task!.id}/complete`, body);
         Alert.alert('محفوظ محلياً', 'سيُزامَن مع المعمل عند عودة الإنترنت');
       }
       router.back();

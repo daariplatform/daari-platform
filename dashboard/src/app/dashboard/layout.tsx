@@ -15,6 +15,8 @@ import {
   LogOut,
 } from 'lucide-react';
 
+// `as const` keeps the href values as literal types so Next.js's typed
+// routes (experimental: typedRoutes) accepts them in <Link href={...}>.
 const NAV = [
   { href: '/dashboard', label: 'الرئيسية', icon: LayoutDashboard },
   { href: '/dashboard/tanks', label: 'الخزانات', icon: Database },
@@ -23,7 +25,7 @@ const NAV = [
   { href: '/dashboard/orders', label: 'الطلبات', icon: ClipboardList },
   { href: '/dashboard/accounting', label: 'المحاسبة', icon: CreditCard },
   { href: '/dashboard/notifications', label: 'التنبيهات', icon: Bell },
-];
+] as const;
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

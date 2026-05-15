@@ -143,7 +143,10 @@ function Lookup({ onBack }: { onBack: () => void }) {
       <ScrollView className="flex-1 p-5">
         <View className="bg-aqua-50 border border-aqua-200 rounded-2xl p-4 mb-3">
           <Text className="font-bold text-lg">{selected.fullName}</Text>
-          <Text className="text-xs text-slate-500 mt-0.5" dir="ltr">
+          <Text
+            className="text-xs text-slate-500 mt-0.5"
+            style={{ writingDirection: 'ltr' }}
+          >
             {selected.phone}
           </Text>
           <Text className="text-xs text-slate-500">{selected.addressLine}</Text>

@@ -136,6 +136,12 @@ export class OrdersService {
       include: { tank: { include: { tenant: true } }, customer: true },
     });
     if (!order) throw new NotFoundException('Order not found or not yours');
+    // Every RefillOrder should be linked to a customer in practice — if we
+    // got here without one, the order row is corrupt and we'd rather fail
+    // loud than crash later with `cannot read property of null`.
+    if (!order.customer) {
+      throw new BadRequestException('Order has no associated customer (data integrity issue)');
+    }
     if (order.status !== RefillOrderStatus.EN_ROUTE && order.status !== RefillOrderStatus.ASSIGNED) {
       throw new BadRequestException(`Order is ${order.status}, cannot complete`);
     }
@@ -277,6 +283,13 @@ export class OrdersService {
 
       const balanceDelta = input.paidAmountIqd - order.priceIqd; // negative = owes plant
 
+      // order.customerId is non-null in practice (every refill belongs to
+      // a customer); narrow with a defensive throw so Prisma's stricter
+      // typing accepts it as a unique identifier.
+      if (!order.customerId) {
+        throw new BadRequestException('Order has no customer id');
+      }
+
       await tx.customer.update({
         where: { id: order.customerId },
         data: {
@@ -378,7 +391,7 @@ export class OrdersService {
       include: { customer: { select: { userId: true } } },
     });
     if (!order) throw new NotFoundException('Order not found');
-    if (order.customer.userId !== customerUserId) {
+    if (!order.customer || order.customer.userId !== customerUserId) {
       throw new BadRequestException('This refill belongs to a different customer');
     }
     return this.prisma.refillOrder.update({
@@ -393,7 +406,7 @@ export class OrdersService {
       include: { customer: { select: { userId: true } } },
     });
     if (!order) throw new NotFoundException('Order not found');
-    if (order.customer.userId !== customerUserId) {
+    if (!order.customer || order.customer.userId !== customerUserId) {
       throw new BadRequestException('This refill belongs to a different customer');
     }
     return this.prisma.refillOrder.update({

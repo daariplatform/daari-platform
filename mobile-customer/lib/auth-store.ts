@@ -11,8 +11,12 @@ interface AuthState {
   /** True when we're showing seeded mock data because no backend is reachable. */
   demoMode: boolean;
   hydrate: () => Promise<void>;
+  /** Production login: phone + password set by the plant. */
+  login: (phone: string, password: string) => Promise<void>;
+  /** Legacy/future OTP self-signup. Gated behind OTP_SELF_SIGNUP_ENABLED on backend. */
   loginWithOtp: (phone: string, otp: string, fullName?: string) => Promise<void>;
   loginAsDemo: () => void;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -39,6 +43,18 @@ export const useAuth = create<AuthState>((set) => ({
     }
   },
 
+  async login(phone, password) {
+    set({ loading: true });
+    try {
+      const { data } = await api.post('/auth/login', { phone, password });
+      await setTokens(data.accessToken, data.refreshToken);
+      const me = await api.get<MeResponse>('/auth/me');
+      set({ user: me.data, capabilities: me.data.capabilities });
+    } finally {
+      set({ loading: false });
+    }
+  },
+
   async loginWithOtp(phone, otp, fullName) {
     set({ loading: true });
     try {
@@ -49,6 +65,10 @@ export const useAuth = create<AuthState>((set) => ({
     } finally {
       set({ loading: false });
     }
+  },
+
+  async changePassword(currentPassword, newPassword) {
+    await api.post('/auth/change-password', { currentPassword, newPassword });
   },
 
   /**

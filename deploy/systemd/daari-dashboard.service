@@ -1,0 +1,29 @@
+[Unit]
+Description=Daari Dashboard (Next.js)
+Documentation=https://github.com/a7medal3ni/daari-platform
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=daari
+Group=daari
+WorkingDirectory=/var/www/daari-dashboard
+EnvironmentFile=/var/www/daari-dashboard/.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node node_modules/.bin/next start -p 3002
+Restart=on-failure
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/daari-dashboard /var/log/daari
+MemoryMax=1G
+
+StandardOutput=append:/var/log/daari/dashboard.log
+StandardError=append:/var/log/daari/dashboard.err.log
+
+[Install]
+WantedBy=multi-user.target

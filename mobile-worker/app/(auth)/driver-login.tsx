@@ -15,17 +15,41 @@ import { useAuth } from '@/lib/auth-store';
 
 export default function DriverLogin() {
   const router = useRouter();
-  const { loginWithPassword, loading } = useAuth();
+  const { loginWithPassword, loginAsDemo, loading } = useAuth();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [hidden, setHidden] = useState(true);
 
+  const isDemoMode = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
   async function onSubmit() {
+    // Demo mode: skip backend, drop straight into the driver dashboard
+    // with seeded data. Same UX as customer app.
+    if (isDemoMode) {
+      loginAsDemo('driver');
+      router.replace('/(tabs)/home');
+      return;
+    }
+
     try {
       await loginWithPassword(phone, password);
       router.replace('/(tabs)/home');
     } catch (err: any) {
-      Alert.alert('فشل تسجيل الدخول', err?.response?.data?.message ?? 'تحقق من بياناتك');
+      const status = err?.response?.status;
+      const msg = err?.response?.data?.message;
+      if (status === 429) {
+        Alert.alert(
+          'محاولات كثيرة',
+          'تم تجاوز الحد المسموح به. حاول بعد 15 دقيقة أو اطلب من المعمل إعادة تعيين كلمة المرور.',
+        );
+      } else if (status === 401) {
+        Alert.alert(
+          'بيانات غير صحيحة',
+          'رقم الهاتف أو كلمة المرور خاطئة. اطلب من المعمل إعادة إرسالها.',
+        );
+      } else {
+        Alert.alert('فشل تسجيل الدخول', msg ?? 'تحقق من بياناتك');
+      }
     }
   }
 
@@ -90,6 +114,23 @@ export default function DriverLogin() {
               💡 لم تستلم بيانات الدخول؟ تواصل مع صاحب معملك ليفتح لك حساباً من اللوحة.
             </Text>
           </View>
+
+          {isDemoMode && (
+            <Pressable
+              onPress={() => {
+                loginAsDemo('driver');
+                router.replace('/(tabs)/home');
+              }}
+              className="mt-4 bg-white/10 rounded-xl py-3 items-center border border-white/30"
+            >
+              <Text className="text-white font-bold text-sm">
+                🎬 تجربة بدون تسجيل (وضع العرض)
+              </Text>
+              <Text className="text-slate-400 text-[10px] mt-0.5">
+                يدخل بحساب سائق وهمي لتشاهد الشاشات
+              </Text>
+            </Pressable>
+          )}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

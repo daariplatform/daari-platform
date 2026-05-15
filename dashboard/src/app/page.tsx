@@ -14,13 +14,21 @@ export default function Home() {
         >
           تسجيل دخول
         </Link>
-        <Link
-          href="/register"
+        {/* Self-signup is not live yet — plant owners onboard via a
+            manual call with the Phi-Bit team. mailto: lets them contact
+            us directly from the landing page without bouncing through
+            a contact form. */}
+        <a
+          href="mailto:support@phi-bit.com?subject=طلب%20تسجيل%20معمل%20جديد%20على%20داري"
           className="rounded-lg border border-primary-600 text-primary-700 px-6 py-3 hover:bg-primary-50 transition"
         >
           سجّل معملك
-        </Link>
+        </a>
       </div>
+      <p className="text-xs text-slate-400 max-w-md text-center">
+        لاستفسارات الزبائن والسائقين: حمّل تطبيق داري من Google Play واطلب بياناتك من
+        المعمل التابع له.
+      </p>
     </main>
   );
 }

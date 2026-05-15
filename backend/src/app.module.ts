@@ -25,7 +25,18 @@ const optionalModules: DynamicModule['imports'] = vendorsEnabled ? [VendorsModul
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
+    /**
+     * Throttling tiers:
+     *  - 'short'    1s   /  3 req  — burst protection on every endpoint
+     *  - 'default' 60s  / 120 req  — normal app traffic ceiling
+     *  - 'auth'    15min /  5 req  — tight cap on /auth/login + /auth/login/otp
+     *                                so password-guessing is impractical
+     */
+    ThrottlerModule.forRoot([
+      { name: 'short', ttl: 1_000, limit: 3 },
+      { name: 'default', ttl: 60_000, limit: 120 },
+      { name: 'auth', ttl: 15 * 60_000, limit: 5 },
+    ]),
     PrismaModule,
     AuthModule,
     TenantsModule,

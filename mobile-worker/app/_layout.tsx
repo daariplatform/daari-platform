@@ -7,6 +7,11 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useAuth } from '@/lib/auth-store';
 import { ensureRTL } from '@/lib/i18n';
 import { flush } from '@/lib/offline-queue';
+import { initSentry, Sentry } from '@/lib/sentry';
+
+// Initialize Sentry before anything else — no-op if EXPO_PUBLIC_SENTRY_DSN
+// is not set, so dev / demo profiles stay quiet.
+initSentry();
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -14,7 +19,7 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 });
 
-export default function RootLayout() {
+function RootLayoutInner() {
   const router = useRouter();
   const segments = useSegments();
   const { hydrating, user, hydrate } = useAuth();
@@ -59,3 +64,7 @@ export default function RootLayout() {
     </QueryClientProvider>
   );
 }
+
+// Sentry.wrap auto-captures unhandled JS errors and React error boundaries.
+// When SENTRY_DSN is unset it returns the component unchanged.
+export default Sentry.wrap(RootLayoutInner);

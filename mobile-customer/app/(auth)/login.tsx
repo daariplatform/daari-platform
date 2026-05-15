@@ -12,85 +12,62 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth-store';
-import { api } from '@/lib/api';
 
 /**
- * Two-step OTP login. Step 1 captures the phone, step 2 captures the
- * code. In dev the backend accepts the last 6 digits of the phone as
- * the OTP — wire to a real SMS provider before launch.
+ * Phone + password login. Plant admin provisions the account from the
+ * dashboard and gives the customer the temp password (verbally or via
+ * WhatsApp). Customer can change it later from settings.
+ *
+ * Future: OTP self-signup will appear behind a "إنشاء حساب جديد" link
+ * once we wire a real SMS provider and flip OTP_SELF_SIGNUP_ENABLED on
+ * the backend.
  */
 export default function LoginScreen() {
   const router = useRouter();
-  const { loginWithOtp, loginAsDemo, loading } = useAuth();
-  const [step, setStep] = useState<'phone' | 'otp' | 'name'>('phone');
+  const { login, loginAsDemo, loading } = useAuth();
   const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [sending, setSending] = useState(false);
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const isDemoMode = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+  const canSubmit = /^07\d{9}$/.test(phone) && password.length >= 6;
 
-  async function requestOtp() {
-    if (!/^07\d{9}$/.test(phone)) {
-      Alert.alert('رقم غير صحيح', 'الرقم يجب أن يبدأ بـ 07 ويتكون من 11 رقماً');
+  async function submit() {
+    if (!canSubmit) {
+      Alert.alert(
+        'بيانات ناقصة',
+        'أدخل رقم هاتفك (يبدأ بـ 07 ويتكون من 11 رقماً) وكلمة المرور (6 خانات أو أكثر)',
+      );
       return;
     }
-    setSending(true);
-    try {
-      // Demo / no-backend mode: skip the API call entirely and hint at the
-      // mock OTP (last 6 digits of the phone). Saves the user 12s of waiting.
-      if (isDemoMode) {
-        Alert.alert(
-          'رمز التحقق التجريبي',
-          `أدخل آخر ٦ أرقام من رقم هاتفك:\n${phone.slice(-6)}`,
-        );
-        setStep('otp');
-        return;
-      }
-      // Real backend: fire-and-forget with a tight timeout so a flaky server
-      // doesn't freeze the UI.
-      await api.post('/auth/otp/request', { phone }, { timeout: 4000 }).catch(() => {});
-      setStep('otp');
-    } finally {
-      setSending(false);
-    }
-  }
 
-  async function verifyOtp() {
-    if (otp.length < 4) return;
-    // Demo / no-backend: accept the last-6-digits trick locally and drop
-    // straight into the demo session without hitting the API.
-    if (isDemoMode && otp === phone.slice(-6)) {
+    // Demo / no-backend mode: any phone with a non-empty password drops
+    // into the seeded session. Lets us test on BlueStacks without a server.
+    if (isDemoMode) {
       loginAsDemo();
       router.replace('/(tabs)/home');
       return;
     }
+
     try {
-      await loginWithOtp(phone, otp, fullName || undefined);
+      await login(phone, password);
       router.replace('/(tabs)/home');
     } catch (err: any) {
+      const status = err?.response?.status;
       const msg = err?.response?.data?.message;
-      if (msg === 'fullName required for first login') {
-        setStep('name');
-      } else {
+      if (status === 429) {
         Alert.alert(
-          'فشل التسجيل',
-          msg ||
-            (isDemoMode
-              ? `الرمز خطأ. جرّب آخر ٦ أرقام: ${phone.slice(-6)}`
-              : 'رمز التحقق غير صحيح'),
+          'محاولات كثيرة',
+          'تم تجاوز الحد المسموح به من المحاولات. حاول بعد 15 دقيقة، أو تواصل مع معمل المياه لإعادة تعيين كلمة المرور.',
         );
+      } else if (status === 401) {
+        Alert.alert(
+          'بيانات غير صحيحة',
+          'رقم الهاتف أو كلمة المرور خاطئة. إذا نسيت كلمة المرور تواصل مع معمل المياه التابع لك ليرسلها لك.',
+        );
+      } else {
+        Alert.alert('فشل تسجيل الدخول', msg ?? 'حاول مرة أخرى');
       }
-    }
-  }
-
-  async function completeFirstLogin() {
-    if (!fullName.trim()) return;
-    try {
-      await loginWithOtp(phone, otp, fullName.trim());
-      router.replace('/onboarding');
-    } catch (err: any) {
-      Alert.alert('فشل التسجيل', err?.response?.data?.message ?? 'حاول مرة أخرى');
     }
   }
 
@@ -108,108 +85,66 @@ export default function LoginScreen() {
           </View>
 
           <View className="bg-white rounded-3xl p-6 shadow-2xl">
-            {step === 'phone' && (
-              <>
-                <Text className="text-slate-900 text-xl font-bold mb-1 text-right">
-                  تسجيل الدخول
-                </Text>
-                <Text className="text-slate-500 text-xs mb-5 text-right">
-                  أدخل رقم هاتفك وسنرسل لك رمز تحقق برسالة
-                </Text>
-                <Text className="text-slate-700 text-sm mb-2 text-right">رقم الهاتف</Text>
-                <TextInput
-                  value={phone}
-                  onChangeText={setPhone}
-                  placeholder="07XXXXXXXXX"
-                  keyboardType="phone-pad"
-                  maxLength={11}
-                  className="border border-slate-200 rounded-xl px-4 py-3 text-base bg-slate-50 text-right"
-                />
-                <Pressable
-                  onPress={requestOtp}
-                  disabled={sending || phone.length < 11}
-                  className={`mt-5 rounded-xl py-4 items-center ${
-                    sending || phone.length < 11 ? 'bg-slate-300' : 'bg-aqua-600'
-                  }`}
-                >
-                  {sending ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text className="text-white font-bold text-base">إرسال الرمز</Text>
-                  )}
-                </Pressable>
-              </>
-            )}
+            <Text className="text-slate-900 text-xl font-bold mb-1 text-right">
+              تسجيل الدخول
+            </Text>
+            <Text className="text-slate-500 text-xs mb-5 text-right leading-5">
+              استخدم رقم الهاتف وكلمة المرور التي زوّدك بها معمل المياه التابع لك
+            </Text>
 
-            {step === 'otp' && (
-              <>
-                <Text className="text-slate-900 text-xl font-bold mb-1 text-right">
-                  رمز التحقق
-                </Text>
-                <Text className="text-slate-500 text-xs mb-5 text-right">
-                  أرسلنا رمزاً إلى {phone}
-                </Text>
-                <TextInput
-                  value={otp}
-                  onChangeText={setOtp}
-                  placeholder="000000"
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  className="border border-slate-200 rounded-xl px-4 py-3 text-2xl bg-slate-50 text-center font-bold tracking-widest"
-                />
-                <Pressable
-                  onPress={verifyOtp}
-                  disabled={loading || otp.length < 4}
-                  className={`mt-5 rounded-xl py-4 items-center ${
-                    loading || otp.length < 4 ? 'bg-slate-300' : 'bg-aqua-600'
-                  }`}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text className="text-white font-bold text-base">تحقق ودخول</Text>
-                  )}
-                </Pressable>
-                <Pressable onPress={() => setStep('phone')} className="mt-3 items-center">
-                  <Text className="text-aqua-700 text-xs">تعديل رقم الهاتف</Text>
-                </Pressable>
-              </>
-            )}
+            <Text className="text-slate-700 text-sm mb-2 text-right">رقم الهاتف</Text>
+            <TextInput
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="07XXXXXXXXX"
+              keyboardType="phone-pad"
+              maxLength={11}
+              autoComplete="tel"
+              className="border border-slate-200 rounded-xl px-4 py-3 text-base bg-slate-50 text-right mb-4"
+            />
 
-            {step === 'name' && (
-              <>
-                <Text className="text-slate-900 text-xl font-bold mb-1 text-right">
-                  أهلاً بك! ما اسمك؟
+            <Text className="text-slate-700 text-sm mb-2 text-right">كلمة المرور</Text>
+            <View className="flex-row-reverse items-center border border-slate-200 rounded-xl bg-slate-50">
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                placeholder="••••••"
+                secureTextEntry={!showPassword}
+                autoComplete="password"
+                className="flex-1 px-4 py-3 text-base text-right"
+              />
+              <Pressable onPress={() => setShowPassword((v) => !v)} className="px-3 py-3">
+                <Text className="text-aqua-700 text-xs">
+                  {showPassword ? 'إخفاء' : 'إظهار'}
                 </Text>
-                <Text className="text-slate-500 text-xs mb-5 text-right">
-                  لإكمال إنشاء حسابك
-                </Text>
-                <TextInput
-                  value={fullName}
-                  onChangeText={setFullName}
-                  placeholder="الاسم الكامل"
-                  className="border border-slate-200 rounded-xl px-4 py-3 text-base bg-slate-50 text-right"
-                />
-                <Pressable
-                  onPress={completeFirstLogin}
-                  disabled={loading || !fullName.trim()}
-                  className={`mt-5 rounded-xl py-4 items-center ${
-                    loading || !fullName.trim() ? 'bg-slate-300' : 'bg-aqua-600'
-                  }`}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text className="text-white font-bold text-base">إنشاء الحساب</Text>
-                  )}
-                </Pressable>
-              </>
-            )}
+              </Pressable>
+            </View>
+
+            <Pressable
+              onPress={submit}
+              disabled={loading || !canSubmit}
+              className={`mt-5 rounded-xl py-4 items-center ${
+                loading || !canSubmit ? 'bg-slate-300' : 'bg-aqua-600'
+              }`}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text className="text-white font-bold text-base">دخول</Text>
+              )}
+            </Pressable>
+
+            <View className="mt-5 pt-4 border-t border-slate-100">
+              <Text className="text-slate-500 text-[11px] text-center leading-5">
+                ليس عندك حساب؟ تواصل مع معمل المياه التابع لك ليُنشئ لك حساباً.
+                {'\n'}إذا نسيت كلمة المرور اطلب من المعمل إعادة تعيينها.
+              </Text>
+            </View>
           </View>
 
           {/* Demo bypass — hidden in production builds via EAS env var.
               Only visible in dev/preview channels (EXPO_PUBLIC_DEMO_MODE=true). */}
-          {process.env.EXPO_PUBLIC_DEMO_MODE === 'true' && (
+          {isDemoMode && (
             <Pressable
               onPress={() => {
                 loginAsDemo();

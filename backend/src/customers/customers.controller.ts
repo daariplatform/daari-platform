@@ -29,6 +29,16 @@ class CreateCustomerDto {
 
   @IsOptional() @IsLatitude()
   locationLat?: number;
+
+  /** If omitted the backend generates a random 6-char password. */
+  @IsOptional() @IsString() @MinLength(6)
+  password?: string;
+}
+
+class ResetPasswordDto {
+  /** Plant admin can force-set a new password, or omit to auto-generate. */
+  @IsOptional() @IsString() @MinLength(6)
+  password?: string;
 }
 
 class CaptureLocationDto {
@@ -92,5 +102,20 @@ export class CustomersController {
     @Body() dto: MoveDto,
   ) {
     return this.customers.startMove(user.tenantId!, id, dto.newLng, dto.newLat);
+  }
+
+  /**
+   * Plant admin resets a customer's login password. The plain new value is
+   * returned ONCE so the admin can hand it back. Useful when a customer
+   * forgets — there is no SMS-based reset flow yet.
+   */
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @Post(':id/reset-password')
+  resetPassword(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: ResetPasswordDto,
+  ) {
+    return this.customers.resetPassword(user.tenantId!, id, dto.password);
   }
 }

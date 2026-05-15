@@ -1,6 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CustomerStatus, LocationSource, Prisma } from '@prisma/client';
+import { CustomerStatus, LocationSource, Prisma, UserRole } from '@prisma/client';
+import * as argon2 from 'argon2';
+import { randomBytes } from 'crypto';
 
 interface CreateCustomerInput {
   fullName: string;
@@ -10,6 +12,33 @@ interface CreateCustomerInput {
   addressLine: string;
   locationLng?: number;
   locationLat?: number;
+  /**
+   * Optional. If omitted, a 6-character password is generated. Either way the
+   * plain value is returned ONCE in the response so the plant admin can hand it
+   * to the customer (in person, or via WhatsApp). It is never stored in plain
+   * form — only the argon2 hash lives on the User row.
+   */
+  password?: string;
+}
+
+/**
+ * 6-character credentials are a deliberate compromise:
+ *  - long enough that incidental guessing is hopeless
+ *  - short enough that a plant admin can read it over the phone or write it on
+ *    paper without errors
+ * Together with the rate-limited /auth/login endpoint (5 attempts / 15 min /
+ * phone) the entropy is comfortable for this threat model.
+ *
+ * Excludes 0/O/1/I/l visually-confusable characters.
+ */
+const PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+function generatePassword(): string {
+  const bytes = randomBytes(6);
+  let out = '';
+  for (let i = 0; i < 6; i++) {
+    out += PASSWORD_ALPHABET[bytes[i] % PASSWORD_ALPHABET.length];
+  }
+  return out;
 }
 
 interface ListFilters {
@@ -22,14 +51,48 @@ interface ListFilters {
 export class CustomersService {
   constructor(private prisma: PrismaService) {}
 
-  create(tenantId: string, input: CreateCustomerInput) {
-    return this.prisma.customer.create({
-      data: {
-        tenantId,
-        ...input,
-        whatsapp: input.whatsapp ?? input.phone,
-      },
+  /**
+   * Plant admin creates a customer from the dashboard. Also provisions a
+   * User row (role=CUSTOMER) so the customer can sign into the mobile app
+   * with phone + password. The plant tells the customer the password verbally
+   * (or via WhatsApp). Customer can change it later from the app.
+   *
+   * The plain password is returned ONLY in this response — never persisted.
+   */
+  async create(tenantId: string, input: CreateCustomerInput) {
+    const existing = await this.prisma.user.findUnique({ where: { phone: input.phone } });
+    if (existing) {
+      throw new ConflictException('A user with this phone already exists');
+    }
+
+    const plainPassword = input.password ?? generatePassword();
+    const passwordHash = await argon2.hash(plainPassword);
+
+    const { password: _ignore, ...customerInput } = input;
+
+    const customer = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          phone: input.phone,
+          passwordHash,
+          fullName: input.fullName,
+          role: UserRole.CUSTOMER,
+          tenantId,
+        },
+      });
+      return tx.customer.create({
+        data: {
+          tenantId,
+          userId: user.id,
+          ...customerInput,
+          whatsapp: input.whatsapp ?? input.phone,
+        },
+      });
     });
+
+    // tempPassword is returned ONCE — the dashboard displays it on the
+    // success screen, and there is no way to recover it afterward.
+    return { ...customer, tempPassword: plainPassword };
   }
 
   /**
@@ -60,12 +123,81 @@ export class CustomersService {
     });
   }
 
-  /** Plant owner approves a driver-registered customer. */
+  /**
+   * Plant owner approves a driver-registered customer. A User row is created
+   * at this point (not at registration time) so the customer can log in
+   * straight after approval — the plant gets the temporary password back.
+   */
   async approve(tenantId: string, customerId: string) {
-    return this.prisma.customer.update({
+    const customer = await this.prisma.customer.findFirst({
       where: { id: customerId, tenantId },
-      data: { status: CustomerStatus.ACTIVE },
     });
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    // Idempotent: if already has a user, just flip status.
+    if (customer.userId) {
+      const updated = await this.prisma.customer.update({
+        where: { id: customerId },
+        data: { status: CustomerStatus.ACTIVE },
+      });
+      return { ...updated, tempPassword: null };
+    }
+
+    const plainPassword = generatePassword();
+    const passwordHash = await argon2.hash(plainPassword);
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          phone: customer.phone,
+          passwordHash,
+          fullName: customer.fullName,
+          role: UserRole.CUSTOMER,
+          tenantId,
+        },
+      });
+      return tx.customer.update({
+        where: { id: customerId },
+        data: { status: CustomerStatus.ACTIVE, userId: user.id },
+      });
+    });
+
+    return { ...updated, tempPassword: plainPassword };
+  }
+
+  /**
+   * Plant admin forces a new password for the customer. Returns the plain
+   * value ONCE — admin tells the customer over WhatsApp/in-person.
+   *
+   * Also revokes existing refresh tokens so old sessions stop working
+   * immediately (defensive: if the reset is happening because the customer
+   * lost access, a stolen session shouldn't survive the reset).
+   */
+  async resetPassword(tenantId: string, customerId: string, newPassword?: string) {
+    const customer = await this.prisma.customer.findFirst({
+      where: { id: customerId, tenantId },
+      include: { user: true },
+    });
+    if (!customer) throw new NotFoundException('Customer not found');
+    if (!customer.userId) {
+      throw new NotFoundException('Customer has no login account yet — approve them first');
+    }
+
+    const plainPassword = newPassword ?? generatePassword();
+    const passwordHash = await argon2.hash(plainPassword);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: customer.userId },
+        data: { passwordHash },
+      }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId: customer.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
+    return { ok: true, tempPassword: plainPassword };
   }
 
   listPendingApprovals(tenantId: string) {
