@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearTokens, getAccessToken } from '@/lib/api';
+import { resetPostHog, trackEvent } from '@/lib/posthog';
 import { useEffect } from 'react';
 import {
   LayoutDashboard,
@@ -47,6 +48,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [router]);
 
   function logout() {
+    trackEvent('logout');
+    resetPostHog();
     clearTokens();
     router.push('/login');
   }

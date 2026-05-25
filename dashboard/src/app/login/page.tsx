@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, setTokens } from '@/lib/api';
+import { identifyPlantAdmin, trackEvent } from '@/lib/posthog';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,8 +19,17 @@ export default function LoginPage() {
     try {
       const { data } = await api.post('/auth/login', { phone, password });
       setTokens(data.accessToken, data.refreshToken);
+      if (data.user?.id) {
+        identifyPlantAdmin(data.user.id, {
+          phone: data.user.phone,
+          role: data.user.role,
+          tenantId: data.user.tenantId,
+        });
+      }
+      trackEvent('login_success', { role: 'plant_admin' });
       router.push('/dashboard');
     } catch (err: any) {
+      trackEvent('login_failed', { reason: err.response?.status ?? 'network' });
       setError(err.response?.data?.message ?? 'فشل تسجيل الدخول');
     } finally {
       setLoading(false);
