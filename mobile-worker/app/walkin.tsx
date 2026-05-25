@@ -21,6 +21,7 @@ import {
 import { getCurrentCoords } from '@/lib/location';
 import { enqueue } from '@/lib/offline-queue';
 import { iqd } from '@/lib/format';
+import { EmptyState } from '@/components/EmptyState';
 
 type Mode = 'pick' | 'lookup' | 'register';
 
@@ -357,9 +358,11 @@ function Lookup({ onBack }: { onBack: () => void }) {
       ))}
 
       {q.length >= 2 && results?.length === 0 && !isLoading && (
-        <Text className="text-center text-slate-400 py-8 text-sm">
-          لا يوجد زبون بهذا الاسم{'\n'}جرّب "تسجيل زبون جديد" بدلاً منه
-        </Text>
+        <EmptyState
+          icon="person-search"
+          title="لا يوجد زبون بهذا الاسم"
+          subtitle="جرّب البحث برقم الهاتف أو رقم الخزان، أو سجّل زبوناً جديداً"
+        />
       )}
 
       <Pressable onPress={onBack} className="mt-4 bg-slate-100 rounded-xl py-3">

@@ -1,7 +1,9 @@
-import { ScrollView, View, Text, ActivityIndicator } from 'react-native';
+import { ScrollView, View, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMyHistory } from '@/lib/queries';
 import { fmtArabicDate, iqd } from '@/lib/format';
+import { SkeletonCard } from '@/components/Skeleton';
+import { EmptyState } from '@/components/EmptyState';
 
 interface HistoryRow {
   id: string;
@@ -21,9 +23,19 @@ export default function History() {
         <Text className="text-slate-400 text-xs">كل ما أنجزته</Text>
       </View>
       {isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color="#0891b2" />
+        <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+          <SkeletonCard height={70} />
+          <SkeletonCard height={70} />
+          <SkeletonCard height={70} />
+          <SkeletonCard height={70} />
+          <SkeletonCard height={70} />
         </View>
+      ) : data?.length === 0 ? (
+        <EmptyState
+          icon="history"
+          title="سجلك فارغ حالياً"
+          subtitle="عند إكمال أول مهمة، ستظهر هنا مع كل التفاصيل"
+        />
       ) : (
         <ScrollView className="flex-1 px-4" contentContainerStyle={{ paddingTop: 12, paddingBottom: 24 }}>
           {data?.map((h) => (
@@ -42,9 +54,6 @@ export default function History() {
               </Text>
             </View>
           ))}
-          {data?.length === 0 && (
-            <Text className="text-center text-slate-400 py-12">لا يوجد سجل بعد</Text>
-          )}
         </ScrollView>
       )}
     </SafeAreaView>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ScrollView,
   View,
@@ -12,6 +12,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
+import MapView, { Marker, type Region } from 'react-native-maps';
+import { usePostHog } from 'posthog-react-native';
 import {
   useMyTodayTasks,
   useCompleteOrder,
@@ -22,6 +25,7 @@ import {
 import { getCurrentCoords, distanceMetres } from '@/lib/location';
 import { enqueue } from '@/lib/offline-queue';
 import { iqd } from '@/lib/format';
+import { track } from '@/lib/posthog';
 
 const RECLAIM_REASONS = [
   { id: 'NON_COMPLIANCE',     label: 'عدم التزام بتعليمات الشركة', emoji: '⚠️' },
@@ -36,6 +40,7 @@ const GPS_MAX_METRES = 50;
 
 export default function TaskDetail() {
   const router = useRouter();
+  const ph = usePostHog();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: tasks } = useMyTodayTasks();
   const completeOrder = useCompleteOrder();
@@ -45,6 +50,45 @@ export default function TaskDetail() {
   const [reclaimReason, setReclaimReason] =
     useState<typeof RECLAIM_REASONS[number]['id'] | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Local-only driver position for the in-screen map. Refreshes every 10s
+  // while this screen is open. The OS-level background tracker in
+  // lib/location.ts is the one that actually reports to the server — this
+  // is purely for the local map preview.
+  const [driverCoord, setDriverCoord] = useState<{ lat: number; lng: number } | null>(null);
+  const watchSub = useRef<Location.LocationSubscription | null>(null);
+
+  // Track ride start time for completion duration. Captured at first mount.
+  const startedAtRef = useRef<number>(Date.now());
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          const r = await Location.requestForegroundPermissionsAsync();
+          if (r.status !== 'granted') return;
+        }
+        const fix = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        setDriverCoord({ lat: fix.coords.latitude, lng: fix.coords.longitude });
+        // Subscribe to position updates while this screen is open. We use a
+        // 10s/50m throttle — anything finer wastes battery without changing
+        // a UI marker the user is glancing at.
+        watchSub.current = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.Balanced, timeInterval: 10_000, distanceInterval: 50 },
+          (loc) => setDriverCoord({ lat: loc.coords.latitude, lng: loc.coords.longitude }),
+        );
+      } catch {
+        // No location — map just shows the customer pin alone.
+      }
+    })();
+    return () => {
+      watchSub.current?.remove();
+      watchSub.current = null;
+    };
+  }, []);
 
   const task = tasks?.find((t) => t.id === id);
   if (!task) {
@@ -139,6 +183,12 @@ export default function TaskDetail() {
 
       try {
         await completeOrder.mutateAsync({ orderId: task!.id, body });
+        track(ph, 'order_completed', {
+          orderId: task!.id,
+          kind: task!.kind,
+          priceIqd: task!.priceIqd,
+          durationSec: Math.round((Date.now() - startedAtRef.current) / 1000),
+        });
         router.back();
       } catch (e: any) {
         // Distinguish offline vs. a real backend rejection. If we got an
@@ -274,16 +324,28 @@ export default function TaskDetail() {
               QR: {task.tank.qrCode}
             </Text>
           )}
+          {/* In-app map preview — customer pin + driver's current location.
+              Tappable, but the big navigation button below does the real
+              work via Apple/Google Maps. */}
+          {(task.customer.locationLat != null && task.customer.locationLng != null) && (
+            <View style={{ height: 180, borderRadius: 14, overflow: 'hidden', marginTop: 12 }}>
+              <TaskMap
+                customer={{ lat: task.customer.locationLat, lng: task.customer.locationLng }}
+                driver={driverCoord}
+              />
+            </View>
+          )}
+
           {/* زر الملاحة — يفتح Google Maps / Apple Maps بالـ GPS الدقيق إن وُجد */}
           <Pressable
             onPress={openNavigation}
-            className="mt-3 bg-aqua-50 border border-aqua-200 rounded-xl py-3 px-3 flex-row-reverse items-center justify-between"
+            className="mt-3 bg-aqua-600 rounded-xl py-4 px-3 flex-row-reverse items-center justify-between"
           >
             <View className="flex-row-reverse items-center gap-2">
               <Text className="text-lg">🗺️</Text>
-              <Text className="text-aqua-700 font-bold text-sm">افتح في Google Maps</Text>
+              <Text className="text-white font-bold text-base">افتح الخرائط للملاحة</Text>
             </View>
-            <Text className="text-aqua-600 text-xs">›</Text>
+            <Text className="text-white text-xs">›</Text>
           </Pressable>
         </View>
 
@@ -408,5 +470,54 @@ export default function TaskDetail() {
         )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/**
+ * Inline map: customer pin + (optional) driver pin. Pure presentational
+ * — the parent owns the location subscription so unmounting the screen
+ * stops the GPS watcher.
+ */
+function TaskMap({
+  customer,
+  driver,
+}: {
+  customer: { lat: number; lng: number };
+  driver: { lat: number; lng: number } | null;
+}) {
+  let region: Region;
+  if (driver) {
+    const midLat = (customer.lat + driver.lat) / 2;
+    const midLng = (customer.lng + driver.lng) / 2;
+    region = {
+      latitude: midLat,
+      longitude: midLng,
+      latitudeDelta: Math.abs(customer.lat - driver.lat) * 2.4 + 0.005,
+      longitudeDelta: Math.abs(customer.lng - driver.lng) * 2.4 + 0.005,
+    };
+  } else {
+    region = {
+      latitude: customer.lat,
+      longitude: customer.lng,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    };
+  }
+
+  return (
+    <MapView style={{ flex: 1 }} initialRegion={region} pointerEvents="none">
+      <Marker
+        coordinate={{ latitude: customer.lat, longitude: customer.lng }}
+        title="الزبون"
+        pinColor="#0891b2"
+      />
+      {driver && (
+        <Marker
+          coordinate={{ latitude: driver.lat, longitude: driver.lng }}
+          title="موقعي"
+          pinColor="#16a34a"
+        />
+      )}
+    </MapView>
   );
 }

@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { api } from '@/lib/api';
 import { setTokens } from '@/lib/tokens';
 import { useAuth } from '@/lib/auth-store';
+import { OtpCodeField } from '@/components/OtpCodeField';
 
 /**
  * Two-step self-service password reset.
@@ -33,6 +34,7 @@ export default function ForgotPassword() {
   const [step, setStep] = useState<1 | 2>(1);
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
+  const [otpError, setOtpError] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -56,23 +58,32 @@ export default function ForgotPassword() {
     }
   }
 
-  async function verifyAndReset() {
-    if (!/^\d{6}$/.test(otp)) {
+  async function verifyAndReset(codeOverride?: string) {
+    const code = codeOverride ?? otp;
+    if (!/^\d{6}$/.test(code)) {
       Alert.alert('كود غير صحيح', 'الكود يتكوّن من 6 أرقام');
       return;
     }
+    // Note: لا نطلب كلمة المرور في الـ onFilled — auto-submit يحدث فقط عند
+    // اكتمال الكود ووجود كلمة مرور صالحة. خلاف ذلك يضغط المستخدم الزر يدوياً.
     if (newPassword.length < 6) {
-      Alert.alert('كلمة المرور قصيرة', '6 أحرف على الأقل');
+      // إذا كان من auto-fill خلال onFilled، لا نُظهر alert (يبدو مزعجاً) —
+      // فقط نضع تركيز التحقق على الزر اليدوي.
+      if (!codeOverride) {
+        Alert.alert('كلمة المرور قصيرة', '6 أحرف على الأقل');
+      }
       return;
     }
     setLoading(true);
+    setOtpError(false);
     try {
-      const res = await api.post('/auth/verify-otp', { phone, otp, newPassword });
+      const res = await api.post('/auth/verify-otp', { phone, otp: code, newPassword });
       // Auto-login with new tokens
       await setTokens(res.data.accessToken, res.data.refreshToken);
       await hydrate();
       router.replace('/(tabs)/home');
     } catch (e: any) {
+      setOtpError(true);
       Alert.alert('فشل', e?.response?.data?.message ?? 'الكود غير صحيح أو منتهي');
     } finally {
       setLoading(false);
@@ -161,14 +172,14 @@ export default function ForgotPassword() {
               ) : (
                 <>
                   <Text className="text-slate-700 text-sm mb-2 text-right">الكود (6 أرقام)</Text>
-                  <TextInput
+                  <OtpCodeField
                     value={otp}
-                    onChangeText={(t) => setOtp(t.replace(/\D/g, ''))}
-                    placeholder="123456"
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    className="border-2 border-slate-200 rounded-xl px-4 py-3.5 mb-4 text-center text-2xl tracking-widest font-mono bg-slate-50"
-                    placeholderTextColor="#cbd5e1"
+                    onChange={(t) => {
+                      setOtp(t);
+                      if (otpError) setOtpError(false);
+                    }}
+                    onFilled={(code) => verifyAndReset(code)}
+                    error={otpError}
                   />
                   <Text className="text-slate-700 text-sm mb-2 text-right">كلمة المرور الجديدة</Text>
                   <TextInput
@@ -180,7 +191,7 @@ export default function ForgotPassword() {
                     placeholderTextColor="#cbd5e1"
                   />
                   <Pressable
-                    onPress={verifyAndReset}
+                    onPress={() => verifyAndReset()}
                     disabled={loading}
                     className={`rounded-xl py-4 items-center ${
                       loading ? 'bg-slate-300' : 'bg-emerald-600'
@@ -196,6 +207,7 @@ export default function ForgotPassword() {
                     onPress={() => {
                       setStep(1);
                       setOtp('');
+                      setOtpError(false);
                       setNewPassword('');
                     }}
                     className="mt-3 items-center"

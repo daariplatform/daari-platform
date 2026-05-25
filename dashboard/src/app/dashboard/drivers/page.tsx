@@ -29,6 +29,16 @@ interface ResetPasswordResponse {
   tempPassword: string;
 }
 
+interface DriversPage {
+  items: Driver[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+const PAGE_SIZE = 50;
+
 const STATUS: Record<Driver['status'], { label: string; klass: string }> = {
   AVAILABLE: { label: 'متاح', klass: 'bg-emerald-50 text-emerald-700' },
   ON_ROUTE: { label: 'في جولة', klass: 'bg-sky-50 text-sky-700' },
@@ -37,6 +47,7 @@ const STATUS: Record<Driver['status'], { label: string; klass: string }> = {
 };
 
 export default function DriversPage() {
+  const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
   const [credentials, setCredentials] = useState<{
     phone: string;
@@ -45,10 +56,13 @@ export default function DriversPage() {
   } | null>(null);
 
   const qc = useQueryClient();
-  const { data } = useQuery<Driver[]>({
-    queryKey: ['drivers'],
-    queryFn: async () => (await api.get('/drivers')).data,
+  const { data: pageData } = useQuery<DriversPage>({
+    queryKey: ['drivers', page],
+    queryFn: async () =>
+      (await api.get('/drivers', { params: { page, pageSize: PAGE_SIZE } })).data,
   });
+  const data = pageData?.items;
+  const totalPages = pageData?.totalPages ?? 0;
 
   const createMutation = useMutation<CreateDriverResponse, unknown, CreateDriverForm>({
     mutationFn: async (form) => (await api.post('/drivers', form)).data,
@@ -142,6 +156,31 @@ export default function DriversPage() {
             )}
           </tbody>
         </table>
+
+        {totalPages > 1 && (
+          <div
+            dir="rtl"
+            className="flex items-center justify-center gap-4 px-4 py-3 border-t bg-slate-50 text-sm"
+          >
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="px-3 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              « السابق
+            </button>
+            <span className="text-slate-600">
+              صفحة {page} من {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="px-3 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              التالي »
+            </button>
+          </div>
+        )}
       </div>
 
       {showCreate && (

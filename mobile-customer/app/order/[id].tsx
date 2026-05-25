@@ -10,13 +10,14 @@
  *   - زر إلغاء (إذا الحالة pending/assigned)
  */
 
-import { View, Text, Pressable, ScrollView, Linking, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, ScrollView, Linking, Alert, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import MapView, { Marker, type Region } from 'react-native-maps';
 import { api } from '@/lib/api';
 import { iqd, fmtArabicDate } from '@/lib/format';
 import type { RefillOrder, RefillOrderStatus } from '@/lib/types';
@@ -207,6 +208,39 @@ export default function OrderDetail() {
             </MotiView>
           )}
 
+          {/* Map — customer pin + driver pin (if live). The data comes
+              from the same order payload above; backend includes
+              `deliveryLat/Lng` and `driver.lastLat/lastLng` when present. */}
+          {(order.deliveryLat ?? order.customer?.locationLat) != null && (
+            <MotiView
+              from={{ opacity: 0, translateY: 20 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ type: 'timing', delay: 250, duration: 500 }}
+              style={{ backgroundColor: 'white', borderRadius: 22, padding: 12, marginTop: 12, shadowColor: '#0f172a', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 }}
+            >
+              <Text className="text-base font-bold mb-3 text-right px-2">الموقع</Text>
+              <OrderMap order={order} />
+              <Pressable
+                onPress={() => {
+                  const lat = order.deliveryLat ?? order.customer?.locationLat;
+                  const lng = order.deliveryLng ?? order.customer?.locationLng;
+                  if (lat == null || lng == null) return;
+                  const url = Platform.select({
+                    ios: `maps://?daddr=${lat},${lng}&dirflg=d`,
+                    default: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`,
+                  }) as string;
+                  Linking.openURL(url).catch(() =>
+                    Alert.alert('تعذّر فتح الخرائط', 'تأكد من تثبيت خرائط Google'),
+                  );
+                }}
+                className="mt-2 mx-2 bg-cyan-50 border border-cyan-200 rounded-xl py-3 flex-row-reverse items-center justify-center gap-2"
+              >
+                <Ionicons name="navigate" size={18} color="#0891b2" />
+                <Text className="text-cyan-700 font-bold text-sm">افتح في خرائط Google</Text>
+              </Pressable>
+            </MotiView>
+          )}
+
           {/* Price + payment */}
           <MotiView
             from={{ opacity: 0, translateY: 20 }}
@@ -256,6 +290,59 @@ function Row({ label, value }: { label: string; value: string }) {
     <View className="flex-row-reverse justify-between py-2 border-b border-slate-100">
       <Text className="text-sm text-slate-500">{label}</Text>
       <Text className="text-sm font-bold text-slate-900">{value}</Text>
+    </View>
+  );
+}
+
+/**
+ * Static-ish map preview for the order. Centers on the customer's address;
+ * adds a driver pin if the backend has reported a `driver.lastLat/lastLng`.
+ * We avoid panning to follow the driver — the live tracking polls every
+ * 15s elsewhere; a hard re-center would feel jarring during a scroll.
+ */
+function OrderMap({ order }: { order: any }) {
+  const custLat = order.deliveryLat ?? order.customer?.locationLat;
+  const custLng = order.deliveryLng ?? order.customer?.locationLng;
+  if (custLat == null || custLng == null) return null;
+  const driverLat = order.driver?.lastLat ?? order.driver?.locationLat ?? null;
+  const driverLng = order.driver?.lastLng ?? order.driver?.locationLng ?? null;
+
+  // Default zoom shows ~1km around the customer. If we have a driver pin,
+  // widen until both are comfortably in frame.
+  let region: Region = {
+    latitude: custLat,
+    longitude: custLng,
+    latitudeDelta: 0.01,
+    longitudeDelta: 0.01,
+  };
+  if (driverLat != null && driverLng != null) {
+    const midLat = (custLat + driverLat) / 2;
+    const midLng = (custLng + driverLng) / 2;
+    const dLat = Math.abs(custLat - driverLat) * 2.4 + 0.005;
+    const dLng = Math.abs(custLng - driverLng) * 2.4 + 0.005;
+    region = { latitude: midLat, longitude: midLng, latitudeDelta: dLat, longitudeDelta: dLng };
+  }
+
+  return (
+    <View style={{ height: 200, borderRadius: 14, overflow: 'hidden', marginHorizontal: 8 }}>
+      <MapView
+        style={{ flex: 1 }}
+        initialRegion={region}
+        pointerEvents="none"
+      >
+        <Marker
+          coordinate={{ latitude: custLat, longitude: custLng }}
+          title="عنوان التوصيل"
+          pinColor="#0891b2"
+        />
+        {driverLat != null && driverLng != null && (
+          <Marker
+            coordinate={{ latitude: driverLat, longitude: driverLng }}
+            title="السائق"
+            pinColor="#f59e0b"
+          />
+        )}
+      </MapView>
     </View>
   );
 }

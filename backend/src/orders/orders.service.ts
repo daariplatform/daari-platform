@@ -2,17 +2,22 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../notifications/push.service';
+import { CustomersService } from '../customers/customers.service';
+import { EmailService } from '../email/email.service';
 import {
   CustomerStatus,
   PaymentMethod,
+  Prisma,
   RefillOrderKind,
   RefillOrderStatus,
   TankStatus,
 } from '@prisma/client';
+import { paginated, type PaginatedResult } from '../common/dto/pagination.dto';
 
 interface CreateOrderInput {
   customerId: string;
@@ -45,9 +50,13 @@ const GPS_MAX_DISTANCE_M = Number(process.env.REFILL_GPS_MAX_DISTANCE_M ?? 50);
 
 @Injectable()
 export class OrdersService {
+  private readonly log = new Logger(OrdersService.name);
+
   constructor(
     private prisma: PrismaService,
     private push: PushService,
+    private customers: CustomersService,
+    private email: EmailService,
   ) {}
 
   async create(tenantId: string, input: CreateOrderInput) {
@@ -213,21 +222,34 @@ export class OrdersService {
     });
   }
 
-  list(tenantId: string, status?: RefillOrderStatus, driverId?: string) {
-    return this.prisma.refillOrder.findMany({
-      where: {
-        tenantId,
-        ...(status && { status }),
-        ...(driverId && { driverId }),
-      },
-      include: {
-        customer: { select: { fullName: true, phone: true, district: true, locationLat: true, locationLng: true } },
-        driver: { select: { id: true, user: { select: { fullName: true } } } },
-        tank: { select: { qrCode: true, capacity: true } },
-      },
-      orderBy: { requestedAt: 'desc' },
-      take: 200,
-    });
+  async list(
+    tenantId: string,
+    status?: RefillOrderStatus,
+    driverId?: string,
+    page = 1,
+    pageSize = 50,
+  ): Promise<PaginatedResult<any>> {
+    const where: Prisma.RefillOrderWhereInput = {
+      tenantId,
+      ...(status && { status }),
+      ...(driverId && { driverId }),
+    };
+    const skip = (page - 1) * pageSize;
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.refillOrder.findMany({
+        where,
+        include: {
+          customer: { select: { fullName: true, phone: true, district: true, locationLat: true, locationLng: true } },
+          driver: { select: { id: true, user: { select: { fullName: true } } } },
+          tank: { select: { qrCode: true, capacity: true } },
+        },
+        orderBy: { requestedAt: 'desc' },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.refillOrder.count({ where }),
+    ]);
+    return paginated(items, total, { page, pageSize });
   }
 
   async assign(tenantId: string, orderId: string, driverId: string) {
@@ -515,6 +537,50 @@ export class OrdersService {
           { orderId, kind: 'completed' },
         )
         .catch((err) => console.warn('[push] completion notify failed:', err));
+    }
+
+    // Cache invalidation: balance / lastRefillAt / totalRefills all changed,
+    // so the next /customers/me must hit DB.
+    if (order.customer?.userId) {
+      await this.customers.invalidateMeCache(order.customer.userId, order.tenantId);
+    }
+
+    // Email receipt — only for refills, only if the customer has email on
+    // file. Customer schema doesn't (yet) have an email column, so we
+    // gracefully no-op when none is available. Wrapped in try/catch so an
+    // SMTP outage never blocks order completion. Follow-up TODO: add
+    // `Customer.email` (optional) so receipts can actually be delivered.
+    if (
+      order.kind === RefillOrderKind.REFILL &&
+      order.customer &&
+      result.completedAt
+    ) {
+      const recipientEmail = (order.customer as unknown as { email?: string | null }).email;
+      if (recipientEmail) {
+        try {
+          const tenant = await this.prisma.tenant.findUnique({
+            where: { id: order.tenantId },
+            select: { name: true },
+          });
+          const refillLiters = order.tank?.capacity === 'L500' ? 500 : 350;
+          await this.email.sendReceipt(recipientEmail, {
+            customerName: order.customer.fullName,
+            orderId: order.id,
+            refillLiters,
+            refillPriceIqd: input.paidAmountIqd,
+            tenantName: tenant?.name ?? 'داري',
+            completedAt: result.completedAt,
+          });
+        } catch (err) {
+          this.log.warn(
+            `Email receipt failed for order ${order.id}: ${(err as Error).message}`,
+          );
+        }
+      } else {
+        // Customer has no email — silently skip. Logged at debug only so
+        // production logs aren't flooded.
+        this.log.debug(`No email on customer ${order.customer.id} — skipping receipt`);
+      }
     }
 
     return result;

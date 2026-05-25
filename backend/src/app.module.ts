@@ -17,6 +17,9 @@ import { PlantModule } from './plant/plant.module';
 import { VendorsModule } from './vendors/vendors.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { HealthModule } from './health/health.module';
+import { CacheModule } from './cache/cache.module';
+import { QueueModule } from './queue/queue.module';
+import { EmailModule } from './email/email.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { TenantGuard } from './common/guards/tenant.guard';
 import { CapabilitiesGuard } from './common/guards/capabilities.guard';
@@ -44,6 +47,9 @@ const optionalModules: DynamicModule['imports'] = vendorsEnabled ? [VendorsModul
       { name: 'default', ttl: 60_000, limit: 120 },
     ]),
     PrismaModule,
+    CacheModule,
+    QueueModule,
+    EmailModule,
     AuthModule,
     TenantsModule,
     TanksModule,

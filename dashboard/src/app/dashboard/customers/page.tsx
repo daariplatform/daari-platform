@@ -29,6 +29,16 @@ interface ResetPasswordResponse {
   tempPassword: string;
 }
 
+interface CustomersPage {
+  items: Customer[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+const PAGE_SIZE = 50;
+
 const STATUS: Record<string, { label: string; klass: string }> = {
   ACTIVE: { label: 'نشط', klass: 'bg-emerald-50 text-emerald-700' },
   AT_RISK: { label: 'في خطر', klass: 'bg-amber-50 text-amber-700' },
@@ -39,6 +49,7 @@ const STATUS: Record<string, { label: string; klass: string }> = {
 
 export default function CustomersPage() {
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [credentials, setCredentials] = useState<{
@@ -48,11 +59,17 @@ export default function CustomersPage() {
   } | null>(null);
 
   const qc = useQueryClient();
-  const { data } = useQuery<Customer[]>({
-    queryKey: ['customers', search],
+  const { data: pageData } = useQuery<CustomersPage>({
+    queryKey: ['customers', page, search],
     queryFn: async () =>
-      (await api.get('/customers', { params: { search: search || undefined } })).data,
+      (
+        await api.get('/customers', {
+          params: { search: search || undefined, page, pageSize: PAGE_SIZE },
+        })
+      ).data,
   });
+  const data = pageData?.items;
+  const totalPages = pageData?.totalPages ?? 0;
 
   const createMutation = useMutation<CreateCustomerResponse, unknown, CreateCustomerForm>({
     mutationFn: async (form) => (await api.post('/customers', form)).data,
@@ -147,7 +164,10 @@ export default function CustomersPage() {
           <input
             placeholder="بحث بالاسم، الهاتف، العنوان، أو رقم الخزان"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             className="border rounded-lg px-3 py-2 w-80"
           />
           <button
@@ -259,6 +279,31 @@ export default function CustomersPage() {
             )}
           </tbody>
         </table>
+
+        {totalPages > 1 && (
+          <div
+            dir="rtl"
+            className="flex items-center justify-center gap-4 px-4 py-3 border-t bg-slate-50 text-sm"
+          >
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="px-3 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              « السابق
+            </button>
+            <span className="text-slate-600">
+              صفحة {page} من {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="px-3 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              التالي »
+            </button>
+          </div>
+        )}
       </div>
 
       {showCreate && (

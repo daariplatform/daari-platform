@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { PaymentMethod, RefillOrderKind, RefillOrderStatus, TankReclaimReason, UserRole } from '@prisma/client';
 import { OrdersService } from './orders.service';
@@ -8,6 +8,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { RequireCapability } from '../common/decorators/capabilities.decorator';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 class CreateOrderDto {
   @IsString()
@@ -116,13 +117,24 @@ export class OrdersController {
   }
 
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'driverId', required: false })
   @Get()
   list(
     @CurrentUser() user: AuthUser,
+    @Query() pagination: PaginationDto,
     @Query('status') status?: RefillOrderStatus,
     @Query('driverId') driverId?: string,
   ) {
-    return this.orders.list(user.tenantId!, status, driverId);
+    return this.orders.list(
+      user.tenantId!,
+      status,
+      driverId,
+      pagination.page,
+      pagination.pageSize,
+    );
   }
 
   @Roles(UserRole.OWNER, UserRole.MANAGER)

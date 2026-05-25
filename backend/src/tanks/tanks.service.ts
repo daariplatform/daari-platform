@@ -1,7 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { TankCapacity, TankStatus } from '@prisma/client';
+import { Prisma, TankCapacity, TankStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import { paginated, type PaginatedResult } from '../common/dto/pagination.dto';
 
 interface CreateTankInput {
   serialNumber: string;
@@ -31,12 +32,25 @@ export class TanksService {
     });
   }
 
-  list(tenantId: string, status?: TankStatus) {
-    return this.prisma.tank.findMany({
-      where: { tenantId, ...(status && { status }) },
-      include: { customer: { select: { id: true, fullName: true, phone: true, district: true } } },
-      orderBy: { createdAt: 'desc' },
-    });
+  async list(
+    tenantId: string,
+    status?: TankStatus,
+    page = 1,
+    pageSize = 50,
+  ): Promise<PaginatedResult<any>> {
+    const where: Prisma.TankWhereInput = { tenantId, ...(status && { status }) };
+    const skip = (page - 1) * pageSize;
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.tank.findMany({
+        where,
+        include: { customer: { select: { id: true, fullName: true, phone: true, district: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.tank.count({ where }),
+    ]);
+    return paginated(items, total, { page, pageSize });
   }
 
   inventory(tenantId: string) {

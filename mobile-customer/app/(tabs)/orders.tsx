@@ -88,9 +88,11 @@ export default function Orders() {
           </>
         ) : data?.length === 0 ? (
           <EmptyState
-            icon="receipt-outline"
+            icon="local-shipping"
             title="لا توجد طلبات بعد"
             subtitle="اضغط على زر «اطلب تعبئة الآن» في الشاشة الرئيسية لأول طلب"
+            actionLabel="اطلب تعبئتك الأولى"
+            onAction={() => router.push('/(tabs)/home')}
           />
         ) : (
           data?.map((o, idx) => (

@@ -39,15 +39,29 @@ const STATUS_COLOR: Record<string, string> = {
   DAMAGED: 'bg-red-50 text-red-700',
 };
 
+interface TanksPage {
+  items: Tank[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+const PAGE_SIZE = 50;
+
 export default function TanksPage() {
   const qc = useQueryClient();
+  const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
   const [assignFor, setAssignFor] = useState<Tank | null>(null);
 
-  const { data, isLoading } = useQuery<Tank[]>({
-    queryKey: ['tanks'],
-    queryFn: async () => (await api.get('/tanks')).data,
+  const { data: pageData, isLoading } = useQuery<TanksPage>({
+    queryKey: ['tanks', page],
+    queryFn: async () =>
+      (await api.get('/tanks', { params: { page, pageSize: PAGE_SIZE } })).data,
   });
+  const data = pageData?.items;
+  const totalPages = pageData?.totalPages ?? 0;
 
   const createMutation = useMutation<Tank, unknown, CreateTankForm>({
     mutationFn: async (form) => (await api.post('/tanks', form)).data,
@@ -183,6 +197,31 @@ export default function TanksPage() {
             )}
           </tbody>
         </table>
+
+        {totalPages > 1 && (
+          <div
+            dir="rtl"
+            className="flex items-center justify-center gap-4 px-4 py-3 border-t bg-slate-50 text-sm"
+          >
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="px-3 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              « السابق
+            </button>
+            <span className="text-slate-600">
+              صفحة {page} من {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="px-3 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              التالي »
+            </button>
+          </div>
+        )}
       </div>
 
       {showCreate && (
@@ -343,12 +382,15 @@ function AssignTankModal({
 
   const { data: customers, isLoading } = useQuery<Customer[]>({
     queryKey: ['customers', 'assign-search', search],
-    queryFn: async () =>
-      (
-        await api.get('/customers', {
-          params: { search: search || undefined },
-        })
-      ).data,
+    queryFn: async () => {
+      // /customers now returns { items, total, page, pageSize, totalPages }.
+      // The assign-tank modal only needs the first 200 candidates for picking,
+      // so we request a larger pageSize and read .items.
+      const res = await api.get('/customers', {
+        params: { search: search || undefined, page: 1, pageSize: 200 },
+      });
+      return res.data?.items ?? [];
+    },
   });
 
   // Only customers WITHOUT a tank yet — prevent double-assignment.

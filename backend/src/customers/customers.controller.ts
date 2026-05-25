@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Inject,
   Param,
   Post,
   Query,
@@ -11,9 +12,12 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { CACHE_MANAGER, CacheTTL } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
+import { UserScopedCacheInterceptor } from '../cache/user-scoped-cache.interceptor';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import {
   IsEnum,
   IsLatitude,
@@ -32,6 +36,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { RequireCapability } from '../common/decorators/capabilities.decorator';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 class CreateCustomerDto {
   @IsString() @MinLength(2)
@@ -138,6 +143,7 @@ export class CustomersController {
     private customers: CustomersService,
     private bulkImport: BulkImportService,
     private auth: AuthService,
+    @Inject(CACHE_MANAGER) private cache: Cache,
   ) {}
 
   /**
@@ -238,14 +244,25 @@ export class CustomersController {
   }
 
   @RequireCapability('plant_admin', 'driver')
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'district', required: false })
+  @ApiQuery({ name: 'search', required: false })
   @Get()
   list(
     @CurrentUser() user: AuthUser,
+    @Query() pagination: PaginationDto,
     @Query('status') status?: CustomerStatus,
     @Query('district') district?: string,
     @Query('search') search?: string,
   ) {
-    return this.customers.list(user.tenantId!, { status, district, search });
+    return this.customers.list(
+      user.tenantId!,
+      { status, district, search },
+      pagination.page,
+      pagination.pageSize,
+    );
   }
 
   /**
@@ -255,6 +272,8 @@ export class CustomersController {
    */
   @RequireCapability('customer')
   @Get('me')
+  @UseInterceptors(UserScopedCacheInterceptor)
+  @CacheTTL(30_000) // 30 s — short so a refilled balance shows up quickly
   findMe(@CurrentUser() user: AuthUser) {
     return this.customers.findByUserId(user.id);
   }

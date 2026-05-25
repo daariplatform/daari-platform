@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, View, Text, Pressable, ActivityIndicator } from 'react-native';
+import { ScrollView, View, Text, Pressable } from 'react-native';
 import { Link } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/lib/auth-store';
 import { useMyTodayTasks, type DriverTask } from '@/lib/queries';
 import { pendingCount } from '@/lib/offline-queue';
 import { WorkerHeader } from '@/components/WorkerHeader';
+import { SkeletonCard } from '@/components/Skeleton';
 
 type IconName = React.ComponentProps<typeof MaterialIcons>['name'];
 
@@ -42,8 +43,12 @@ export default function Home() {
       <WorkerHeader online={online} queuedCount={queued} />
 
       {isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color="#0284c7" />
+        <View style={{ paddingHorizontal: 12, paddingTop: 14 }}>
+          <SkeletonCard height={68} />
+          <SkeletonCard height={150} />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
         </View>
       ) : (
         <DriverHome tasks={tasks ?? []} />

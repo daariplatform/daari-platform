@@ -1,4 +1,4 @@
-import { ScrollView, View, Text, Pressable, Alert, ActivityIndicator } from 'react-native';
+import { ScrollView, View, Text, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth-store';
 import { useMyProfile } from '@/lib/queries';
 import { api } from '@/lib/api';
 import { iqd } from '@/lib/format';
+import { Skeleton } from '@/components/Skeleton';
 
 export default function Profile() {
   const router = useRouter();
@@ -14,10 +15,57 @@ export default function Profile() {
   const { data: profile, isLoading } = useMyProfile();
 
   if (isLoading || !profile) {
+    // Skeleton placeholders تحاكي شكل بطاقة الـ profile (avatar + اسم + 4 صفوف).
     return (
-      <SafeAreaView className="flex-1 bg-slate-50 items-center justify-center">
-        <ActivityIndicator color="#0284c7" />
-      </SafeAreaView>
+      <View className="flex-1 bg-slate-50">
+        <LinearGradient
+          colors={['#38bdf8', '#0ea5e9', '#0284c7']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={{
+            paddingBottom: 24,
+            borderBottomLeftRadius: 28,
+            borderBottomRightRadius: 28,
+          }}
+        >
+          <SafeAreaView edges={['top']}>
+            <View className="px-4 pt-2 items-center">
+              <View
+                style={{
+                  width: 84,
+                  height: 84,
+                  borderRadius: 42,
+                  backgroundColor: 'rgba(255,255,255,0.22)',
+                }}
+              />
+              <View style={{ height: 14 }} />
+              <View
+                style={{
+                  width: 140,
+                  height: 18,
+                  borderRadius: 6,
+                  backgroundColor: 'rgba(255,255,255,0.30)',
+                }}
+              />
+              <View style={{ height: 6 }} />
+              <View
+                style={{
+                  width: 100,
+                  height: 11,
+                  borderRadius: 4,
+                  backgroundColor: 'rgba(255,255,255,0.25)',
+                }}
+              />
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <View style={{ paddingHorizontal: 16, paddingTop: 16, gap: 10 }}>
+          <Skeleton height={52} borderRadius={14} />
+          <Skeleton height={52} borderRadius={14} />
+          <Skeleton height={52} borderRadius={14} />
+          <Skeleton height={52} borderRadius={14} />
+        </View>
+      </View>
     );
   }
 

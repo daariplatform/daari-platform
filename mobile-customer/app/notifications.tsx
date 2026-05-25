@@ -101,7 +101,7 @@ export default function NotificationsScreen() {
           </>
         ) : data?.length === 0 ? (
           <EmptyState
-            icon="notifications-off-outline"
+            icon="notifications-off"
             title="لا توجد إشعارات"
             subtitle="سنخطرك عند تحديث طلبك أو ورود إشعار جديد"
           />

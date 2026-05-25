@@ -35,6 +35,24 @@ const STATUS: Record<string, { label: string; klass: string; col: number }> = {
   FAILED: { label: 'فشل', klass: 'bg-red-50 text-red-700 ring-red-200', col: -1 },
 };
 
+interface OrdersPage {
+  items: Order[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+interface DriversPageResponse {
+  items: Driver[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+const PAGE_SIZE = 50;
+
 const COLUMNS: { key: string; title: string; statuses: string[]; color: string }[] = [
   { key: 'pending', title: 'قيد الانتظار', statuses: ['PENDING'], color: '#f59e0b' },
   { key: 'assigned', title: 'مُسنَد', statuses: ['ASSIGNED'], color: '#2563eb' },
@@ -45,12 +63,16 @@ const COLUMNS: { key: string; title: string; statuses: string[]; color: string }
 export default function OrdersPage() {
   const [view, setView] = useState<'kanban' | 'list'>('kanban');
   const [assigningOrder, setAssigningOrder] = useState<Order | null>(null);
+  const [page, setPage] = useState(1);
 
-  const { data: orders } = useQuery<Order[]>({
-    queryKey: ['orders'],
-    queryFn: async () => (await api.get('/orders')).data,
+  const { data: ordersPage } = useQuery<OrdersPage>({
+    queryKey: ['orders', page],
+    queryFn: async () =>
+      (await api.get('/orders', { params: { page, pageSize: PAGE_SIZE } })).data,
     refetchInterval: 15_000,
   });
+  const orders = ordersPage?.items;
+  const totalPages = ordersPage?.totalPages ?? 0;
 
   return (
     <div className="space-y-6">
@@ -110,7 +132,33 @@ export default function OrdersPage() {
           })}
         </div>
       ) : (
-        <OrdersTable orders={orders} onAssign={setAssigningOrder} />
+        <>
+          <OrdersTable orders={orders} onAssign={setAssigningOrder} />
+          {totalPages > 1 && (
+            <div
+              dir="rtl"
+              className="flex items-center justify-center gap-4 px-4 py-3 mt-3 bg-white rounded-2xl shadow-sm text-sm"
+            >
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="px-3 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                « السابق
+              </button>
+              <span className="text-slate-600">
+                صفحة {page} من {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="px-3 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                التالي »
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {assigningOrder && (
@@ -212,9 +260,16 @@ function OrdersTable({ orders, onAssign }: { orders?: Order[]; onAssign: (o: Ord
 
 function AssignDriverModal({ order, onClose }: { order: Order; onClose: () => void }) {
   const qc = useQueryClient();
+  // /drivers returns { items, total, ... } — pull the first 200 (more than
+  // any plant will realistically have) so the assign modal can pick freely.
   const { data: drivers } = useQuery<Driver[]>({
-    queryKey: ['drivers'],
-    queryFn: async () => (await api.get('/drivers')).data,
+    queryKey: ['drivers', 'assign-modal'],
+    queryFn: async () => {
+      const res = await api.get<DriversPageResponse>('/drivers', {
+        params: { page: 1, pageSize: 200 },
+      });
+      return res.data?.items ?? [];
+    },
   });
 
   const assignMutation = useMutation({

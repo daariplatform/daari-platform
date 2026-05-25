@@ -3,11 +3,22 @@ import {
   Body,
   Controller,
   Get,
+  Inject,
+  Param,
   Post,
   Query,
   UseGuards,
+  UseInterceptors,
+  NotFoundException,
 } from '@nestjs/common';
+import { CACHE_MANAGER, CacheTTL } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
+import { InjectQueue } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+
+import { UserScopedCacheInterceptor } from '../cache/user-scoped-cache.interceptor';
+import { WHATSAPP_BLAST_QUEUE } from '../queue/queue.constants';
 import { IsEnum, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 import { PromoChannel, UserRole } from '@prisma/client';
 
@@ -59,6 +70,8 @@ export class PlantController {
     private prisma: PrismaService,
     private push: PushService,
     private whatsapp: WhatsAppProvider,
+    @Inject(CACHE_MANAGER) private cache: Cache,
+    @InjectQueue(WHATSAPP_BLAST_QUEUE) private whatsappBlastQueue: Queue,
   ) {}
 
   // ─── Wave 4: Water stock ─────────────────────────────────────────
@@ -128,6 +141,8 @@ export class PlantController {
 
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)
   @Get('driver-performance')
+  @UseInterceptors(UserScopedCacheInterceptor)
+  @CacheTTL(60_000) // 60 s
   async driverPerformance(@CurrentUser() user: AuthUser, @Query('days') days?: string) {
     const window = Math.min(parseInt(days ?? '30', 10) || 30, 90);
     const since = new Date(Date.now() - window * 24 * 60 * 60 * 1000);
@@ -244,7 +259,9 @@ export class PlantController {
       },
     });
 
-    // Send (push only for now; WhatsApp wire-up later via existing provider)
+    // Push path — synchronous (Expo handles fan-out, latency is low). The
+    // sentCount / failedCount fields are written before we return so the
+    // dashboard sees the final state without polling.
     if (dto.channel === PromoChannel.PUSH) {
       const result = await this.push.sendToUsers(userIds, dto.title, dto.body, {
         promoId: promo.id,
@@ -265,47 +282,50 @@ export class PlantController {
       });
       return { ...promo, sentCount: result.sent, failedCount: result.failed };
     }
-    // WhatsApp path — fetch every active customer's phone and send via
-    // the existing provider. Provider returns null when not configured,
-    // which we count as "would send" so the plant still gets billed for
-    // the work done by Daari (and we don't silently swallow the blast).
-    const recipients = await this.prisma.customer.findMany({
+
+    // WhatsApp path — handed off to a BullMQ background worker so the HTTP
+    // call returns immediately even for large audiences (one Meta Cloud
+    // request per recipient adds up fast). The processor updates
+    // sentCount / failedCount / status as it progresses; dashboard polls
+    // GET /plant/promo-blast/:id/status for the live count.
+    const customerIds = (await this.prisma.customer.findMany({
       where: {
         tenantId: user.tenantId!,
         status: { in: ['ACTIVE', 'AT_RISK'] },
       },
-      select: { phone: true, whatsapp: true, fullName: true },
-    });
-    let sent = 0;
-    let failed = 0;
-    const message = `${dto.title}\n\n${dto.body}`;
-    for (const r of recipients) {
-      try {
-        await this.whatsapp.send(r.whatsapp ?? r.phone, message);
-        sent++;
-      } catch {
-        failed++;
-      }
-    }
-    await this.prisma.promoNotification.update({
-      where: { id: promo.id },
-      data: {
-        status: failed === recipients.length ? 'FAILED' : 'SENT',
-        sentCount: sent,
-        failedCount: failed,
-        sentAt: new Date(),
+      select: { id: true },
+    })).map((c) => c.id);
+
+    await this.whatsappBlastQueue.add(
+      'send',
+      {
+        promoNotificationId: promo.id,
+        tenantId: user.tenantId!,
+        customerIds,
+        title: dto.title,
+        body: dto.body,
       },
-    });
-    await this.audit(user, 'promo.send', 'PromoNotification', promo.id, null, {
+      {
+        // Retry the whole job on hard failures (network drop). Per-recipient
+        // failures are caught inside the processor and don't trigger retries.
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5_000 },
+        removeOnComplete: { age: 24 * 60 * 60 }, // keep for 24 h for debugging
+        removeOnFail: { age: 7 * 24 * 60 * 60 }, // keep failed for a week
+      },
+    );
+
+    await this.audit(user, 'promo.queue', 'PromoNotification', promo.id, null, {
       channel: 'WHATSAPP',
-      sent,
-      failed,
+      audienceCount: customerIds.length,
     });
-    return { ...promo, sentCount: sent, failedCount: failed };
+    return promo; // status: QUEUED, sentCount: 0 — dashboard polls /status
   }
 
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)
   @Get('promo-history')
+  @UseInterceptors(UserScopedCacheInterceptor)
+  @CacheTTL(30_000) // 30 s — refresh after a new blast is queued
   promoHistory(@CurrentUser() user: AuthUser, @Query('limit') limit?: string) {
     const n = limit ? Math.min(parseInt(limit, 10) || 50, 200) : 50;
     return this.prisma.promoNotification.findMany({
@@ -313,6 +333,21 @@ export class PlantController {
       orderBy: { createdAt: 'desc' },
       take: n,
     });
+  }
+
+  /**
+   * Dashboard polls this to render a progress bar on an in-flight blast.
+   * Returns just the PromoNotification row (sentCount / failedCount /
+   * status / sentAt fields are what the UI watches).
+   */
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)
+  @Get('promo-blast/:id/status')
+  async promoBlastStatus(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    const row = await this.prisma.promoNotification.findFirst({
+      where: { id, tenantId: user.tenantId! },
+    });
+    if (!row) throw new NotFoundException('Promo blast not found');
+    return row;
   }
 
   // ─── helpers ─────────────────────────────────────────────────────

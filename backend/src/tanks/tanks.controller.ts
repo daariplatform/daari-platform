@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
 import { TankCapacity, TankStatus, UserRole } from '@prisma/client';
 import { TanksService } from './tanks.service';
@@ -7,6 +7,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { RequireCapability } from '../common/decorators/capabilities.decorator';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 class CreateTankDto {
   @IsString() @MinLength(2)
@@ -40,9 +41,21 @@ export class TanksController {
   }
 
   @RequireCapability('plant_admin', 'driver')
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiQuery({ name: 'status', required: false })
   @Get()
-  list(@CurrentUser() user: AuthUser, @Query('status') status?: TankStatus) {
-    return this.tanks.list(user.tenantId!, status);
+  list(
+    @CurrentUser() user: AuthUser,
+    @Query() pagination: PaginationDto,
+    @Query('status') status?: TankStatus,
+  ) {
+    return this.tanks.list(
+      user.tenantId!,
+      status,
+      pagination.page,
+      pagination.pageSize,
+    );
   }
 
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)

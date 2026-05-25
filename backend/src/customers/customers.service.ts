@@ -1,14 +1,19 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 import { PrismaService } from '../prisma/prisma.service';
 import { CustomerStatus, LocationSource, Prisma, UserRole } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { randomBytes } from 'crypto';
 import type { ImportRow } from './bulk-import.service';
+import { paginated, type PaginatedResult } from '../common/dto/pagination.dto';
 
 interface CreateCustomerInput {
   fullName: string;
@@ -55,7 +60,37 @@ interface ListFilters {
 
 @Injectable()
 export class CustomersService {
-  constructor(private prisma: PrismaService) {}
+  private readonly log = new Logger(CustomersService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    @Inject(CACHE_MANAGER) private cache: Cache,
+  ) {}
+
+  /**
+   * Invalidate cached GET /customers/me for one user. Call after any write
+   * that changes the payload (balance change, location move, status flip,
+   * password reset). The key shape comes from UserScopedCacheInterceptor:
+   * `<userId>:<tenantId>:<url>` — but `tenantId` on the cached value comes
+   * from JWT, which we don't have here, so we delete by scanning known
+   * variants. cache-manager `del` is forgiving when the key doesn't exist.
+   *
+   * `url` is the API path (no prefix) — Nest's HttpAdapter.getRequestUrl
+   * returns the request URL relative to the global prefix. In our setup the
+   * prefix is `api/v1`, so the URL the interceptor sees is `/customers/me`.
+   */
+  async invalidateMeCache(userId: string | null | undefined, tenantId?: string | null) {
+    if (!userId) return;
+    const variants = [
+      `${userId}:${tenantId ?? 'no-tenant'}:/customers/me`,
+      `${userId}:${tenantId ?? 'no-tenant'}:/api/v1/customers/me`,
+    ];
+    try {
+      await Promise.all(variants.map((k) => this.cache.del(k)));
+    } catch (err) {
+      this.log.warn(`Cache invalidate failed for user=${userId}: ${(err as Error).message}`);
+    }
+  }
 
   /**
    * Plant admin creates a customer from the dashboard. Also provisions a
@@ -214,6 +249,7 @@ export class CustomersService {
         where: { id: customerId },
         data: { status: CustomerStatus.ACTIVE },
       });
+      await this.invalidateMeCache(updated.userId, updated.tenantId);
       return { ...updated, tempPassword: null };
     }
 
@@ -252,6 +288,7 @@ export class CustomersService {
       });
     });
 
+    await this.invalidateMeCache(updated.userId, updated.tenantId);
     return { ...updated, tempPassword: plainPassword };
   }
 
@@ -495,7 +532,12 @@ export class CustomersService {
     });
   }
 
-  list(tenantId: string, f: ListFilters = {}) {
+  async list(
+    tenantId: string,
+    f: ListFilters = {},
+    page = 1,
+    pageSize = 50,
+  ): Promise<PaginatedResult<any>> {
     const where: Prisma.CustomerWhereInput = { tenantId };
     if (f.status) where.status = f.status;
     if (f.district) where.district = f.district;
@@ -512,11 +554,18 @@ export class CustomersService {
       ];
     }
 
-    return this.prisma.customer.findMany({
-      where,
-      include: { tanks: { select: { id: true, qrCode: true, capacity: true } } },
-      orderBy: [{ status: 'asc' }, { fullName: 'asc' }],
-    });
+    const skip = (page - 1) * pageSize;
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.customer.findMany({
+        where,
+        include: { tanks: { select: { id: true, qrCode: true, capacity: true } } },
+        orderBy: [{ status: 'asc' }, { fullName: 'asc' }],
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.customer.count({ where }),
+    ]);
+    return paginated(items, total, { page, pageSize });
   }
 
   async findOne(tenantId: string, id: string) {
@@ -570,7 +619,7 @@ export class CustomersService {
   ) {
     const c = await this.prisma.customer.findFirst({ where: { id: customerId, tenantId } });
     if (!c) throw new NotFoundException('Customer not found');
-    return this.prisma.customer.update({
+    const updated = await this.prisma.customer.update({
       where: { id: customerId },
       data: {
         locationLng: lng,
@@ -579,6 +628,8 @@ export class CustomersService {
         locationCapturedBy: source,
       },
     });
+    await this.invalidateMeCache(updated.userId, updated.tenantId);
+    return updated;
   }
 
   /**
@@ -590,7 +641,7 @@ export class CustomersService {
   async startMove(tenantId: string, customerId: string, newLng: number, newLat: number) {
     const c = await this.prisma.customer.findFirst({ where: { id: customerId, tenantId } });
     if (!c) throw new NotFoundException('Customer not found');
-    return this.prisma.customer.update({
+    const updated = await this.prisma.customer.update({
       where: { id: customerId },
       data: {
         previousLocationLng: c.locationLng,
@@ -602,6 +653,8 @@ export class CustomersService {
         movedAt: new Date(),
       },
     });
+    await this.invalidateMeCache(updated.userId, updated.tenantId);
+    return updated;
   }
 
   /**

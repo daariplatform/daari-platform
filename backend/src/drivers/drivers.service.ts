@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DriverStatus, RefillOrderStatus, UserRole } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { randomBytes } from 'crypto';
+import { paginated, type PaginatedResult } from '../common/dto/pagination.dto';
 
 interface CreateDriverInput {
   fullName: string;
@@ -96,12 +97,24 @@ export class DriversService {
     return { ok: true, tempPassword: plainPassword };
   }
 
-  list(tenantId: string) {
-    return this.prisma.driver.findMany({
-      where: { tenantId },
-      include: { user: { select: { fullName: true, phone: true, isActive: true } } },
-      orderBy: { hiredAt: 'desc' },
-    });
+  async list(
+    tenantId: string,
+    page = 1,
+    pageSize = 50,
+  ): Promise<PaginatedResult<any>> {
+    const where = { tenantId };
+    const skip = (page - 1) * pageSize;
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.driver.findMany({
+        where,
+        include: { user: { select: { fullName: true, phone: true, isActive: true } } },
+        orderBy: { hiredAt: 'desc' },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.driver.count({ where }),
+    ]);
+    return paginated(items, total, { page, pageSize });
   }
 
   /**

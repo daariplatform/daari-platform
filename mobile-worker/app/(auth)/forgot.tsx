@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { api } from '@/lib/api';
 import { setTokens } from '@/lib/tokens';
 import { useAuth } from '@/lib/auth-store';
+import { OtpCodeField } from '@/components/OtpCodeField';
 
 /**
  * Two-step self-service password reset.
@@ -33,6 +34,7 @@ export default function ForgotPassword() {
   const [step, setStep] = useState<1 | 2>(1);
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
+  const [otpError, setOtpError] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -56,23 +58,28 @@ export default function ForgotPassword() {
     }
   }
 
-  async function verifyAndReset() {
-    if (!/^\d{6}$/.test(otp)) {
+  async function verifyAndReset(codeOverride?: string) {
+    const code = codeOverride ?? otp;
+    if (!/^\d{6}$/.test(code)) {
       Alert.alert('كود غير صحيح', 'الكود يتكوّن من 6 أرقام');
       return;
     }
     if (newPassword.length < 6) {
-      Alert.alert('كلمة المرور قصيرة', '6 أحرف على الأقل');
+      if (!codeOverride) {
+        Alert.alert('كلمة المرور قصيرة', '6 أحرف على الأقل');
+      }
       return;
     }
     setLoading(true);
+    setOtpError(false);
     try {
-      const res = await api.post('/auth/verify-otp', { phone, otp, newPassword });
+      const res = await api.post('/auth/verify-otp', { phone, otp: code, newPassword });
       // Auto-login with new tokens
       await setTokens(res.data.accessToken, res.data.refreshToken);
       await hydrate();
       router.replace('/(tabs)/home');
     } catch (e: any) {
+      setOtpError(true);
       Alert.alert('فشل', e?.response?.data?.message ?? 'الكود غير صحيح أو منتهي');
     } finally {
       setLoading(false);
@@ -180,7 +187,7 @@ export default function ForgotPassword() {
                     placeholderTextColor="#cbd5e1"
                   />
                   <Pressable
-                    onPress={verifyAndReset}
+                    onPress={() => verifyAndReset()}
                     disabled={loading}
                     className={`rounded-xl py-4 items-center ${
                       loading ? 'bg-slate-300' : 'bg-emerald-600'

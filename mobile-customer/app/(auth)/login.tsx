@@ -16,6 +16,8 @@ import { MotiView } from 'moti';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/lib/auth-store';
 import { hap } from '@/lib/haptics';
+import { usePostHog } from 'posthog-react-native';
+import { track } from '@/lib/posthog';
 import { AnimatedLogo } from '@/components/AnimatedLogo';
 import { RainBackground } from '@/components/RainBackground';
 
@@ -25,6 +27,7 @@ import { RainBackground } from '@/components/RainBackground';
 export default function LoginScreen() {
   const router = useRouter();
   const { login, loginAsDemo, loading } = useAuth();
+  const ph = usePostHog();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -52,6 +55,7 @@ export default function LoginScreen() {
       hap.error();
       const status = err?.response?.status;
       const msg = err?.response?.data?.message;
+      track(ph, 'login_failed', { status, reason: msg ?? 'unknown' });
       if (status === 429) {
         Alert.alert('محاولات كثيرة', 'تجاوزت الحد، حاول بعد ١٥ دقيقة.');
       } else if (status === 401) {

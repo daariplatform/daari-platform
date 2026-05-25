@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 
 import { useMyOrders } from '@/lib/queries';
 import { iqd, fmtArabicDate, daysBetween } from '@/lib/format';
+import { Skeleton } from '@/components/Skeleton';
 import type { RefillOrder, RefillOrderStatus, RefillOrderKind } from '@/lib/types';
 
 /**
@@ -130,6 +131,7 @@ export function RecentActivityList() {
   const { data: orders, isLoading, error } = useMyOrders();
 
   // Empty / error / loading — لا نخفي القسم كاملاً، لكن نختصره.
+  // Skeleton يحاكي شكل 3 صفوف نشاط بدل نص "جاري التحميل" البارد.
   if (isLoading) {
     return (
       <View style={{ marginTop: 18 }}>
@@ -138,11 +140,34 @@ export function RecentActivityList() {
           style={{
             backgroundColor: '#fff',
             borderRadius: 18,
-            padding: 24,
-            alignItems: 'center',
+            overflow: 'hidden',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.04,
+            shadowRadius: 8,
+            elevation: 1,
           }}
         >
-          <Text style={{ color: '#94a3b8', fontSize: 12 }}>جاري التحميل…</Text>
+          {[0, 1, 2].map((i) => (
+            <View
+              key={i}
+              style={{
+                flexDirection: 'row-reverse',
+                alignItems: 'center',
+                gap: 10,
+                padding: 12,
+                borderBottomWidth: i < 2 ? 1 : 0,
+                borderBottomColor: '#f1f5f9',
+              }}
+            >
+              <Skeleton width={36} height={36} borderRadius={12} />
+              <View style={{ flex: 1, gap: 6 }}>
+                <Skeleton width={'70%'} height={12} />
+                <Skeleton width={'40%'} height={9} />
+              </View>
+              <Skeleton width={48} height={14} />
+            </View>
+          ))}
         </View>
       </View>
     );

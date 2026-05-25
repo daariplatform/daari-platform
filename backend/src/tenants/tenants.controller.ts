@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
+import { CacheInterceptor, CacheKey, CacheTTL } from '@nestjs/cache-manager';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { IsInt, IsLatitude, IsLongitude, IsString, MinLength, IsEnum, IsOptional, Matches, Min } from 'class-validator';
 import { SubscriptionPlan, TenantStatus, UserRole } from '@prisma/client';
@@ -102,7 +103,12 @@ export class TenantsController {
    */
   @Public()
   @Get('discover')
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(5 * 60 * 1000) // 5 min — plant coverage areas change rarely
   discover(@Query('lng') lng: string, @Query('lat') lat: string) {
+    // Note: default CacheInterceptor keys by request URL which includes the
+    // lng/lat (and any radius) querystring, so each location bucket gets
+    // its own cache entry naturally.
     return this.tenants.discoverPlants(Number(lng), Number(lat));
   }
 

@@ -1,13 +1,21 @@
 import {
+  ArgumentsHost,
   BadRequestException,
+  Catch,
   Controller,
+  ExceptionFilter,
+  HttpException,
+  HttpStatus,
+  PayloadTooLargeException,
   Post,
   UploadedFile,
+  UseFilters,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { diskStorage } from 'multer';
+import type { Response } from 'express';
+import { diskStorage, MulterError } from 'multer';
 import { extname, join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
@@ -35,8 +43,44 @@ try {
   // Permission errors surface at request time; that's acceptable for MVP.
 }
 
-const ACCEPTED_MIME = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
-const MAX_BYTES = 6 * 1024 * 1024; // 6 MB — phones take large JPEGs
+// 5 MB hard cap. Phone JPEGs at 12 MP typically land between 2–4 MB after
+// in-app compression; 5 MB leaves headroom for low-end devices that skip
+// re-encode. Above this we bounce the request with a clean Arabic message.
+const MAX_BYTES = 5 * 1024 * 1024;
+const ACCEPTED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+/**
+ * Multer surfaces size violations as `MulterError(code='LIMIT_FILE_SIZE')`,
+ * which Nest doesn't translate to a clean HTTP response by default —
+ * the driver app would see a generic 500. This filter intercepts that
+ * specific case and any HttpExceptions that bubble out of our fileFilter,
+ * and returns a friendly Arabic JSON payload with the right status code.
+ */
+@Catch(MulterError, HttpException)
+class UploadExceptionFilter implements ExceptionFilter {
+  catch(exception: MulterError | HttpException, host: ArgumentsHost) {
+    const res = host.switchToHttp().getResponse<Response>();
+    if (exception instanceof MulterError) {
+      if (exception.code === 'LIMIT_FILE_SIZE') {
+        return res.status(HttpStatus.PAYLOAD_TOO_LARGE).json({
+          statusCode: HttpStatus.PAYLOAD_TOO_LARGE,
+          message: 'حجم الملف يتجاوز 5 ميجابايت',
+        });
+      }
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: exception.message,
+      });
+    }
+    // Pass-through for our own HttpExceptions (fileFilter rejection,
+    // missing-file BadRequest, etc.) with their original status + body.
+    const status = exception.getStatus();
+    const body = exception.getResponse();
+    return res.status(status).json(
+      typeof body === 'string' ? { statusCode: status, message: body } : body,
+    );
+  }
+}
 
 @ApiBearerAuth()
 @ApiTags('uploads')
@@ -44,6 +88,7 @@ const MAX_BYTES = 6 * 1024 * 1024; // 6 MB — phones take large JPEGs
 export class UploadsController {
   @RequireCapability('driver')
   @Post('proof')
+  @UseFilters(UploadExceptionFilter)
   @UseInterceptors(
     FileInterceptor('photo', {
       storage: diskStorage({
@@ -56,7 +101,9 @@ export class UploadsController {
       limits: { fileSize: MAX_BYTES },
       fileFilter: (_req, file, cb) => {
         if (!ACCEPTED_MIME.has(file.mimetype)) {
-          cb(new BadRequestException('نوع الملف غير مدعوم — JPEG/PNG/WebP فقط'), false);
+          // HttpException(400) — caught by UploadExceptionFilter and
+          // returned as a clean JSON body.
+          cb(new BadRequestException('نوع ملف غير مدعوم'), false);
           return;
         }
         cb(null, true);

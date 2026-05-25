@@ -6,10 +6,13 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 import { useMyProfile, useCreateRefillOrder, useMyOrders } from '@/lib/queries';
 import { useRouter } from 'expo-router';
+import { usePostHog } from 'posthog-react-native';
+import { track } from '@/lib/posthog';
 import { iqd } from '@/lib/format';
 import { RefillStatusStrip } from '@/components/RefillStatusStrip';
 import { RecentActivityList } from '@/components/RecentActivityList';
 import { RainBackground } from '@/components/RainBackground';
+import { Skeleton, SkeletonCard } from '@/components/Skeleton';
 import { hap } from '@/lib/haptics';
 import { useState, useEffect } from 'react';
 import Animated, {
@@ -31,6 +34,7 @@ export default function Home() {
   const { data: profile, isLoading } = useMyProfile();
   const { data: orders } = useMyOrders();
   const createOrder = useCreateRefillOrder();
+  const ph = usePostHog();
 
   // Find an in-flight refill — used to disable the order button so the
   // customer can't pile up duplicate requests for the same tank. Matches
@@ -53,6 +57,12 @@ export default function Home() {
     try {
       await createOrder.mutateAsync(profile.id);
       hap.success();
+      track(ph, 'order_created', {
+        priceIqd: profile.refillPriceIqd,
+        // No `liters` field on the customer flow — the tank size is a
+        // tenant-level setting; we omit it here and the worker fires the
+        // detailed event with liters in `order_completed`.
+      });
       Alert.alert('تم إرسال طلبك للمعمل', 'سيصل السائق خلال ساعة');
     } catch (err: any) {
       hap.error();
@@ -61,10 +71,28 @@ export default function Home() {
   }
 
   if (isLoading || !profile) {
+    // Skeleton placeholders: hero bar + big CTA + 3 stat chips + activity rows.
+    // أفضل من spinner عام — يطمئن العين بالشكل العام للشاشة.
     return (
-      <SafeAreaView className="flex-1 bg-slate-50 items-center justify-center">
-        <ActivityIndicator color="#0891b2" size="large" />
-      </SafeAreaView>
+      <View className="flex-1 bg-slate-50">
+        <SafeAreaView edges={['top']}>
+          <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+            <Skeleton width={'50%'} height={20} />
+            <Skeleton width={'80%'} height={28} style={{ marginTop: 8 }} />
+            <Skeleton height={48} borderRadius={16} style={{ marginTop: 14 }} />
+            <Skeleton height={96} borderRadius={26} style={{ marginTop: 20 }} />
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+              <Skeleton height={50} borderRadius={14} style={{ flex: 1 }} />
+              <Skeleton height={50} borderRadius={14} style={{ flex: 1 }} />
+              <Skeleton height={50} borderRadius={14} style={{ flex: 1 }} />
+            </View>
+            <View style={{ marginTop: 18 }}>
+              <SkeletonCard height={90} />
+              <SkeletonCard height={90} />
+            </View>
+          </View>
+        </SafeAreaView>
+      </View>
     );
   }
 

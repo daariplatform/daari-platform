@@ -14,8 +14,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { api } from '@/lib/api';
+import { usePostHog } from 'posthog-react-native';
+import { track } from '@/lib/posthog';
+import { OtpCodeField } from '@/components/OtpCodeField';
 
 /**
  * 4-step self-signup wizard for prospects:
@@ -45,6 +48,13 @@ type Step = 'locating' | 'pick-plant' | 'enter-info' | 'verify-otp' | 'submitted
 
 export default function Signup() {
   const router = useRouter();
+  const ph = usePostHog();
+  // map-picker returns to us via router.replace() with these params.
+  const pickerParams = useLocalSearchParams<{
+    pickedLat?: string;
+    pickedLng?: string;
+    pickedAddress?: string;
+  }>();
   const [step, setStep] = useState<Step>('locating');
   const [loading, setLoading] = useState(false);
 
@@ -61,6 +71,31 @@ export default function Signup() {
 
   // Step 4 OTP
   const [otp, setOtp] = useState('');
+  // الإطار الأحمر يظهر فقط بعد فشل التحقّق — يُمسح فور تعديل الكود.
+  const [otpError, setOtpError] = useState(false);
+
+  // signup_started — fire once when this screen first mounts.
+  useEffect(() => {
+    track(ph, 'signup_started');
+  }, [ph]);
+
+  // Pick up a freshly-confirmed map pin and override the GPS-derived coords +
+  // prefill the address field. Once we've consumed the params, jump straight
+  // to the enter-info step so the user keeps editing where they left off.
+  useEffect(() => {
+    if (pickerParams.pickedLat && pickerParams.pickedLng) {
+      const lat = Number(pickerParams.pickedLat);
+      const lng = Number(pickerParams.pickedLng);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        setCoords({ lat, lng });
+        if (pickerParams.pickedAddress && !addressLine) {
+          setAddressLine(pickerParams.pickedAddress);
+        }
+        setStep('enter-info');
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickerParams.pickedLat, pickerParams.pickedLng]);
 
   // Step 1: fetch GPS + plants
   useEffect(() => {
@@ -111,15 +146,17 @@ export default function Signup() {
     }
   }
 
-  async function verifyAndSubmit() {
-    if (!/^\d{6}$/.test(otp)) {
+  async function verifyAndSubmit(codeOverride?: string) {
+    const code = codeOverride ?? otp;
+    if (!/^\d{6}$/.test(code)) {
       Alert.alert('كود غير صحيح', 'الكود 6 أرقام');
       return;
     }
     if (!picked || !coords) return;
     setLoading(true);
+    setOtpError(false);
     try {
-      await api.post('/auth/signup/verify-otp', { phone, otp });
+      await api.post('/auth/signup/verify-otp', { phone, otp: code });
       await api.post('/customers/lead', {
         tenantId: picked.id,
         fullName,
@@ -129,8 +166,10 @@ export default function Signup() {
         locationLng: coords.lng,
         locationLat: coords.lat,
       });
+      track(ph, 'signup_completed', { tenantId: picked.id });
       setStep('submitted');
     } catch (e: any) {
+      setOtpError(true);
       Alert.alert('فشل', e?.response?.data?.message ?? 'حاول مرة أخرى');
     } finally {
       setLoading(false);
@@ -315,10 +354,28 @@ export default function Signup() {
                     placeholderTextColor="#94a3b8"
                   />
 
+                  <Pressable
+                    onPress={() =>
+                      router.push({
+                        pathname: '/(auth)/map-picker',
+                        params: coords
+                          ? { lat: String(coords.lat), lng: String(coords.lng) }
+                          : {},
+                      } as any)
+                    }
+                    className="mb-3 rounded-xl p-3 flex-row-reverse items-center gap-2 border-2 border-sky-300 bg-sky-50"
+                  >
+                    <MaterialIcons name="map" size={20} color="#0284c7" />
+                    <Text className="text-sm font-bold text-sky-700 flex-1 text-right">
+                      حدّد موقعك على الخريطة
+                    </Text>
+                    <MaterialIcons name="arrow-back-ios" size={14} color="#0284c7" />
+                  </Pressable>
+
                   <View className="bg-sky-50 rounded-xl p-2.5 mb-4 flex-row-reverse items-center gap-2">
                     <MaterialIcons name="location-on" size={16} color="#0284c7" />
                     <Text className="text-[10px] text-slate-600 flex-1 text-right">
-                      موقعك الحالي مُحدّد بالـ GPS وسيُحفظ كعنوان البيت
+                      موقعك مُحدّد {coords ? '✓' : 'بالـ GPS'} وسيُحفظ كعنوان البيت
                     </Text>
                   </View>
 
@@ -365,18 +422,17 @@ export default function Signup() {
                   className="rounded-2xl p-5"
                   style={{ backgroundColor: 'rgba(255,255,255,0.97)' }}
                 >
-                  <TextInput
+                  <OtpCodeField
                     value={otp}
-                    onChangeText={(t) => setOtp(t.replace(/\D/g, ''))}
-                    placeholder="123456"
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    className="border-2 border-slate-200 rounded-xl px-4 py-4 mb-4 text-center text-2xl tracking-widest font-mono bg-slate-50"
-                    placeholderTextColor="#cbd5e1"
-                    autoFocus
+                    onChange={(t) => {
+                      setOtp(t);
+                      if (otpError) setOtpError(false);
+                    }}
+                    onFilled={(code) => verifyAndSubmit(code)}
+                    error={otpError}
                   />
                   <Pressable
-                    onPress={verifyAndSubmit}
+                    onPress={() => verifyAndSubmit()}
                     disabled={loading}
                     className={`rounded-xl py-4 items-center ${
                       loading ? 'bg-slate-300' : 'bg-emerald-600'
@@ -392,6 +448,7 @@ export default function Signup() {
                     onPress={() => {
                       setStep('enter-info');
                       setOtp('');
+                      setOtpError(false);
                     }}
                     className="mt-3 items-center"
                   >

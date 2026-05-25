@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { IsEnum, IsLatitude, IsLongitude, IsOptional, IsString, Matches, Min, IsInt, MinLength } from 'class-validator';
 import { DriverStatus, UserRole } from '@prisma/client';
 import { DriversService } from './drivers.service';
@@ -7,6 +7,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { RequireCapability } from '../common/decorators/capabilities.decorator';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 class CreateDriverDto {
   @IsString() @MinLength(2)
@@ -65,9 +66,11 @@ export class DriversController {
   }
 
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
   @Get()
-  list(@CurrentUser() user: AuthUser) {
-    return this.drivers.list(user.tenantId!);
+  list(@CurrentUser() user: AuthUser, @Query() pagination: PaginationDto) {
+    return this.drivers.list(user.tenantId!, pagination.page, pagination.pageSize);
   }
 
   /**
