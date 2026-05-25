@@ -173,7 +173,7 @@ export default function CustomersScreen() {
             <Text
               style={{ flex: 1, color: '#92400e', fontWeight: '800', fontSize: 13, textAlign: 'right' }}
             >
-              {pendingCount.toLocaleString('ar-IQ')} طلب جديد بانتظار موافقتك
+              {pendingCount.toLocaleString('en-US')} طلب جديد بانتظار موافقتك
             </Text>
             <Pressable
               onPress={() => {
@@ -403,7 +403,7 @@ function Pagination({
         <MaterialIcons name="chevron-right" size={22} color={prevDisabled ? '#cbd5e1' : '#0284c7'} />
       </Pressable>
       <Text style={{ fontWeight: '700', color: '#475569', fontSize: 13 }}>
-        صفحة {page.toLocaleString('ar-IQ')} من {totalPages.toLocaleString('ar-IQ')}
+        صفحة {(page ?? 1).toLocaleString('en-US')} من {(totalPages ?? 1).toLocaleString('en-US')}
       </Text>
       <Pressable
         onPress={onNext}

@@ -318,12 +318,12 @@ function OrderRow({ order, onPress }: { order: RefillOrder; onPress: () => void 
         </View>
         <View style={{ alignItems: 'flex-start' }}>
           <Text style={{ fontSize: 16, fontWeight: '900', color: '#0284c7' }}>
-            {(order.priceIqd ?? 0).toLocaleString('ar-IQ')}{' '}
+            {(order.priceIqd ?? 0).toLocaleString('en-US')}{' '}
             <Text style={{ fontSize: 10, color: '#64748b' }}>د.ع</Text>
           </Text>
           {order.paidAmountIqd !== order.priceIqd && (
             <Text style={{ fontSize: 10, color: '#dc2626', marginTop: 1 }}>
-              مدفوع: {(order.paidAmountIqd ?? 0).toLocaleString('ar-IQ')}
+              مدفوع: {(order.paidAmountIqd ?? 0).toLocaleString('en-US')}
             </Text>
           )}
         </View>
@@ -370,7 +370,7 @@ function Pagination({
         <MaterialIcons name="chevron-right" size={22} color={prevDisabled ? '#cbd5e1' : '#0284c7'} />
       </Pressable>
       <Text style={{ fontWeight: '700', color: '#475569', fontSize: 13 }}>
-        صفحة {page.toLocaleString('ar-IQ')} من {totalPages.toLocaleString('ar-IQ')}
+        صفحة {(page ?? 1).toLocaleString('en-US')} من {(totalPages ?? 1).toLocaleString('en-US')}
       </Text>
       <Pressable
         onPress={onNext}

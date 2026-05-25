@@ -48,10 +48,28 @@ export default function PlantHome() {
   }).format(new Date());
 
   // Plant name placeholder — backend doesn't surface tenant.name in the
-  // /auth/me payload yet, so we fall back to the literal label per spec.
-  const plantName = user?.tenantId ? 'معملك' : 'معملك';
+  // /auth/me payload yet, so we fall back to a friendly label.
+  const plantName = 'معملك';
 
   const kpis = kpisQuery.data;
+
+  // "Fresh plant" = literally nothing has happened yet. A wall of "٠" looks
+  // broken (Arabic-Indic zero renders as a tiny dot that looks like a
+  // bullet). Show a welcoming empty state instead so the owner knows the
+  // app is working and what to do first.
+  const isFreshPlant =
+    !!kpis &&
+    (kpis.todayCompletedOrders ?? 0) === 0 &&
+    (kpis.todayPendingOrders ?? 0) === 0 &&
+    (kpis.pendingLeadsCount ?? 0) === 0 &&
+    (kpis.todayRevenueIqd ?? 0) === 0 &&
+    (kpis.opsThisMonth ?? 0) === 0;
+
+  /** Render numbers as Latin digits (0, 12, 1,234) — Arabic-Indic ٠ renders
+   * as a tiny dot that users routinely mistake for a bullet in this UI. */
+  function n(v: number | null | undefined): string {
+    return (v ?? 0).toLocaleString('en-US');
+  }
 
   return (
     <View className="flex-1 bg-slate-50">
@@ -145,7 +163,112 @@ export default function PlantHome() {
           />
         )}
 
-        {kpis && (
+        {/* Fresh plant — welcome state instead of a wall of zeros. */}
+        {kpis && isFreshPlant && (
+          <View
+            style={{
+              backgroundColor: '#fff',
+              borderRadius: 22,
+              padding: 22,
+              marginTop: 4,
+              shadowColor: '#0f172a',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.06,
+              shadowRadius: 12,
+              elevation: 2,
+              borderWidth: 1,
+              borderColor: '#e0f2fe',
+            }}
+          >
+            <LinearGradient
+              colors={['#0ea5e9', '#0284c7']}
+              style={{
+                width: 72,
+                height: 72,
+                borderRadius: 24,
+                alignItems: 'center',
+                justifyContent: 'center',
+                alignSelf: 'center',
+                marginBottom: 14,
+              }}
+            >
+              <MaterialIcons name="celebration" size={36} color="#fff" />
+            </LinearGradient>
+            <Text
+              style={{
+                color: '#0f172a',
+                fontWeight: '900',
+                fontSize: 18,
+                textAlign: 'center',
+              }}
+            >
+              مرحباً بمعملك على داري
+            </Text>
+            <Text
+              style={{
+                color: '#64748b',
+                fontSize: 13,
+                textAlign: 'center',
+                marginTop: 6,
+                lineHeight: 20,
+              }}
+            >
+              لم تبدأ أي عمليات بعد. ابدأ بإضافة زبائنك وفعّل سائقاً واحداً
+              لتشاهد إحصاءاتك اليوميّة هنا.
+            </Text>
+            <View style={{ marginTop: 16, gap: 10 }}>
+              <Pressable
+                onPress={() => router.push('/(tabs)/customers')}
+                style={({ pressed }) => ({
+                  borderRadius: 14,
+                  overflow: 'hidden',
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <LinearGradient
+                  colors={['#0ea5e9', '#0284c7']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{
+                    padding: 13,
+                    flexDirection: 'row-reverse',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                  }}
+                >
+                  <MaterialIcons name="person-add" size={20} color="#fff" />
+                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>
+                    أضف أول زبون
+                  </Text>
+                </LinearGradient>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push('/walkin' as any)}
+                style={({ pressed }) => ({
+                  borderRadius: 14,
+                  padding: 12,
+                  flexDirection: 'row-reverse',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  borderWidth: 1.5,
+                  borderColor: '#0284c7',
+                  backgroundColor: '#f0f9ff',
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                <MaterialIcons name="add-shopping-cart" size={18} color="#0284c7" />
+                <Text style={{ color: '#0284c7', fontWeight: '700', fontSize: 13 }}>
+                  أو سجّل تعبئة مباشرة
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* Regular dashboard view — only when the plant has any signal. */}
+        {kpis && !isFreshPlant && (
           <>
             {/* ── Alert banners (conditional) ───────────────────────── */}
             {kpis.overLimit && (
@@ -153,7 +276,7 @@ export default function PlantHome() {
                 tone="red"
                 icon="error"
                 title="تجاوزت حدّ خطّتك الشهرية"
-                subtitle={`${(kpis.opsThisMonth ?? 0).toLocaleString('ar-IQ')} من ${(kpis.planLimit ?? 0).toLocaleString('ar-IQ')} عملية`}
+                subtitle={`${n(kpis.opsThisMonth)} من ${n(kpis.planLimit)} عملية`}
                 onPress={() => router.push('/(tabs)/settings')}
               />
             )}
@@ -162,7 +285,7 @@ export default function PlantHome() {
                 tone="amber"
                 icon="warning"
                 title="اقتربت من حدّ الخطة"
-                subtitle={`${(kpis.opsThisMonth ?? 0).toLocaleString('ar-IQ')} من ${(kpis.planLimit ?? 0).toLocaleString('ar-IQ')} عملية`}
+                subtitle={`${n(kpis.opsThisMonth)} من ${n(kpis.planLimit)} عملية`}
                 onPress={() => router.push('/(tabs)/settings')}
               />
             )}
@@ -171,7 +294,7 @@ export default function PlantHome() {
                 tone="orange"
                 icon="water-drop"
                 title="المخزون منخفض"
-                subtitle={`${(kpis.stockLevelLiters ?? 0).toLocaleString('ar-IQ')} لتر متبقّي`}
+                subtitle={`${n(kpis.stockLevelLiters)} لتر متبقّي`}
                 onPress={() => router.push('/(tabs)/stock')}
               />
             )}
@@ -211,13 +334,13 @@ export default function PlantHome() {
                       lineHeight: 36,
                     }}
                   >
-                    {(kpis.todayRevenueIqd ?? 0).toLocaleString('ar-IQ')}{' '}
+                    {n(kpis.todayRevenueIqd)}{' '}
                     <Text style={{ fontSize: 14, color: '#64748b', fontWeight: '700' }}>
                       د.ع
                     </Text>
                   </Text>
                   <Text style={{ fontSize: 12, color: '#0284c7', marginTop: 4 }}>
-                    {(kpis.todayCompletedOrders ?? 0).toLocaleString('ar-IQ')} طلب مكتمل
+                    {n(kpis.todayCompletedOrders)} طلب مكتمل
                   </Text>
                 </View>
                 <LinearGradient
@@ -240,14 +363,14 @@ export default function PlantHome() {
               <StatTile
                 icon="schedule"
                 label="طلبات قيد الانتظار"
-                value={(kpis.todayPendingOrders ?? 0).toLocaleString('ar-IQ')}
+                value={n(kpis.todayPendingOrders)}
                 tint="#f59e0b"
                 onPress={() => router.push('/(tabs)/orders')}
               />
               <StatTile
                 icon="local-shipping"
                 label="السائقون النشطون"
-                value={(kpis.activeDrivers ?? 0).toLocaleString('ar-IQ')}
+                value={n(kpis.activeDrivers)}
                 tint="#0284c7"
                 onPress={() => router.push('/(tabs)/orders')}
               />
@@ -256,7 +379,7 @@ export default function PlantHome() {
               <StatTile
                 icon="person-add"
                 label="زبائن بانتظار الموافقة"
-                value={(kpis.pendingLeadsCount ?? 0).toLocaleString('ar-IQ')}
+                value={n(kpis.pendingLeadsCount)}
                 tint="#10b981"
                 onPress={() => router.push('/(tabs)/customers')}
               />
@@ -314,8 +437,7 @@ export default function PlantHome() {
                         fontSize: 14,
                       }}
                     >
-                      {(kpis.pendingLeadsCount ?? 0).toLocaleString('ar-IQ')} زبون بانتظار
-                      موافقتك
+                      {n(kpis.pendingLeadsCount)} زبون بانتظار موافقتك
                     </Text>
                     <Text style={{ color: '#92400e', fontSize: 11, marginTop: 2 }}>
                       اضغط لمراجعة الطلبات الجديدة
@@ -336,7 +458,7 @@ export default function PlantHome() {
             >
               <QuickAction
                 icon="add-shopping-cart"
-                label="إضافة طلب walk-in"
+                label="تعبئة مباشرة"
                 onPress={() => router.push('/walkin' as any)}
                 primary
               />
@@ -354,9 +476,9 @@ export default function PlantHome() {
 }
 
 function stockPct(current: number, capacity: number): string {
-  if (!capacity || capacity <= 0) return '٠';
+  if (!capacity || capacity <= 0) return '0';
   const pct = Math.max(0, Math.min(100, Math.round((current / capacity) * 100)));
-  return pct.toLocaleString('ar-IQ');
+  return pct.toLocaleString('en-US');
 }
 
 // ────────────────────────────────────────────────────────────────────────

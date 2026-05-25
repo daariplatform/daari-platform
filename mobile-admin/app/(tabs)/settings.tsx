@@ -83,8 +83,8 @@ export default function SettingsScreen() {
 
   const usage = subQuery.data;
   const usagePct =
-    usage && usage.monthlyOpsLimit > 0
-      ? Math.min(100, Math.round((usage.opsThisMonth / usage.monthlyOpsLimit) * 100))
+    usage && usage.opsLimit > 0
+      ? Math.min(100, Math.round((usage.opsThisMonth / usage.opsLimit) * 100))
       : 0;
 
   return (
@@ -172,8 +172,8 @@ export default function SettingsScreen() {
               </View>
 
               <Text style={{ fontSize: 12, color: '#475569', textAlign: 'right' }}>
-                {usage.opsThisMonth.toLocaleString('ar-IQ')} من{' '}
-                {usage.monthlyOpsLimit.toLocaleString('ar-IQ')} عملية هذا الشهر
+                {(usage.opsThisMonth ?? 0).toLocaleString('en-US')} من{' '}
+                {(usage.opsLimit ?? 0).toLocaleString('en-US')} عملية هذا الشهر
               </Text>
 
               <View

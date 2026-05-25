@@ -293,11 +293,20 @@ export function useDriversList() {
 // Subscription + plan
 // ────────────────────────────────────────────────────────────────────
 
+/**
+ * Shape returned by GET /plant/usage. Field names mirror the backend
+ * (plant.controller.ts `usage()`) — DO NOT rename here without updating
+ * the API or this will silently break the subscription pane.
+ */
 export interface UsageState {
   plan: 'STARTER' | 'PRO' | 'BUSINESS' | 'ENTERPRISE';
   status: string;
   opsThisMonth: number;
-  monthlyOpsLimit: number;
+  /** Backend names this `opsLimit`; aliased here for consumer clarity. */
+  opsLimit: number;
+  /** Pre-computed by the backend; equals (opsThisMonth/opsLimit)*100 clamped. */
+  usagePercent: number;
+  monthlyPriceIqd: number;
   nearLimit: boolean;
   overLimit: boolean;
   trialEndsAt?: string | null;

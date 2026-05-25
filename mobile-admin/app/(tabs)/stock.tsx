@@ -174,9 +174,9 @@ export default function StockScreen() {
                       lineHeight: 44,
                     }}
                   >
-                    {stock.currentLiters.toLocaleString('ar-IQ')}{' '}
+                    {(stock.currentLiters ?? 0).toLocaleString('en-US')}{' '}
                     <Text style={{ fontSize: 14, opacity: 0.85, fontWeight: '700' }}>
-                      / {stock.capacityLiters.toLocaleString('ar-IQ')} لتر
+                      / {(stock.capacityLiters ?? 0).toLocaleString('en-US')} لتر
                     </Text>
                   </Text>
                 </View>
@@ -216,8 +216,8 @@ export default function StockScreen() {
               <Text
                 style={{ color: 'rgba(255,255,255,0.85)', fontSize: 11, marginTop: 6 }}
               >
-                {pct.toLocaleString('ar-IQ')}% من السعة · تنبيه عند{' '}
-                {stock.lowThresholdLiters.toLocaleString('ar-IQ')} لتر
+                {pct.toLocaleString('en-US')}% من السعة · تنبيه عند{' '}
+                {(stock.lowThresholdLiters ?? 0).toLocaleString('en-US')} لتر
               </Text>
             </LinearGradient>
 
@@ -331,13 +331,13 @@ export default function StockScreen() {
                 <View style={{ padding: 14, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
                   <SettingsField
                     label="السعة الكاملة (لتر)"
-                    placeholder={`الحالي: ${stock.capacityLiters.toLocaleString('ar-IQ')}`}
+                    placeholder={`الحالي: ${(stock.capacityLiters ?? 0).toLocaleString('en-US')}`}
                     value={capacityInput}
                     onChangeText={setCapacityInput}
                   />
                   <SettingsField
                     label="حدّ التنبيه (لتر)"
-                    placeholder={`الحالي: ${stock.lowThresholdLiters.toLocaleString('ar-IQ')}`}
+                    placeholder={`الحالي: ${(stock.lowThresholdLiters ?? 0).toLocaleString('en-US')}`}
                     value={thresholdInput}
                     onChangeText={setThresholdInput}
                   />

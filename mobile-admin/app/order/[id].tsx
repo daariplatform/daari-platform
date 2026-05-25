@@ -251,17 +251,17 @@ export default function OrderDetailScreen() {
           <SectionCard icon="payments" title="السعر والدفع">
             <InfoRow
               label="السعر"
-              value={`${(order.priceIqd ?? 0).toLocaleString('ar-IQ')} د.ع`}
+              value={`${(order.priceIqd ?? 0).toLocaleString('en-US')} د.ع`}
             />
             <InfoRow
               label="المدفوع"
-              value={`${(order.paidAmountIqd ?? 0).toLocaleString('ar-IQ')} د.ع`}
+              value={`${(order.paidAmountIqd ?? 0).toLocaleString('en-US')} د.ع`}
               valueColor={order.paidAmountIqd >= order.priceIqd ? '#10b981' : '#dc2626'}
             />
             {order.liters !== undefined && order.liters !== null && (
               <InfoRow
                 label="اللترات"
-                value={`${(order.liters ?? 0).toLocaleString('ar-IQ')} لتر`}
+                value={`${(order.liters ?? 0).toLocaleString('en-US')} لتر`}
               />
             )}
           </SectionCard>

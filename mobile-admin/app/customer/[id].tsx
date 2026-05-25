@@ -214,11 +214,11 @@ export default function CustomerDetailScreen() {
               <InfoRow label="العنوان" value={customer.addressLine || '—'} />
               <InfoRow
                 label="إجمالي التعبئات"
-                value={(customer.totalRefills ?? 0).toLocaleString('ar-IQ')}
+                value={(customer.totalRefills ?? 0).toLocaleString('en-US')}
               />
               <InfoRow
                 label="الرصيد"
-                value={`${(customer.balanceIqd ?? 0).toLocaleString('ar-IQ')} د.ع`}
+                value={`${(customer.balanceIqd ?? 0).toLocaleString('en-US')} د.ع`}
                 valueColor={
                   (customer.balanceIqd ?? 0) >= 0 ? '#10b981' : '#dc2626'
                 }
@@ -258,7 +258,7 @@ export default function CustomerDetailScreen() {
                 >
                   <View style={{ flex: 1, alignItems: 'flex-end' }}>
                     <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>
-                      {(o.priceIqd ?? 0).toLocaleString('ar-IQ')} د.ع
+                      {(o.priceIqd ?? 0).toLocaleString('en-US')} د.ع
                     </Text>
                     <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
                       {formatDistanceToNow(new Date(o.requestedAt), {
