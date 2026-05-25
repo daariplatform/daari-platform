@@ -1,0 +1,98 @@
+{
+  "expo": {
+    "name": "داري للمعمل",
+    "slug": "daari-admin",
+    "scheme": "daariadmin",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "owner": "a7medal3ni",
+    "description": "داري للمعمل — تطبيق إدارة معامل المياه على منصّة داري. لوحة معلومات للمالك: طلبات اليوم، اعتماد زبائن جدد، مراقبة المخزون، تتبّع السائقين، وإحصاءات الأداء — كلّ ذلك من الهاتف.",
+    "primaryColor": "#0284c7",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0284c7"
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "apiBaseUrl": "https://api.phi-bit.com/api/v1",
+      "developer": {
+        "name": "أحمد العاني",
+        "company": "Phi-Bit",
+        "website": "https://phi-bit.com",
+        "supportEmail": "support@phi-bit.com",
+        "supportPhone": "+964 0000 000 000"
+      },
+      "eas": {
+        "projectId": ""
+      }
+    },
+    "runtimeVersion": "0.1.0",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.phibit.daari.admin",
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.phibit.daari.admin",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0284c7"
+      },
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE"
+      ]
+    },
+    "locales": {
+      "ar": "./assets/ar.json"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-localization",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#0284c7"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 24,
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ],
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

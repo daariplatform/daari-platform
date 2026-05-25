@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "33363733342",
+    "project_id": "daari-platform",
+    "storage_bucket": "daari-platform.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:33363733342:android:5daa7af8017204b1503dcf",
+        "android_client_info": {
+          "package_name": "com.phibit.daari.customer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBlRcYZTX6qLJA7NXXIP3yzABn_tMeq57E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:33363733342:android:6615b5d0bfd413ac503dcf",
+        "android_client_info": {
+          "package_name": "com.phibit.daari.worker"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBlRcYZTX6qLJA7NXXIP3yzABn_tMeq57E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

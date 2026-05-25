@@ -9,6 +9,7 @@ import {
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../notifications/push.service';
 import { CustomerStatus, LocationSource, Prisma, UserRole } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { randomBytes } from 'crypto';
@@ -65,6 +66,7 @@ export class CustomersService {
   constructor(
     private prisma: PrismaService,
     @Inject(CACHE_MANAGER) private cache: Cache,
+    private push: PushService,
   ) {}
 
   /**
@@ -195,6 +197,15 @@ export class CustomersService {
         status: CustomerStatus.PENDING_APPROVAL,
       },
     });
+    // Notify plant admins — best effort, never block the lead creation.
+    this.push
+      .sendToTenantAdmins(
+        input.tenantId,
+        'طلب زبون جديد',
+        `${input.fullName} من ${input.district} يطلب الانضمام لمعملك`,
+        { kind: 'new-lead', customerId: customer.id, tenantId: input.tenantId },
+      )
+      .catch((err) => this.log.warn(`lead push failed: ${(err as Error).message}`));
     return { ok: true, customerId: customer.id, status: customer.status };
   }
 
@@ -208,7 +219,7 @@ export class CustomersService {
     driverId: string,
     input: CreateCustomerInput,
   ) {
-    return this.prisma.customer.create({
+    const customer = await this.prisma.customer.create({
       data: {
         tenantId,
         ...input,
@@ -224,6 +235,15 @@ export class CustomersService {
           : {}),
       },
     });
+    this.push
+      .sendToTenantAdmins(
+        tenantId,
+        'زبون جديد عبر السائق',
+        `${input.fullName}${input.district ? ' من ' + input.district : ''} بانتظار موافقتك`,
+        { kind: 'new-lead', customerId: customer.id, tenantId },
+      )
+      .catch((err) => this.log.warn(`driver-lead push failed: ${(err as Error).message}`));
+    return customer;
   }
 
   /**

@@ -29,6 +29,15 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 
+// Tier limits — billed at the boundaries the user agreed in chat.
+// Module-level so both /plant/usage and /plant/kpis share the same source of truth.
+const PLAN_TIERS = {
+  STARTER: { ops: 300, priceIqd: 0 },
+  PRO: { ops: 1500, priceIqd: 75000 },
+  BUSINESS: { ops: 5000, priceIqd: 200000 },
+  ENTERPRISE: { ops: 999999, priceIqd: 400000 },
+} as const;
+
 /** Wave 4 — water stock management. */
 class StockUpdateDto {
   @IsOptional() @IsInt() @Min(0)
@@ -200,14 +209,7 @@ export class PlantController {
       where: { id: user.tenantId! },
       select: { plan: true, status: true, trialEndsAt: true },
     });
-    // Tier limits — billed at the boundaries the user agreed in chat
-    const tiers = {
-      STARTER: { ops: 300, priceIqd: 0 },
-      PRO: { ops: 1500, priceIqd: 75000 },
-      BUSINESS: { ops: 5000, priceIqd: 200000 },
-      ENTERPRISE: { ops: 999999, priceIqd: 400000 },
-    } as const;
-    const current = tiers[tenant?.plan ?? 'STARTER'];
+    const current = PLAN_TIERS[tenant?.plan ?? 'STARTER'];
     return {
       plan: tenant?.plan ?? 'STARTER',
       status: tenant?.status,
@@ -218,6 +220,100 @@ export class PlantController {
       usagePercent: Math.min(100, Math.round((opsThisMonth / current.ops) * 100)),
       nearLimit: opsThisMonth >= current.ops * 0.8,
       overLimit: opsThisMonth >= current.ops,
+    };
+  }
+
+  // ─── Wave 6: Mobile home-screen KPIs ───────────────────────────────
+  //
+  // One round-trip for the plant-owner mobile app's home tiles. Replaces
+  // 5+ separate calls (/orders, /customers, /drivers, /plant/stock,
+  // /plant/usage) — important on slow Iraqi 3G. All counts are scoped to
+  // the caller's tenant. Cached for 30 s per tenant via
+  // UserScopedCacheInterceptor; mobile polls every 60 s.
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)
+  @Get('kpis')
+  @UseInterceptors(UserScopedCacheInterceptor)
+  @CacheTTL(30_000) // 30 s — data may be slightly stale, that's OK for KPI tiles
+  async kpis(@CurrentUser() user: AuthUser) {
+    const tenantId = user.tenantId!;
+
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    // "Active" = driver was seen in the last 30 minutes. Driver model has
+    // no `isOnline` boolean — `lastLocationAt` is the closest proxy
+    // (updated whenever the driver app pings its GPS).
+    const activeSince = new Date(Date.now() - 30 * 60 * 1000);
+
+    const [
+      todayCompletedAgg,
+      todayPendingCount,
+      activeDriversCount,
+      pendingLeadsCount,
+      stock,
+      opsThisMonth,
+      tenant,
+    ] = await this.prisma.$transaction([
+      this.prisma.refillOrder.aggregate({
+        where: {
+          tenantId,
+          status: 'COMPLETED',
+          completedAt: { gte: dayStart },
+        },
+        _count: { _all: true },
+        _sum: { paidAmountIqd: true },
+      }),
+      this.prisma.refillOrder.count({
+        where: {
+          tenantId,
+          status: { in: ['PENDING', 'ASSIGNED', 'EN_ROUTE'] },
+        },
+      }),
+      this.prisma.driver.count({
+        where: {
+          tenantId,
+          lastLocationAt: { gte: activeSince },
+        },
+      }),
+      this.prisma.customer.count({
+        where: { tenantId, status: 'PENDING_APPROVAL' },
+      }),
+      this.prisma.waterStock.findUnique({ where: { tenantId } }),
+      this.prisma.refillOrder.count({
+        where: {
+          tenantId,
+          status: 'COMPLETED',
+          completedAt: { gte: monthStart },
+        },
+      }),
+      this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { plan: true },
+      }),
+    ]);
+
+    const planLimit = PLAN_TIERS[tenant?.plan ?? 'STARTER'].ops;
+    const stockLevelLiters = stock?.currentLiters ?? 0;
+    const stockCapacityLiters = stock?.capacityLiters ?? 0;
+    const lowThresholdLiters = stock?.lowThresholdLiters ?? 0;
+
+    return {
+      todayRevenueIqd: todayCompletedAgg._sum.paidAmountIqd ?? 0,
+      todayCompletedOrders: todayCompletedAgg._count._all,
+      todayPendingOrders: todayPendingCount,
+      activeDrivers: activeDriversCount,
+      pendingLeadsCount,
+      stockLevelLiters,
+      stockCapacityLiters,
+      stockLow: stockLevelLiters <= lowThresholdLiters,
+      opsThisMonth,
+      planLimit,
+      nearLimit: opsThisMonth / planLimit >= 0.8,
+      overLimit: opsThisMonth >= planLimit,
     };
   }
 

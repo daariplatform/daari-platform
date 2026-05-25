@@ -161,6 +161,18 @@ export class OrdersService {
         .catch((err) => console.warn('[push] notify driver failed:', err));
     }
 
+    // Notify plant admins on the mobile-admin app. Only for customer-initiated
+    // orders — walk-in + tank-delivery flows already start from the admin's
+    // tap so the admin doesn't need to be told. Best-effort, never blocks.
+    this.push
+      .sendToTenantAdmins(
+        tenantId,
+        driver ? 'طلب جديد (مُكلَّف)' : 'طلب جديد بانتظار تعيين سائق',
+        `${customer.fullName} — ${customer.district} · ${priceIqd.toLocaleString('ar-IQ')} د.ع`,
+        { orderId: order.id, kind: 'new-order', tenantId },
+      )
+      .catch((err) => console.warn('[push] notify admins failed:', err));
+
     return order;
   }
 

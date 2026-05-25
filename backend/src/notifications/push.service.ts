@@ -74,6 +74,37 @@ export class PushService {
     );
   }
 
+  /**
+   * Send a push to every admin-class user of a tenant (OWNER, MANAGER,
+   * ACCOUNTANT). Used for plant-facing alerts: new customer lead arrived,
+   * new order placed, stock dipped below threshold. The mobile-admin app
+   * uses the `kind` field in `data` to route the tap to the right tab.
+   *
+   * Best-effort: returns 0/0 without throwing if the tenant has no admins
+   * with a registered device. Callers MUST NOT block on the result.
+   */
+  async sendToTenantAdmins(
+    tenantId: string,
+    title: string,
+    body: string,
+    data: Record<string, unknown> = {},
+  ) {
+    const admins = await this.prisma.user.findMany({
+      where: {
+        tenantId,
+        role: { in: ['OWNER', 'MANAGER', 'ACCOUNTANT'] },
+      },
+      select: { id: true },
+    });
+    if (admins.length === 0) return { sent: 0, failed: 0 };
+    return this.sendToUsers(
+      admins.map((u) => u.id),
+      title,
+      body,
+      data,
+    );
+  }
+
   private async sendToTokens(
     tokens: string[],
     title: string,
