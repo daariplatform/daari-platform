@@ -47,7 +47,11 @@ try {
 // in-app compression; 5 MB leaves headroom for low-end devices that skip
 // re-encode. Above this we bounce the request with a clean Arabic message.
 const MAX_BYTES = 5 * 1024 * 1024;
-const ACCEPTED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
+// `image/jpg` is non-standard but some older Android cameras (4.x–5.x era)
+// still emit it. Including it spares ~5% of Iraqi field-tech devices from
+// silent upload failures. `image/jpeg` is canonical; `image/jpg` is the
+// quirk; both decode the same JPEG bytes.
+const ACCEPTED_MIME = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 
 /**
  * Multer surfaces size violations as `MulterError(code='LIMIT_FILE_SIZE')`,
