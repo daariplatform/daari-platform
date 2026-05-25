@@ -36,13 +36,40 @@ const queryClient = new QueryClient({
   },
 });
 
+/**
+ * PostHog identity + screen tracker. Only mounted when EXPO_PUBLIC_POSTHOG_KEY
+ * is set (PostHogProvider is conditional in RootLayout below). Extracting
+ * this means RootLayoutInner never calls usePostHog() — which would log a
+ * noisy "called without a PostHog client" warning whenever the provider is
+ * absent.
+ */
+function PostHogTracker() {
+  const { hydrating, user } = useAuth();
+  const ph = usePostHog();
+
+  useScreenTracking();
+
+  useEffect(() => {
+    if (hydrating) return;
+    if (user && user.id && !user.id.startsWith('demo-')) {
+      identifyUser(ph, user.id, {
+        phone: user.phone,
+        role: user.role,
+        tenantId: user.tenantId,
+      });
+      track(ph, 'login_success', { role: user.role, tenantId: user.tenantId });
+    } else if (!user) {
+      resetUser(ph);
+    }
+  }, [user, hydrating, ph]);
+
+  return null;
+}
+
 function RootLayoutInner() {
   const router = useRouter();
   const segments = useSegments();
   const { hydrating, user, hydrate } = useAuth();
-  const ph = usePostHog();
-
-  useScreenTracking();
 
   useEffect(() => {
     ensureRTL();
@@ -62,20 +89,6 @@ function RootLayoutInner() {
     }
     SplashScreen.hideAsync().catch(() => {});
   }, [hydrating, user, segments]);
-
-  useEffect(() => {
-    if (hydrating) return;
-    if (user && user.id && !user.id.startsWith('demo-')) {
-      identifyUser(ph, user.id, {
-        phone: user.phone,
-        role: user.role,
-        tenantId: user.tenantId,
-      });
-      track(ph, 'login_success', { role: user.role, tenantId: user.tenantId });
-    } else if (!user) {
-      resetUser(ph);
-    }
-  }, [user, hydrating, ph]);
 
   useEffect(() => {
     if (!user) return;
@@ -131,13 +144,23 @@ function RootLayout() {
         buster: 'v1',
       }}
     >
-      <PostHogProvider
-        apiKey={POSTHOG_API_KEY}
-        options={POSTHOG_OPTIONS}
-        autocapture={false}
-      >
+      {POSTHOG_API_KEY ? (
+        // PostHog throws "You must pass your project's api key" when apiKey
+        // is empty AND usePostHog logs "called without a PostHog client"
+        // when no provider exists. To dodge both, we render the provider
+        // ONLY when a real key is configured, and isolate every PostHog
+        // hook call into <PostHogTracker /> which lives inside this branch.
+        <PostHogProvider
+          apiKey={POSTHOG_API_KEY}
+          options={POSTHOG_OPTIONS}
+          autocapture={false}
+        >
+          <PostHogTracker />
+          <RootLayoutInner />
+        </PostHogProvider>
+      ) : (
         <RootLayoutInner />
-      </PostHogProvider>
+      )}
     </PersistQueryClientProvider>
   );
 }
