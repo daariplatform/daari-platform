@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  forwardRef,
   Inject,
   Injectable,
   Logger,
@@ -66,7 +67,7 @@ export class CustomersService {
   constructor(
     private prisma: PrismaService,
     @Inject(CACHE_MANAGER) private cache: Cache,
-    private push: PushService,
+    @Inject(forwardRef(() => PushService)) private push: PushService,
   ) {}
 
   /**

@@ -1,6 +1,9 @@
 import { Module, Global, Logger } from '@nestjs/common';
 import { MailerModule } from '@nestjs-modules/mailer';
-import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
+// Newer @nestjs-modules/mailer (≥2.x) exposes adapters via the `./adapters/*`
+// exports map. The legacy `/dist/adapters/...` path errors at runtime with
+// ERR_PACKAGE_PATH_NOT_EXPORTED on Node 20+ because exports field is strict.
+import { HandlebarsAdapter } from '@nestjs-modules/mailer/adapters/handlebars.adapter';
 import { join } from 'path';
 import { EmailService } from './email.service';
 

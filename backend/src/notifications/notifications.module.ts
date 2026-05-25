@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { NotificationsController } from './notifications.controller';
 import { ReminderSchedulerService } from './reminder.scheduler';
@@ -9,7 +9,8 @@ import { PushService } from './push.service';
 import { CustomersModule } from '../customers/customers.module';
 
 @Module({
-  imports: [CustomersModule],
+  // Paired with the forwardRef() on CustomersModule's side — see comment there.
+  imports: [forwardRef(() => CustomersModule)],
   controllers: [NotificationsController],
   providers: [
     NotificationsService,
