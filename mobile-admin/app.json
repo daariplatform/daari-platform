@@ -10,11 +10,11 @@
     "newArchEnabled": true,
     "owner": "a7medal3ni",
     "description": "داري للمعمل — تطبيق إدارة معامل المياه على منصّة داري. لوحة معلومات للمالك: طلبات اليوم، اعتماد زبائن جدد، مراقبة المخزون، تتبّع السائقين، وإحصاءات الأداء — كلّ ذلك من الهاتف.",
-    "primaryColor": "#0284c7",
+    "primaryColor": "#0e9384",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0284c7"
+      "backgroundColor": "#0e9384"
     },
     "extra": {
       "router": {
@@ -55,7 +55,7 @@
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0284c7"
+        "backgroundColor": "#0e9384"
       },
       "permissions": [
         "android.permission.POST_NOTIFICATIONS",
@@ -73,7 +73,7 @@
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
-          "color": "#0284c7"
+          "color": "#0e9384"
         }
       ],
       [

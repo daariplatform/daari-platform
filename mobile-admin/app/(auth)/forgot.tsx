@@ -87,7 +87,7 @@ export default function ForgotPassword() {
   }
 
   return (
-    <LinearGradient colors={['#38bdf8', '#0ea5e9', '#0284c7']} style={{ flex: 1 }}>
+    <LinearGradient colors={['#2dd4bf', '#14b8a6', '#0e9384']} style={{ flex: 1 }}>
       <SafeAreaView className="flex-1">
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -124,7 +124,7 @@ export default function ForgotPassword() {
               <Text className="text-white text-xl font-bold">
                 {step === 1 ? 'استعادة كلمة المرور' : 'تأكيد الكود'}
               </Text>
-              <Text className="text-sky-100 text-xs mt-1 text-center px-6">
+              <Text className="text-teal-50 text-xs mt-1 text-center px-6">
                 {step === 1
                   ? 'سنرسل لك كوداً عبر WhatsApp / رسالة لإعادة تعيين كلمة المرور'
                   : `الكود أُرسل إلى ${phone}`}
@@ -155,7 +155,7 @@ export default function ForgotPassword() {
                     onPress={sendCode}
                     disabled={loading}
                     className={`rounded-xl py-4 items-center ${
-                      loading ? 'bg-slate-300' : 'bg-sky-600'
+                      loading ? 'bg-slate-300' : 'bg-teal-600'
                     }`}
                   >
                     {loading ? (

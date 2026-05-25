@@ -190,13 +190,13 @@ export default function OrderDetailScreen() {
                     onPress={() => Linking.openURL(`tel:${order.customer!.phone}`)}
                     hitSlop={8}
                     style={({ pressed }) => ({
-                      backgroundColor: '#e0f2fe',
+                      backgroundColor: '#ccfbf1',
                       padding: 8,
                       borderRadius: 12,
                       opacity: pressed ? 0.7 : 1,
                     })}
                   >
-                    <MaterialIcons name="call" size={18} color="#0284c7" />
+                    <MaterialIcons name="call" size={18} color="#0e9384" />
                   </Pressable>
                 }
               />
@@ -226,7 +226,7 @@ export default function OrderDetailScreen() {
                 })}
               >
                 <LinearGradient
-                  colors={['#0ea5e9', '#0284c7']}
+                  colors={['#14b8a6', '#0e9384']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={{
@@ -424,7 +424,7 @@ function SectionCard({
           marginBottom: 12,
         }}
       >
-        <MaterialIcons name={icon} size={18} color="#0284c7" />
+        <MaterialIcons name={icon} size={18} color="#0e9384" />
         <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>{title}</Text>
       </View>
       {children}

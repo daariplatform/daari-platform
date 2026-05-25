@@ -241,12 +241,12 @@ export default function StockScreen() {
                     width: 40,
                     height: 40,
                     borderRadius: 12,
-                    backgroundColor: '#e0f2fe',
+                    backgroundColor: '#ccfbf1',
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
                 >
-                  <MaterialIcons name="history" size={22} color="#0284c7" />
+                  <MaterialIcons name="history" size={22} color="#0e9384" />
                 </View>
                 <View style={{ flex: 1, alignItems: 'flex-end' }}>
                   <Text style={{ fontSize: 12, color: '#64748b' }}>آخر تزويد</Text>
@@ -273,7 +273,7 @@ export default function StockScreen() {
               })}
             >
               <LinearGradient
-                colors={['#0ea5e9', '#0284c7']}
+                colors={['#14b8a6', '#0e9384']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={{
@@ -315,7 +315,7 @@ export default function StockScreen() {
                 <View
                   style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 10 }}
                 >
-                  <MaterialIcons name="settings" size={18} color="#0284c7" />
+                  <MaterialIcons name="settings" size={18} color="#0e9384" />
                   <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>
                     الإعدادات
                   </Text>
@@ -346,7 +346,7 @@ export default function StockScreen() {
                     disabled={updateSettings.isPending}
                     style={({ pressed }) => ({
                       marginTop: 10,
-                      backgroundColor: '#0284c7',
+                      backgroundColor: '#0e9384',
                       paddingVertical: 12,
                       borderRadius: 14,
                       flexDirection: 'row-reverse',
@@ -436,7 +436,7 @@ export default function StockScreen() {
                 gap: 8,
               }}
             >
-              <MaterialIcons name="water-drop" size={20} color="#0284c7" />
+              <MaterialIcons name="water-drop" size={20} color="#0e9384" />
               <TextInput
                 value={refillInput}
                 onChangeText={setRefillInput}
@@ -466,7 +466,7 @@ export default function StockScreen() {
               })}
             >
               <LinearGradient
-                colors={['#0ea5e9', '#0284c7']}
+                colors={['#14b8a6', '#0e9384']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={{

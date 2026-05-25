@@ -69,11 +69,11 @@ export function EmptyState({
           onPress={onAction}
           style={{
             marginTop: 18,
-            backgroundColor: '#0284c7',
+            backgroundColor: '#0e9384',
             paddingHorizontal: 22,
             paddingVertical: 10,
             borderRadius: 12,
-            shadowColor: '#0284c7',
+            shadowColor: '#0e9384',
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.25,
             shadowRadius: 8,

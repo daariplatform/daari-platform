@@ -206,7 +206,7 @@ export default function WalkinScreen() {
             >
               <LinearGradient
                 colors={
-                  validationError ? ['#cbd5e1', '#94a3b8'] : ['#0ea5e9', '#0284c7']
+                  validationError ? ['#cbd5e1', '#94a3b8'] : ['#14b8a6', '#0e9384']
                 }
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
@@ -278,7 +278,7 @@ function Field({
           gap: 10,
         }}
       >
-        <MaterialIcons name={icon} size={20} color="#0284c7" />
+        <MaterialIcons name={icon} size={20} color="#0e9384" />
         <TextInput
           value={value}
           onChangeText={onChangeText}

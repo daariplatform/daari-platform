@@ -94,9 +94,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cellFocused: {
-    borderColor: '#0284c7',
+    borderColor: '#0e9384',
     backgroundColor: '#fff',
-    shadowColor: '#0284c7',
+    shadowColor: '#0e9384',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.18,
     shadowRadius: 6,

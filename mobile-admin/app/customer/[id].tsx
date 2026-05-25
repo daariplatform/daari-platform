@@ -170,7 +170,7 @@ export default function CustomerDetailScreen() {
               }}
             >
               <LinearGradient
-                colors={['#0ea5e9', '#0284c7']}
+                colors={['#14b8a6', '#0e9384']}
                 style={{
                   width: 64,
                   height: 64,
@@ -200,13 +200,13 @@ export default function CustomerDetailScreen() {
                     onPress={() => Linking.openURL(`tel:${customer.phone}`)}
                     hitSlop={8}
                     style={({ pressed }) => ({
-                      backgroundColor: '#e0f2fe',
+                      backgroundColor: '#ccfbf1',
                       padding: 8,
                       borderRadius: 12,
                       opacity: pressed ? 0.7 : 1,
                     })}
                   >
-                    <MaterialIcons name="call" size={18} color="#0284c7" />
+                    <MaterialIcons name="call" size={18} color="#0e9384" />
                   </Pressable>
                 }
               />
@@ -353,7 +353,7 @@ function SectionCard({
           marginBottom: 12,
         }}
       >
-        <MaterialIcons name={icon} size={18} color="#0284c7" />
+        <MaterialIcons name={icon} size={18} color="#0e9384" />
         <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>{title}</Text>
       </View>
       {children}
@@ -428,12 +428,12 @@ function TankRow({ tank }: { tank: Tank }) {
           width: 40,
           height: 40,
           borderRadius: 12,
-          backgroundColor: '#e0f2fe',
+          backgroundColor: '#ccfbf1',
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <MaterialIcons name="qr-code-2" size={22} color="#0284c7" />
+        <MaterialIcons name="qr-code-2" size={22} color="#0e9384" />
       </View>
       <View style={{ flex: 1, alignItems: 'flex-end' }}>
         <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>

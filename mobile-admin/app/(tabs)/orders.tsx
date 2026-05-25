@@ -166,7 +166,7 @@ export default function OrdersScreen() {
         })}
       >
         <LinearGradient
-          colors={['#0ea5e9', '#0284c7']}
+          colors={['#14b8a6', '#0e9384']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{
@@ -175,7 +175,7 @@ export default function OrdersScreen() {
             borderRadius: 30,
             alignItems: 'center',
             justifyContent: 'center',
-            shadowColor: '#0284c7',
+            shadowColor: '#0e9384',
             shadowOffset: { width: 0, height: 6 },
             shadowOpacity: 0.4,
             shadowRadius: 12,
@@ -218,9 +218,9 @@ function FilterBar({
               paddingHorizontal: 14,
               paddingVertical: 8,
               borderRadius: 999,
-              backgroundColor: active ? '#0284c7' : '#f1f5f9',
+              backgroundColor: active ? '#0e9384' : '#f1f5f9',
               borderWidth: 1,
-              borderColor: active ? '#0284c7' : '#e2e8f0',
+              borderColor: active ? '#0e9384' : '#e2e8f0',
               opacity: pressed ? 0.8 : 1,
             })}
           >
@@ -317,7 +317,7 @@ function OrderRow({ order, onPress }: { order: RefillOrder; onPress: () => void 
           )}
         </View>
         <View style={{ alignItems: 'flex-start' }}>
-          <Text style={{ fontSize: 16, fontWeight: '900', color: '#0284c7' }}>
+          <Text style={{ fontSize: 16, fontWeight: '900', color: '#0e9384' }}>
             {(order.priceIqd ?? 0).toLocaleString('en-US')}{' '}
             <Text style={{ fontSize: 10, color: '#64748b' }}>د.ع</Text>
           </Text>
@@ -367,7 +367,7 @@ function Pagination({
           opacity: pressed ? 0.7 : prevDisabled ? 0.5 : 1,
         })}
       >
-        <MaterialIcons name="chevron-right" size={22} color={prevDisabled ? '#cbd5e1' : '#0284c7'} />
+        <MaterialIcons name="chevron-right" size={22} color={prevDisabled ? '#cbd5e1' : '#0e9384'} />
       </Pressable>
       <Text style={{ fontWeight: '700', color: '#475569', fontSize: 13 }}>
         صفحة {(page ?? 1).toLocaleString('en-US')} من {(totalPages ?? 1).toLocaleString('en-US')}
@@ -384,7 +384,7 @@ function Pagination({
           opacity: pressed ? 0.7 : nextDisabled ? 0.5 : 1,
         })}
       >
-        <MaterialIcons name="chevron-left" size={22} color={nextDisabled ? '#cbd5e1' : '#0284c7'} />
+        <MaterialIcons name="chevron-left" size={22} color={nextDisabled ? '#cbd5e1' : '#0e9384'} />
       </Pressable>
     </View>
   );

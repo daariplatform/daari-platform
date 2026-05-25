@@ -63,7 +63,7 @@ export default function AdminLogin() {
 
   return (
     <LinearGradient
-      colors={['#0ea5e9', '#0284c7', '#0369a1']}
+      colors={['#14b8a6', '#0e9384', '#0c7a6e']}
       start={{ x: 0, y: 0 }}
       end={{ x: 0, y: 1 }}
       style={{ flex: 1 }}
@@ -96,7 +96,7 @@ export default function AdminLogin() {
                 <MaterialIcons name="business" size={42} color="#fff" />
               </View>
               <Text className="text-white text-3xl font-bold">داري للمعمل</Text>
-              <Text className="text-sky-100 text-sm mt-2 text-center" style={{ opacity: 0.92 }}>
+              <Text className="text-teal-50 text-sm mt-2 text-center" style={{ opacity: 0.92 }}>
                 لوحة معلومات معملك في جيبك
               </Text>
             </View>
@@ -199,7 +199,7 @@ export default function AdminLogin() {
                 style={{ alignSelf: 'flex-start', marginBottom: 14 }}
                 hitSlop={6}
               >
-                <Text className="text-sky-700 text-xs underline">نسيت كلمة المرور؟</Text>
+                <Text className="text-teal-700 text-xs underline">نسيت كلمة المرور؟</Text>
               </Pressable>
 
               {/* Error */}
@@ -232,7 +232,7 @@ export default function AdminLogin() {
                 })}
               >
                 <LinearGradient
-                  colors={['#0284c7', '#0369a1']}
+                  colors={['#0e9384', '#0c7a6e']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={{
@@ -273,10 +273,10 @@ export default function AdminLogin() {
 
             {/* Footer */}
             <View style={{ alignItems: 'center', marginTop: 28 }}>
-              <Text className="text-sky-100 text-[11px]" style={{ opacity: 0.85 }}>
+              <Text className="text-teal-50 text-[11px]" style={{ opacity: 0.85 }}>
                 من فاي‑بِت · إصدار 0.1
               </Text>
-              <Text className="text-sky-100 text-[10px] mt-1" style={{ opacity: 0.7 }}>
+              <Text className="text-teal-50 text-[10px] mt-1" style={{ opacity: 0.7 }}>
                 هذا التطبيق لأصحاب معامل المياه فقط
               </Text>
             </View>

@@ -304,12 +304,12 @@ function CustomerRow({
             width: 44,
             height: 44,
             borderRadius: 14,
-            backgroundColor: '#e0f2fe',
+            backgroundColor: '#ccfbf1',
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <Text style={{ color: '#0284c7', fontWeight: '900', fontSize: 18 }}>{initial}</Text>
+          <Text style={{ color: '#0e9384', fontWeight: '900', fontSize: 18 }}>{initial}</Text>
         </View>
         <View style={{ flex: 1, alignItems: 'flex-end' }}>
           <Text
@@ -400,7 +400,7 @@ function Pagination({
           opacity: pressed ? 0.7 : prevDisabled ? 0.5 : 1,
         })}
       >
-        <MaterialIcons name="chevron-right" size={22} color={prevDisabled ? '#cbd5e1' : '#0284c7'} />
+        <MaterialIcons name="chevron-right" size={22} color={prevDisabled ? '#cbd5e1' : '#0e9384'} />
       </Pressable>
       <Text style={{ fontWeight: '700', color: '#475569', fontSize: 13 }}>
         صفحة {(page ?? 1).toLocaleString('en-US')} من {(totalPages ?? 1).toLocaleString('en-US')}
@@ -417,7 +417,7 @@ function Pagination({
           opacity: pressed ? 0.7 : nextDisabled ? 0.5 : 1,
         })}
       >
-        <MaterialIcons name="chevron-left" size={22} color={nextDisabled ? '#cbd5e1' : '#0284c7'} />
+        <MaterialIcons name="chevron-left" size={22} color={nextDisabled ? '#cbd5e1' : '#0e9384'} />
       </Pressable>
     </View>
   );
@@ -508,7 +508,7 @@ function CredentialsModal({
               })}
             >
               <LinearGradient
-                colors={['#0ea5e9', '#0284c7']}
+                colors={['#14b8a6', '#0e9384']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={{

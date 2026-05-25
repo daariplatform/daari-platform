@@ -193,7 +193,7 @@ export default function SettingsScreen() {
                       ? '#ef4444'
                       : usage.nearLimit
                         ? '#f59e0b'
-                        : '#0284c7',
+                        : '#0e9384',
                   }}
                 />
               </View>
@@ -208,7 +208,7 @@ export default function SettingsScreen() {
                 })}
               >
                 <LinearGradient
-                  colors={['#0ea5e9', '#0284c7']}
+                  colors={['#14b8a6', '#0e9384']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={{
@@ -248,10 +248,10 @@ export default function SettingsScreen() {
               opacity: pressed ? 0.7 : 1,
             })}
           >
-            <Text style={{ fontSize: 13, fontWeight: '700', color: '#0284c7' }}>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#0e9384' }}>
               الشروط والخصوصية
             </Text>
-            <MaterialIcons name="open-in-new" size={18} color="#0284c7" />
+            <MaterialIcons name="open-in-new" size={18} color="#0e9384" />
           </Pressable>
         </Section>
 
@@ -313,7 +313,7 @@ function Section({
           marginBottom: 12,
         }}
       >
-        <MaterialIcons name={icon} size={18} color="#0284c7" />
+        <MaterialIcons name={icon} size={18} color="#0e9384" />
         <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>{title}</Text>
       </View>
       {children}

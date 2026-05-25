@@ -76,7 +76,7 @@ export default function PlantHome() {
       {/* Sky gradient hero — extended outside the SafeArea so the status-bar
           area paints in the brand colour. */}
       <LinearGradient
-        colors={['#0ea5e9', '#0284c7']}
+        colors={['#14b8a6', '#0e9384']}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={{
@@ -95,7 +95,7 @@ export default function PlantHome() {
               }}
             >
               <View style={{ flex: 1 }}>
-                <Text style={{ color: '#bae6fd', fontSize: 12 }}>أهلاً بعودتك</Text>
+                <Text style={{ color: '#99f6e4', fontSize: 12 }}>أهلاً بعودتك</Text>
                 <Text
                   style={{
                     color: '#fff',
@@ -107,7 +107,7 @@ export default function PlantHome() {
                 >
                   {plantName}
                 </Text>
-                <Text style={{ color: '#bae6fd', fontSize: 12, marginTop: 4 }}>
+                <Text style={{ color: '#99f6e4', fontSize: 12, marginTop: 4 }}>
                   {todayLabel}
                 </Text>
               </View>
@@ -177,11 +177,11 @@ export default function PlantHome() {
               shadowRadius: 12,
               elevation: 2,
               borderWidth: 1,
-              borderColor: '#e0f2fe',
+              borderColor: '#ccfbf1',
             }}
           >
             <LinearGradient
-              colors={['#0ea5e9', '#0284c7']}
+              colors={['#14b8a6', '#0e9384']}
               style={{
                 width: 72,
                 height: 72,
@@ -226,7 +226,7 @@ export default function PlantHome() {
                 })}
               >
                 <LinearGradient
-                  colors={['#0ea5e9', '#0284c7']}
+                  colors={['#14b8a6', '#0e9384']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={{
@@ -253,13 +253,13 @@ export default function PlantHome() {
                   justifyContent: 'center',
                   gap: 8,
                   borderWidth: 1.5,
-                  borderColor: '#0284c7',
-                  backgroundColor: '#f0f9ff',
+                  borderColor: '#0e9384',
+                  backgroundColor: '#f0fdfa',
                   opacity: pressed ? 0.85 : 1,
                 })}
               >
-                <MaterialIcons name="add-shopping-cart" size={18} color="#0284c7" />
-                <Text style={{ color: '#0284c7', fontWeight: '700', fontSize: 13 }}>
+                <MaterialIcons name="add-shopping-cart" size={18} color="#0e9384" />
+                <Text style={{ color: '#0e9384', fontWeight: '700', fontSize: 13 }}>
                   أو سجّل تعبئة مباشرة
                 </Text>
               </Pressable>
@@ -313,7 +313,7 @@ export default function PlantHome() {
                 shadowRadius: 12,
                 elevation: 2,
                 borderWidth: 1,
-                borderColor: '#e0f2fe',
+                borderColor: '#ccfbf1',
               }}
             >
               <View
@@ -339,12 +339,12 @@ export default function PlantHome() {
                       د.ع
                     </Text>
                   </Text>
-                  <Text style={{ fontSize: 12, color: '#0284c7', marginTop: 4 }}>
+                  <Text style={{ fontSize: 12, color: '#0e9384', marginTop: 4 }}>
                     {n(kpis.todayCompletedOrders)} طلب مكتمل
                   </Text>
                 </View>
                 <LinearGradient
-                  colors={['#0ea5e9', '#0284c7']}
+                  colors={['#14b8a6', '#0e9384']}
                   style={{
                     width: 64,
                     height: 64,
@@ -371,7 +371,7 @@ export default function PlantHome() {
                 icon="local-shipping"
                 label="السائقون النشطون"
                 value={n(kpis.activeDrivers)}
-                tint="#0284c7"
+                tint="#0e9384"
                 onPress={() => router.push('/(tabs)/orders')}
               />
             </View>
@@ -657,7 +657,7 @@ function QuickAction({
         })}
       >
         <LinearGradient
-          colors={['#0ea5e9', '#0284c7']}
+          colors={['#14b8a6', '#0e9384']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{
@@ -684,7 +684,7 @@ function QuickAction({
         backgroundColor: '#fff',
         borderRadius: 18,
         borderWidth: 1,
-        borderColor: '#bae6fd',
+        borderColor: '#99f6e4',
         paddingVertical: 14,
         paddingHorizontal: 14,
         flexDirection: 'row-reverse',
@@ -694,8 +694,8 @@ function QuickAction({
         opacity: pressed ? 0.85 : 1,
       })}
     >
-      <MaterialIcons name={icon} size={20} color="#0284c7" />
-      <Text style={{ color: '#0369a1', fontWeight: '700', fontSize: 13 }}>{label}</Text>
+      <MaterialIcons name={icon} size={20} color="#0e9384" />
+      <Text style={{ color: '#0c7a6e', fontWeight: '700', fontSize: 13 }}>{label}</Text>
     </Pressable>
   );
 }
