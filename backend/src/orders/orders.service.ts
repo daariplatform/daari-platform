@@ -1,5 +1,11 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../notifications/push.service';
 import {
   CustomerStatus,
   PaymentMethod,
@@ -39,9 +45,18 @@ const GPS_MAX_DISTANCE_M = Number(process.env.REFILL_GPS_MAX_DISTANCE_M ?? 50);
 
 @Injectable()
 export class OrdersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private push: PushService,
+  ) {}
 
   async create(tenantId: string, input: CreateOrderInput) {
+    // Subscription gate — block new orders if the plant has blown past
+    // its monthly operations limit AND hasn't upgraded. We compute the
+    // limit per-plan inline so the orders module doesn't have to pull in
+    // PlantController. Refills are the metric we bill on.
+    await this.assertWithinPlanLimit(tenantId);
+
     const customer = await this.prisma.customer.findFirst({
       where: { id: input.customerId, tenantId },
       include: { tanks: true },
@@ -49,19 +64,152 @@ export class OrdersService {
     if (!customer) throw new NotFoundException('Customer not found');
 
     const tankId = input.tankId ?? customer.tanks[0]?.id;
-    if ((input.kind ?? RefillOrderKind.REFILL) === RefillOrderKind.REFILL && !tankId) {
+    const kind = input.kind ?? RefillOrderKind.REFILL;
+    if (kind === RefillOrderKind.REFILL && !tankId) {
       throw new BadRequestException('Customer has no tank assigned for a refill');
     }
 
-    return this.prisma.refillOrder.create({
+    // Guard against duplicate active orders. A customer should only have ONE
+    // in-flight refill request at a time — otherwise the same tank ends up
+    // in the driver's queue 3-4× and the plant ships the same water twice.
+    // Active = anything not yet COMPLETED / CANCELLED / FAILED.
+    if (kind === RefillOrderKind.REFILL) {
+      const existing = await this.prisma.refillOrder.findFirst({
+        where: {
+          tenantId,
+          customerId: input.customerId,
+          kind: RefillOrderKind.REFILL,
+          status: {
+            in: [
+              RefillOrderStatus.PENDING,
+              RefillOrderStatus.ASSIGNED,
+              RefillOrderStatus.EN_ROUTE,
+            ],
+          },
+        },
+        select: { id: true, status: true, requestedAt: true },
+      });
+      if (existing) {
+        throw new ConflictException({
+          message: 'لديك طلب تعبئة نشط بالفعل. انتظر اكتماله قبل طلب آخر.',
+          existingOrderId: existing.id,
+          existingStatus: existing.status,
+        });
+      }
+    }
+
+    // Snapshot the tenant's CURRENT refill price onto the order. If the
+    // plant changes the price after the order is placed, the customer
+    // still pays the price they saw when they tapped "اطلب الآن". Same
+    // pattern as completed-order bonus snapshots.
+    let priceIqd = input.priceIqd;
+    if (priceIqd == null) {
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { refillPriceIqd: true },
+      });
+      priceIqd = tenant?.refillPriceIqd ?? 1000;
+    }
+
+    // Auto-assign to a driver. Preference order:
+    //   1. AVAILABLE drivers (online but not on a route) — most-recently-seen first
+    //   2. ON_ROUTE drivers (already working a tour, can pick up another)
+    //   3. Any active driver in the tenant (covers OFFLINE — they'll see
+    //      the assignment the moment they open the app)
+    // If literally no drivers exist we still create the order in PENDING so
+    // the plant admin sees it in the dashboard and can hire/assign manually.
+    const driver = await this.pickDriverForNewOrder(tenantId);
+
+    const order = await this.prisma.refillOrder.create({
       data: {
         tenantId,
         customerId: input.customerId,
         tankId,
-        kind: input.kind ?? RefillOrderKind.REFILL,
-        priceIqd: input.priceIqd ?? 1000,
+        kind,
+        priceIqd,
         scheduledFor: input.scheduledFor,
+        ...(driver
+          ? {
+              driverId: driver.id,
+              status: RefillOrderStatus.ASSIGNED,
+              assignedAt: new Date(),
+            }
+          : {}),
       },
+    });
+
+    // Notify the assigned driver — they don't have to keep polling. Fail
+    // silently if push delivery fails (the order still exists; driver will
+    // see it on next /me/today refresh as a fallback).
+    if (driver) {
+      this.push
+        .sendToUser(
+          driver.userId,
+          '🚐 طلب جديد',
+          `${customer.fullName} — ${customer.district}`,
+          { orderId: order.id, kind: 'new-order' },
+        )
+        .catch((err) => console.warn('[push] notify driver failed:', err));
+    }
+
+    return order;
+  }
+
+  /**
+   * Blocks new orders when the plant exceeded its monthly ops cap. The
+   * dashboard subscription page tells them to upgrade. We throw a
+   * specific error so the customer mobile can surface a friendly message
+   * instead of generic "failed".
+   */
+  private async assertWithinPlanLimit(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { plan: true },
+    });
+    const TIER_OPS: Record<string, number> = {
+      STARTER: 300,
+      PRO: 1500,
+      BUSINESS: 5000,
+      ENTERPRISE: 999_999,
+    };
+    const limit = TIER_OPS[tenant?.plan ?? 'STARTER'] ?? 300;
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const opsThisMonth = await this.prisma.refillOrder.count({
+      where: {
+        tenantId,
+        status: RefillOrderStatus.COMPLETED,
+        completedAt: { gte: monthStart },
+      },
+    });
+    if (opsThisMonth >= limit) {
+      throw new BadRequestException(
+        'وصل المعمل لحدّ خطّته الشهرية. الطلبات الجديدة مغلقة مؤقتاً حتى ترقية الخطّة.',
+      );
+    }
+  }
+
+  /**
+   * Simplest possible driver picker — first available driver in the tenant.
+   * When traffic grows, replace with "fewest active orders" or geo-nearest
+   * scoring. Returns null when the tenant has zero drivers (rare, but the
+   * caller handles it by leaving the order PENDING for manual triage).
+   */
+  private async pickDriverForNewOrder(tenantId: string) {
+    const available = await this.prisma.driver.findFirst({
+      where: { tenantId, status: 'AVAILABLE' },
+      orderBy: { lastLocationAt: 'desc' },
+    });
+    if (available) return available;
+    const onRoute = await this.prisma.driver.findFirst({
+      where: { tenantId, status: 'ON_ROUTE' },
+      orderBy: { lastLocationAt: 'desc' },
+    });
+    if (onRoute) return onRoute;
+    return this.prisma.driver.findFirst({
+      where: { tenantId },
+      orderBy: { hiredAt: 'asc' },
     });
   }
 
@@ -104,15 +252,28 @@ export class OrdersService {
   async start(orderId: string, driverId: string) {
     const order = await this.prisma.refillOrder.findFirst({
       where: { id: orderId, driverId },
+      include: { customer: { include: { user: true } } },
     });
     if (!order) throw new NotFoundException('Order not found or not assigned to you');
     if (order.status !== RefillOrderStatus.ASSIGNED) {
       throw new BadRequestException(`Order is ${order.status}`);
     }
-    return this.prisma.refillOrder.update({
+    const updated = await this.prisma.refillOrder.update({
       where: { id: orderId },
       data: { status: RefillOrderStatus.EN_ROUTE, startedAt: new Date() },
     });
+    // Tell the customer the driver is moving toward them.
+    if (order.customer?.user) {
+      this.push
+        .sendToUser(
+          order.customer.user.id,
+          '🚐 السائق متجه إليك',
+          'سيصل خلال وقت قصير. تحقّق من العنوان والـ GPS.',
+          { orderId, kind: 'en-route' },
+        )
+        .catch((err) => console.warn('[push] en-route notify failed:', err));
+    }
+    return updated;
   }
 
   /**
@@ -262,7 +423,7 @@ export class OrdersService {
       order.kind === RefillOrderKind.TANK_DELIVERY ? (tenant?.deliveryBonusIqd ?? 0) :
       order.kind === RefillOrderKind.TANK_RECLAIM ? (tenant?.reclaimBonusIqd ?? 0) : 0;
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const completed = await tx.refillOrder.update({
         where: { id: orderId },
         data: {
@@ -322,8 +483,41 @@ export class OrdersService {
         });
       }
 
+      // Wave 4: decrement plant's water stock for refills. Defensive try
+      // so a missing/disabled stock row doesn't block the refill itself.
+      if (order.kind === RefillOrderKind.REFILL && order.tank) {
+        const liters = order.tank.capacity === 'L500' ? 500 : 350;
+        try {
+          await tx.waterStock.update({
+            where: { tenantId: order.tenantId },
+            data: { currentLiters: { decrement: liters } },
+          });
+        } catch {
+          /* stock row not initialised yet — skip */
+        }
+      }
+
       return completed;
     });
+
+    // Push notification to customer (outside transaction so a push failure
+    // doesn't roll back the completed order). Customer.user might be null
+    // for legacy customers who haven't claimed an account yet.
+    if (order.customer?.userId) {
+      const arabicKind =
+        order.kind === RefillOrderKind.REFILL ? 'تعبئة' :
+        order.kind === RefillOrderKind.TANK_DELIVERY ? 'توصيل خزان' : 'سحب خزان';
+      this.push
+        .sendToUser(
+          order.customer.userId,
+          `✅ تمّت ${arabicKind}`,
+          `المبلغ المدفوع: ${input.paidAmountIqd.toLocaleString('ar-IQ')} د.ع. شكراً لاستخدامك داري.`,
+          { orderId, kind: 'completed' },
+        )
+        .catch((err) => console.warn('[push] completion notify failed:', err));
+    }
+
+    return result;
   }
 
   async cancel(orderId: string, reason: string) {
@@ -442,6 +636,76 @@ export class OrdersService {
         tank: true,
       },
       orderBy: [{ scheduledFor: 'asc' }, { requestedAt: 'asc' }],
+    });
+  }
+
+  /**
+   * Customer's own order history. Used by mobile-customer to render
+   * "نشاطك الأخير" and the full orders tab.
+   */
+  listByCustomerUser(userId: string, limit = 50) {
+    return this.prisma.refillOrder.findMany({
+      where: { customer: { userId } },
+      include: {
+        driver: { include: { user: { select: { fullName: true } } } },
+      },
+      orderBy: { requestedAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  /**
+   * Driver's full task history (not just today). Used by mobile-worker's
+   * History tab. Includes completed + cancelled orders.
+   */
+  listMyHistory(driverId: string, limit = 100) {
+    return this.prisma.refillOrder.findMany({
+      where: { driverId },
+      include: { customer: true, tank: true },
+      orderBy: { requestedAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  /**
+   * Walk-in sale — a driver sells water to someone who is NOT in the system
+   * (or a registered customer paying for a one-off out-of-cycle refill).
+   * Creates a WALKIN_SALE order pre-completed in one step.
+   */
+  async createWalkinRefill(
+    tenantId: string,
+    driverId: string,
+    input: {
+      customerId?: string;
+      walkinBuyerName?: string;
+      walkinBuyerPhone?: string;
+      walkinLiters?: number;
+      paymentMethod: PaymentMethod;
+      paidAmountIqd: number;
+      proofPhotoUrl: string;
+      completionLng?: number;
+      completionLat?: number;
+    },
+  ) {
+    return this.prisma.refillOrder.create({
+      data: {
+        tenantId,
+        driverId,
+        customerId: input.customerId ?? null,
+        kind: 'WALKIN_SALE',
+        status: RefillOrderStatus.COMPLETED,
+        priceIqd: input.paidAmountIqd,
+        paidAmountIqd: input.paidAmountIqd,
+        paymentMethod: input.paymentMethod,
+        proofPhotoUrl: input.proofPhotoUrl,
+        completionLng: input.completionLng,
+        completionLat: input.completionLat,
+        walkinBuyerName: input.walkinBuyerName,
+        walkinBuyerPhone: input.walkinBuyerPhone,
+        walkinLiters: input.walkinLiters,
+        requestedAt: new Date(),
+        completedAt: new Date(),
+      },
     });
   }
 }

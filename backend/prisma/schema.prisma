@@ -83,6 +83,14 @@ model Tenant {
   reclaimBonusIqd      Int       @default(0)
   newCustomerBonusIqd  Int       @default(0)
 
+  // Plant-configurable pricing (edited from dashboard settings page)
+  refillPriceIqd            Int       @default(1000)
+  deliveryFeeIqd            Int       @default(0)
+  freeDeliveryThresholdIqd  Int?
+  // Working hours displayed in customer app + used for new-order eligibility
+  workingHoursStart String   @default("08:00")
+  workingHoursEnd   String   @default("22:00")
+
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
@@ -152,8 +160,61 @@ model User {
   customer     Customer?
   vendor       Vendor?
   refreshTokens RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  pushTokens   PushToken[]
 
   @@index([tenantId, role])
+}
+
+// Expo push tokens for native push delivery. A single user can have
+// multiple tokens (one per installed device — phone + tablet). We store
+// the platform so we can target iOS vs Android specific behaviour later.
+model PushToken {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String   @unique
+  platform   String   // "ios" | "android"
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Stores hashed OTP codes for self-service password reset (sent via otpiq
+// over WhatsApp/Telegram/SMS). We hash so a DB leak doesn't reveal active
+// codes. `attempts` lets us lock out brute-force guesses on a single code.
+//
+// Reset is only available if user.lastLoginAt is non-null — i.e. the
+// customer has logged in at least once with the password the plant admin
+// gave them. This stops fraud (someone guessing a phone that was bulk-
+// registered but never claimed) AND saves a ton of OTP costs.
+// OTP storage for self-signup (the prospect doesn't have a User row yet,
+// so we key by phone instead of userId). Same hash + attempt + expiry
+// pattern as PasswordResetToken.
+model SignupOtpToken {
+  id        String    @id @default(cuid())
+  phone     String
+  otpHash   String
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  @@index([phone, expiresAt])
+}
+
+model PasswordResetToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  otpHash    String
+  expiresAt  DateTime
+  usedAt     DateTime?
+  attempts   Int       @default(0)
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, expiresAt])
 }
 
 model RefreshToken {
@@ -198,7 +259,11 @@ model Tank {
   tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   serialNumber String
-  qrCode       String       @unique
+  // Per-tenant unique (NOT global): every plant uses its own numbering
+  // scheme like T-1, T-2, T-3 … and two plants on the same Daari instance
+  // MUST be allowed to issue the same printed sticker independently.
+  // Enforced by @@unique([tenantId, qrCode]) below.
+  qrCode       String
   capacity     TankCapacity
   status       TankStatus   @default(IN_PLANT)
 
@@ -223,6 +288,7 @@ model Tank {
   refillOrders RefillOrder[]
 
   @@unique([tenantId, serialNumber])
+  @@unique([tenantId, qrCode])
   @@index([tenantId, status])
   @@index([customerId])
 }
@@ -287,6 +353,14 @@ model Customer {
   acceptedTermsAt    DateTime?
   onboardedByDriverId String?
   onboardedAt        DateTime?
+  // Stamped when plant admin first approves a driver-onboarded customer.
+  // `registrationBonusIqd` snapshots Tenant.newCustomerBonusIqd at that
+  // exact moment so the driver's monthly salary always credits the rate
+  // that was in effect when the work happened — even if the plant changes
+  // the bonus rate later. Stays 0 if no driver onboarded them (admin-added
+  // customer or self-signup — nothing to pay).
+  approvedAt           DateTime?
+  registrationBonusIqd Int       @default(0)
 
   balanceIqd      Int            @default(0)  // running balance in dinars
   totalRefills    Int            @default(0)
@@ -784,4 +858,80 @@ model BulkDealParticipation {
 
   @@unique([dealId, tenantId])
   @@index([tenantId])
+}
+
+// ─── Plant power features (stock + audit) ─────────────────────────────────
+
+// Water inventory at the plant. One row per tenant. Driver completes a
+// refill → currentLiters -= tank capacity. Plant admin tops up by setting
+// currentLiters back to a fresh value. lowThresholdLiters triggers a
+// dashboard banner so the plant doesn't accidentally run out mid-day.
+model WaterStock {
+  id                   String   @id @default(cuid())
+  tenantId             String   @unique
+  currentLiters        Int      @default(0)
+  capacityLiters       Int      @default(20000)
+  lowThresholdLiters   Int      @default(2000)
+  lastTopUpAt          DateTime?
+  lastTopUpLiters      Int?
+  updatedAt            DateTime @updatedAt
+  createdAt            DateTime @default(now())
+}
+
+// Append-only audit log of admin actions — who changed the price, who
+// approved which customer, who reset which password. Keeps the plant
+// owner accountable and helps trace mysterious changes later.
+//
+// `before` and `after` are JSON snapshots so we can show diffs in the UI.
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String?
+  actorId    String   // User.id
+  actorName  String
+  action     String   // "settings.update", "customer.approve", "tank.assign", etc.
+  entityType String?  // "Customer" | "Tank" | "Tenant" | ...
+  entityId   String?
+  before     Json?
+  after      Json?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([actorId])
+}
+
+// ─── Revenue: paid promotional blasts ────────────────────────────────────
+
+// Each row is a "marketing blast" the plant admin paid to send to all
+// (or a segment of) their customers. priceIqd is what the plant was
+// charged. channel = PUSH (free for Daari, ~5,000 IQD) or WHATSAPP
+// (cost to Daari ~5 IQD/msg, charged ~10 IQD + 10/msg to plant).
+enum PromoChannel {
+  PUSH
+  WHATSAPP
+}
+
+enum PromoStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+model PromoNotification {
+  id            String       @id @default(cuid())
+  tenantId      String
+  channel       PromoChannel
+  title         String
+  body          String
+  audienceCount Int          // number of customers targeted
+  sentCount     Int          @default(0)
+  failedCount   Int          @default(0)
+  priceIqd      Int          // what the plant was charged
+  status        PromoStatus  @default(QUEUED)
+  scheduledFor  DateTime?
+  sentAt        DateTime?
+  createdById   String       // User.id who composed it
+  createdAt     DateTime     @default(now())
+
+  @@index([tenantId, createdAt])
 }

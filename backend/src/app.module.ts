@@ -13,7 +13,10 @@ import { DriversModule } from './drivers/drivers.module';
 import { OrdersModule } from './orders/orders.module';
 import { AccountingModule } from './accounting/accounting.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { PlantModule } from './plant/plant.module';
 import { VendorsModule } from './vendors/vendors.module';
+import { UploadsModule } from './uploads/uploads.module';
+import { HealthModule } from './health/health.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { TenantGuard } from './common/guards/tenant.guard';
 import { CapabilitiesGuard } from './common/guards/capabilities.guard';
@@ -26,16 +29,19 @@ const optionalModules: DynamicModule['imports'] = vendorsEnabled ? [VendorsModul
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     /**
-     * Throttling tiers:
-     *  - 'short'    1s   /  3 req  — burst protection on every endpoint
+     * Throttling tiers (apply to EVERY route via global ThrottlerGuard):
+     *  - 'short'    1s   / 10 req  — burst protection (was 3, too tight)
      *  - 'default' 60s  / 120 req  — normal app traffic ceiling
-     *  - 'auth'    15min /  5 req  — tight cap on /auth/login + /auth/login/otp
-     *                                so password-guessing is impractical
+     *
+     * Auth-specific cap (5 attempts / 15 min for /auth/login) is enforced
+     * via the @Throttle({ default: { limit: 5, ttl: 15*60_000 } }) override
+     * on the auth controller — DO NOT add it as a global named tier here.
+     * Doing so would apply 5/15min to /customers/me, /orders/me, … which
+     * blocks normal app usage instantly.
      */
     ThrottlerModule.forRoot([
-      { name: 'short', ttl: 1_000, limit: 3 },
+      { name: 'short', ttl: 1_000, limit: 10 },
       { name: 'default', ttl: 60_000, limit: 120 },
-      { name: 'auth', ttl: 15 * 60_000, limit: 5 },
     ]),
     PrismaModule,
     AuthModule,
@@ -46,6 +52,9 @@ const optionalModules: DynamicModule['imports'] = vendorsEnabled ? [VendorsModul
     OrdersModule,
     AccountingModule,
     NotificationsModule,
+    PlantModule,
+    UploadsModule,
+    HealthModule,
     ...optionalModules,
   ],
   providers: [

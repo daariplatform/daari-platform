@@ -9,8 +9,10 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { MaterialIcons } from '@expo/vector-icons';
 import {
   useCustomerSearch,
   useWalkinRefill,
@@ -26,19 +28,39 @@ export default function WalkinScreen() {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>('pick');
 
+  const headerTitle =
+    mode === 'pick'
+      ? 'خدمات السائق'
+      : mode === 'lookup'
+        ? 'بيع فوري'
+        : 'تسجيل زبون جديد';
+
   return (
-    <SafeAreaView className="flex-1 bg-slate-50">
-      <View className="bg-white px-4 py-3 border-b border-slate-200 flex-row items-center justify-between">
-        <Pressable onPress={() => router.back()}>
-          <Text className="text-aqua-700">→ رجوع</Text>
-        </Pressable>
-        <Text className="font-bold">
-          {mode === 'pick' && 'الحالة'}
-          {mode === 'lookup' && 'بيع فوري'}
-          {mode === 'register' && 'تسجيل زبون جديد'}
-        </Text>
-        <View className="w-12" />
-      </View>
+    <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
+      {/* Hero header — gradient sky-blue، يطابق باقي شاشات السائق */}
+      <LinearGradient
+        colors={['#7dd3fc', '#38bdf8', '#0ea5e9']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{
+          paddingHorizontal: 16,
+          paddingTop: 14,
+          paddingBottom: 18,
+        }}
+      >
+        <View className="flex-row items-center justify-between mb-1">
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={12}
+            className="flex-row items-center gap-1"
+          >
+            <MaterialIcons name="arrow-forward-ios" size={16} color="#fff" />
+            <Text className="text-white text-sm font-medium">رجوع</Text>
+          </Pressable>
+          <Text className="text-white font-bold text-base">{headerTitle}</Text>
+          <View className="w-12" />
+        </View>
+      </LinearGradient>
 
       {mode === 'pick' && <Picker onPick={setMode} />}
       {mode === 'lookup' && <Lookup onBack={() => setMode('pick')} />}
@@ -49,45 +71,143 @@ export default function WalkinScreen() {
 
 function Picker({ onPick }: { onPick: (m: Mode) => void }) {
   return (
-    <View className="p-5">
-      <Text className="font-bold text-lg text-center mb-1">ما هي الحالة؟</Text>
-      <Text className="text-xs text-slate-500 text-center mb-6">
-        اختر النوع المناسب لإكمال العملية
-      </Text>
+    <ScrollView
+      className="flex-1"
+      contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 18, paddingBottom: 28 }}
+    >
+      {/* Title */}
+      <View className="items-center mb-5">
+        <View
+          style={{
+            width: 64,
+            height: 64,
+            borderRadius: 20,
+            backgroundColor: '#e0f2fe',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 10,
+          }}
+        >
+          <MaterialIcons name="local-shipping" size={36} color="#0284c7" />
+        </View>
+        <Text className="font-bold text-xl text-slate-900">ماذا تريد أن تعمل؟</Text>
+        <Text className="text-xs text-slate-500 mt-1 text-center px-6">
+          اختر الخدمة المناسبة وأكمل العملية في خطوات قليلة
+        </Text>
+      </View>
 
+      {/* Card 1 — Walk-in refill for registered customer */}
       <Pressable
         onPress={() => onPick('lookup')}
-        className="bg-aqua-50 border-2 border-aqua-300 rounded-2xl p-4 mb-3 flex-row items-center gap-3"
+        style={({ pressed }) => ({
+          marginBottom: 12,
+          borderRadius: 20,
+          overflow: 'hidden',
+          transform: [{ scale: pressed ? 0.98 : 1 }],
+        })}
       >
-        <View className="w-12 h-12 bg-aqua-600 rounded-2xl items-center justify-center">
-          <Text className="text-2xl">💧</Text>
-        </View>
-        <View className="flex-1">
-          <Text className="font-bold">بيع فوري — تعبئة زبون مسجّل</Text>
-          <Text className="text-[11px] text-slate-600">
-            مسجّل عندنا لكنه لم يطلب من التطبيق
-          </Text>
-        </View>
+        <LinearGradient
+          colors={['#0ea5e9', '#0284c7', '#075985']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ padding: 18 }}
+        >
+          <View className="flex-row items-center gap-3">
+            <View
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 18,
+                backgroundColor: 'rgba(255,255,255,0.22)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.35)',
+              }}
+            >
+              <MaterialIcons name="water-drop" size={32} color="#fff" />
+            </View>
+            <View className="flex-1">
+              <Text className="text-white font-bold text-base">بيع فوري</Text>
+              <Text className="text-sky-50 text-xs mt-0.5">
+                تعبئة زبون مسجّل في المعمل
+              </Text>
+              <Text className="text-sky-100 text-[11px] mt-1.5">
+                ابحث بالاسم • الهاتف • رقم الخزان
+              </Text>
+            </View>
+            <MaterialIcons name="arrow-back-ios" size={18} color="#fff" />
+          </View>
+        </LinearGradient>
       </Pressable>
 
+      {/* Card 2 — Register a new customer in the field */}
       <Pressable
         onPress={() => onPick('register')}
-        className="bg-leaf-50 border-2 border-leaf-300 rounded-2xl p-4 flex-row items-center gap-3"
+        style={({ pressed }) => ({
+          borderRadius: 20,
+          overflow: 'hidden',
+          transform: [{ scale: pressed ? 0.98 : 1 }],
+        })}
       >
-        <View className="w-12 h-12 bg-leaf-500 rounded-2xl items-center justify-center">
-          <Text className="text-2xl">👤</Text>
-        </View>
-        <View className="flex-1">
-          <Text className="font-bold">تسجيل زبون جديد</Text>
-          <Text className="text-[11px] text-slate-600">
-            شخص غير مسجّل عندنا، يريد خزاناً
-          </Text>
-          <Text className="text-[10px] text-leaf-700 font-bold mt-0.5">
-            مكافأة ٥,٠٠٠ د.ع عند الموافقة
-          </Text>
-        </View>
+        <LinearGradient
+          colors={['#10b981', '#059669', '#065f46']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ padding: 18 }}
+        >
+          <View className="flex-row items-center gap-3">
+            <View
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 18,
+                backgroundColor: 'rgba(255,255,255,0.22)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.35)',
+              }}
+            >
+              <MaterialIcons name="person-add" size={32} color="#fff" />
+            </View>
+            <View className="flex-1">
+              <Text className="text-white font-bold text-base">تسجيل زبون جديد</Text>
+              <Text className="text-emerald-50 text-xs mt-0.5">
+                شخص يريد خزاناً ولم يسجّل بعد
+              </Text>
+              <Text className="text-emerald-100 text-[11px] mt-1.5">
+                سيراجع المعمل البيانات ويوافق
+              </Text>
+            </View>
+            <MaterialIcons name="arrow-back-ios" size={18} color="#fff" />
+          </View>
+        </LinearGradient>
       </Pressable>
-    </View>
+
+      {/* Info footer */}
+      <View
+        className="mt-6 p-4 bg-white rounded-2xl border border-slate-200"
+        style={{
+          shadowColor: '#0f172a',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 8,
+        }}
+      >
+        <View className="flex-row items-start gap-2">
+          <MaterialIcons name="lightbulb-outline" size={18} color="#0284c7" />
+          <View className="flex-1">
+            <Text className="text-slate-900 text-[13px] font-bold text-right">
+              نصيحة
+            </Text>
+            <Text className="text-slate-600 text-[11px] mt-1 leading-5 text-right">
+              عند البيع الفوري، ابحث بـ <Text className="font-bold text-sky-700">رقم الخزان</Text> (مثل T-1001) لتجنّب الالتباس بين الزبائن الذين لهم نفس الاسم.
+            </Text>
+          </View>
+        </View>
+      </View>
+    </ScrollView>
   );
 }
 
@@ -105,12 +225,27 @@ function Lookup({ onBack }: { onBack: () => void }) {
     if (!selected) return;
     setSubmitting(true);
     try {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (perm.status !== 'granted') {
-        Alert.alert('لا يوجد إذن', 'فعّل الكاميرا لإثبات التعبئة');
-        return;
+      // Try the camera first — that's the production path. On iOS Simulator
+      // (no camera hardware) Apple throws "Camera not available on simulator"
+      // so we fall back to the photo library, which the simulator DOES have.
+      // Same fallback also covers users who tap "Don't Allow" on the perm
+      // prompt: better to let them pick an existing photo than abort entirely.
+      let photo: ImagePicker.ImagePickerResult;
+      try {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (perm.status !== 'granted') {
+          throw new Error('camera-permission-denied');
+        }
+        photo = await ImagePicker.launchCameraAsync({ quality: 0.6 });
+      } catch (cameraErr: any) {
+        console.warn('[walkin] camera unavailable, falling back to library:', cameraErr?.message);
+        const libPerm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (libPerm.status !== 'granted') {
+          Alert.alert('لا يوجد إذن', 'فعّل الكاميرا أو معرض الصور لإثبات التعبئة');
+          return;
+        }
+        photo = await ImagePicker.launchImageLibraryAsync({ quality: 0.6 });
       }
-      const photo = await ImagePicker.launchCameraAsync({ quality: 0.6 });
       if (photo.canceled) return;
       const coords = await getCurrentCoords();
       if (!coords) {

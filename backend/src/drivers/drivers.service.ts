@@ -160,4 +160,99 @@ export class DriversService {
 
     return { completedRefills, collectedIqd: collected, breakdown: orders };
   }
+
+  /**
+   * Live locations of all drivers in the tenant. Returns last known
+   * position + an `inactive` flag (true if no location update in 30+
+   * minutes while shift should be running). Dashboard polls this every
+   * ~15s for the live map.
+   */
+  async liveLocations(tenantId: string) {
+    const INACTIVE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+    const now = Date.now();
+    const drivers = await this.prisma.driver.findMany({
+      where: { tenantId },
+      select: {
+        id: true,
+        status: true,
+        currentLng: true,
+        currentLat: true,
+        lastLocationAt: true,
+        vehiclePlate: true,
+        user: { select: { fullName: true, phone: true } },
+      },
+    });
+    return drivers.map((d) => {
+      const ageMs = d.lastLocationAt ? now - d.lastLocationAt.getTime() : null;
+      return {
+        id: d.id,
+        fullName: d.user.fullName,
+        phone: d.user.phone,
+        vehiclePlate: d.vehiclePlate,
+        status: d.status,
+        currentLng: d.currentLng,
+        currentLat: d.currentLat,
+        lastLocationAt: d.lastLocationAt,
+        lastSeenMinutesAgo: ageMs != null ? Math.floor(ageMs / 60_000) : null,
+        // علم inactive: السائق في وردية لكن ما رسل موقع لأكثر من ٣٠ دقيقة
+        inactive:
+          d.status !== 'OFFLINE' &&
+          d.status !== 'ON_BREAK' &&
+          (ageMs == null || ageMs > INACTIVE_THRESHOLD_MS),
+      };
+    });
+  }
+
+  /**
+   * Full GPS trail for a driver on a specific date (YYYY-MM-DD). Returns
+   * ordered list of {lng, lat, recordedAt} for the dashboard to draw a
+   * polyline on the map. Default = today.
+   */
+  async routeForDate(tenantId: string, driverId: string, dateStr?: string) {
+    const day = dateStr ? new Date(dateStr) : new Date();
+    const start = new Date(day);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
+    // أمن: تأكد إن السائق فعلاً ضمن tenant المتصل
+    const driver = await this.prisma.driver.findFirst({
+      where: { id: driverId, tenantId },
+      select: { id: true },
+    });
+    if (!driver) return { points: [], totalKm: 0 };
+
+    const points = await this.prisma.driverLocation.findMany({
+      where: {
+        driverId,
+        recordedAt: { gte: start, lt: end },
+      },
+      orderBy: { recordedAt: 'asc' },
+      select: { lng: true, lat: true, recordedAt: true },
+    });
+
+    // مسافة الـ route التراكمية بالكيلومترات (Haversine بين كل نقطتين)
+    let totalKm = 0;
+    for (let i = 1; i < points.length; i++) {
+      totalKm += haversineKm(
+        points[i - 1].lat,
+        points[i - 1].lng,
+        points[i].lat,
+        points[i].lng,
+      );
+    }
+
+    return { points, totalKm: Math.round(totalKm * 10) / 10 };
+  }
+}
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
 }

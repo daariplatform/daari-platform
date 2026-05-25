@@ -7,25 +7,36 @@ import { useEffect } from 'react';
 import {
   LayoutDashboard,
   Database,
+  Droplet,
   Users,
   Truck,
+  MapPin,
   ClipboardList,
   CreditCard,
   Bell,
+  Settings,
+  BarChart3,
+  Crown,
+  History,
   LogOut,
 } from 'lucide-react';
 
-// `as const` keeps the href values as literal types so Next.js's typed
-// routes (experimental: typedRoutes) accepts them in <Link href={...}>.
-const NAV = [
+// Next.js typed routes — cast href to any since dynamic + new routes break literal narrowing
+const NAV: Array<{ href: string; label: string; icon: any }> = [
   { href: '/dashboard', label: 'الرئيسية', icon: LayoutDashboard },
   { href: '/dashboard/tanks', label: 'الخزانات', icon: Database },
+  { href: '/dashboard/stock', label: 'مخزون المياه', icon: Droplet },
   { href: '/dashboard/customers', label: 'الزبائن', icon: Users },
   { href: '/dashboard/drivers', label: 'السائقون', icon: Truck },
+  { href: '/dashboard/drivers/live', label: 'تتبع مباشر', icon: MapPin },
   { href: '/dashboard/orders', label: 'الطلبات', icon: ClipboardList },
   { href: '/dashboard/accounting', label: 'المحاسبة', icon: CreditCard },
   { href: '/dashboard/notifications', label: 'التنبيهات', icon: Bell },
-] as const;
+  { href: '/dashboard/reports', label: 'التقارير', icon: BarChart3 },
+  { href: '/dashboard/subscription', label: 'الاشتراك والعروض', icon: Crown },
+  { href: '/dashboard/audit-log', label: 'سجل التعديلات', icon: History },
+  { href: '/dashboard/settings', label: 'الإعدادات', icon: Settings },
+];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -54,7 +65,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={item.href as any}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition ${
                   active ? 'bg-primary-50 text-primary-700' : 'hover:bg-slate-50'
                 }`}

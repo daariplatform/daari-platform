@@ -5,6 +5,8 @@ import { api } from '@/lib/api';
 import { fmtDate } from '@/lib/format';
 import { useState } from 'react';
 import { CredentialsModal } from '@/components/credentials-modal';
+import { BulkImportModal } from '@/components/bulk-import-modal';
+import Link from 'next/link';
 
 interface Customer {
   id: string;
@@ -38,6 +40,7 @@ const STATUS: Record<string, { label: string; klass: string }> = {
 export default function CustomersPage() {
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [showBulkImport, setShowBulkImport] = useState(false);
   const [credentials, setCredentials] = useState<{
     phone: string;
     password: string;
@@ -64,6 +67,28 @@ export default function CustomersPage() {
     },
   });
 
+  const approveMutation = useMutation<CreateCustomerResponse, unknown, Customer>({
+    mutationFn: async (customer) =>
+      (await api.post(`/customers/${customer.id}/approve`, {})).data,
+    onSuccess: (approved, customer) => {
+      // Show the freshly minted password to the admin — only chance to see it
+      if (approved.tempPassword) {
+        setCredentials({
+          phone: customer.phone,
+          password: approved.tempPassword,
+          fullName: customer.fullName,
+        });
+      }
+      qc.invalidateQueries({ queryKey: ['customers'] });
+    },
+    onError: (err) => {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'فشل الموافقة على الزبون';
+      alert(msg);
+    },
+  });
+
   const resetMutation = useMutation<ResetPasswordResponse, unknown, Customer>({
     mutationFn: async (customer) =>
       (await api.post(`/customers/${customer.id}/reset-password`, {})).data,
@@ -74,10 +99,45 @@ export default function CustomersPage() {
         fullName: customer.fullName,
       });
     },
+    onError: (err) => {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'فشل إعادة تعيين كلمة المرور';
+      alert(msg);
+    },
   });
+
+  // Lead alert — count customers PENDING_APPROVAL so the admin sees a
+  // prominent reminder. These are prospects who registered themselves via
+  // the customer mobile's discovery flow.
+  const pendingCount = (data ?? []).filter((c) => c.status === 'PENDING_APPROVAL').length;
 
   return (
     <div className="space-y-6">
+      {pendingCount > 0 && (
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-amber-200 flex items-center justify-center text-amber-800">
+              🔔
+            </div>
+            <div>
+              <div className="font-bold text-amber-900 text-sm">
+                {pendingCount} طلب جديد بانتظار الموافقة
+              </div>
+              <div className="text-amber-700 text-xs">
+                زبائن سجّلوا أنفسهم عبر التطبيق — راجع وأنشئ توصيل خزان
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => setSearch('بانتظار')}
+            className="text-amber-800 text-sm font-medium hover:underline"
+          >
+            عرض ←
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">الزبائن</h1>
@@ -85,11 +145,17 @@ export default function CustomersPage() {
         </div>
         <div className="flex gap-2">
           <input
-            placeholder="بحث بالاسم أو الهاتف"
+            placeholder="بحث بالاسم، الهاتف، العنوان، أو رقم الخزان"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="border rounded-lg px-3 py-2 w-64"
+            className="border rounded-lg px-3 py-2 w-80"
           />
+          <button
+            onClick={() => setShowBulkImport(true)}
+            className="px-4 py-2 border border-aqua-600 text-aqua-700 hover:bg-aqua-50 rounded-lg text-sm font-medium whitespace-nowrap"
+          >
+            📥 استيراد Excel
+          </button>
           <button
             onClick={() => setShowCreate(true)}
             className="px-4 py-2 bg-aqua-600 hover:bg-aqua-700 text-white rounded-lg text-sm font-medium whitespace-nowrap"
@@ -106,6 +172,7 @@ export default function CustomersPage() {
               <th className="text-right px-4 py-3">الاسم</th>
               <th className="text-right px-4 py-3">الهاتف</th>
               <th className="text-right px-4 py-3">المنطقة</th>
+              <th className="text-right px-4 py-3">الخزانات</th>
               <th className="text-right px-4 py-3">الحالة</th>
               <th className="text-right px-4 py-3">عدد التعبئات</th>
               <th className="text-right px-4 py-3">آخر تعبئة</th>
@@ -115,9 +182,33 @@ export default function CustomersPage() {
           <tbody>
             {data?.map((c) => (
               <tr key={c.id} className="border-t hover:bg-slate-50">
-                <td className="px-4 py-3 font-medium">{c.fullName}</td>
+                <td className="px-4 py-3 font-medium">
+                  <Link
+                    href={`/dashboard/customers/${c.id}` as any}
+                    className="text-aqua-700 hover:text-aqua-900 hover:underline"
+                  >
+                    {c.fullName}
+                  </Link>
+                </td>
                 <td className="px-4 py-3" dir="ltr">{c.phone}</td>
                 <td className="px-4 py-3">{c.district}</td>
+                <td className="px-4 py-3">
+                  {c.tanks && c.tanks.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {c.tanks.map((t) => (
+                        <span
+                          key={t.id}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-sky-50 text-sky-700 rounded text-[11px] font-mono border border-sky-200"
+                          title={`سعة: ${t.capacity}`}
+                        >
+                          {t.qrCode}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-slate-300 text-xs">—</span>
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-1 rounded text-xs ${STATUS[c.status].klass}`}>
                     {STATUS[c.status].label}
@@ -126,23 +217,42 @@ export default function CustomersPage() {
                 <td className="px-4 py-3">{c.totalRefills}</td>
                 <td className="px-4 py-3 text-slate-500">{fmtDate(c.lastRefillAt)}</td>
                 <td className="px-4 py-3">
-                  <button
-                    onClick={() => {
-                      if (confirm(`إعادة تعيين كلمة المرور لـ ${c.fullName}؟`)) {
-                        resetMutation.mutate(c);
-                      }
-                    }}
-                    disabled={resetMutation.isPending}
-                    className="text-xs text-aqua-700 hover:text-aqua-900 disabled:opacity-50"
-                  >
-                    🔑 إعادة تعيين كلمة المرور
-                  </button>
+                  <div className="flex flex-col gap-1 items-end">
+                    {c.status === 'PENDING_APPROVAL' && (
+                      <button
+                        onClick={() => {
+                          if (
+                            confirm(
+                              `الموافقة على ${c.fullName}؟ سيُنشأ له حساب دخول وستُدفع المكافأة للسائق الذي سجّله.`,
+                            )
+                          ) {
+                            approveMutation.mutate(c);
+                          }
+                        }}
+                        disabled={approveMutation.isPending}
+                        className="text-xs text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1 rounded font-medium disabled:opacity-50"
+                      >
+                        ✓ موافقة
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (confirm(`إعادة تعيين كلمة المرور لـ ${c.fullName}؟`)) {
+                          resetMutation.mutate(c);
+                        }
+                      }}
+                      disabled={resetMutation.isPending}
+                      className="text-xs text-aqua-700 hover:text-aqua-900 disabled:opacity-50"
+                    >
+                      🔑 إعادة تعيين كلمة المرور
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
             {data?.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-400 text-sm">
+                <td colSpan={8} className="px-4 py-8 text-center text-slate-400 text-sm">
                   لا يوجد زبائن بعد — اضغط &quot;إضافة زبون&quot; للبدء.
                 </td>
               </tr>
@@ -170,6 +280,13 @@ export default function CustomersPage() {
         onClose={() => setCredentials(null)}
         role="customer"
       />
+
+      {showBulkImport && (
+        <BulkImportModal
+          onClose={() => setShowBulkImport(false)}
+          onImported={() => qc.invalidateQueries({ queryKey: ['customers'] })}
+        />
+      )}
     </div>
   );
 }

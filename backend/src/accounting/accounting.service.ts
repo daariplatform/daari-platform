@@ -73,9 +73,26 @@ export class AccountingService {
     const refills = completedAgg._count._all;
     const performanceBonusIqd = completedAgg._sum.bonusIqd ?? 0;
 
+    // Sum every new-customer bonus the driver earned in this period — i.e.
+    // every customer they registered in the field that the plant approved
+    // during [periodStart, periodEnd]. The bonus rate was snapshotted onto
+    // the Customer row at approval time, so changing the rate in settings
+    // later doesn't retroactively rewrite already-paid salaries.
+    const registrationAgg = await this.prisma.customer.aggregate({
+      where: {
+        tenantId,
+        onboardedByDriverId: driverId,
+        approvedAt: { gte: periodStart, lte: periodEnd },
+      },
+      _count: { _all: true },
+      _sum: { registrationBonusIqd: true },
+    });
+    const registrationBonusIqd = registrationAgg._sum.registrationBonusIqd ?? 0;
+
     const commissionIqd = refills * driver.commissionPerRefillIqd;
+    const totalBonusIqd = bonusIqd + performanceBonusIqd + registrationBonusIqd;
     const netIqd =
-      driver.baseSalaryIqd + commissionIqd + performanceBonusIqd + bonusIqd - deductionIqd;
+      driver.baseSalaryIqd + commissionIqd + totalBonusIqd - deductionIqd;
 
     return this.prisma.salaryPayment.create({
       data: {
@@ -85,7 +102,7 @@ export class AccountingService {
         periodEnd,
         baseIqd: driver.baseSalaryIqd,
         commissionIqd,
-        bonusIqd: bonusIqd + performanceBonusIqd,
+        bonusIqd: totalBonusIqd,
         deductionIqd,
         netIqd,
       },

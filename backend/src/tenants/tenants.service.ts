@@ -66,29 +66,89 @@ export class TenantsService {
   }
 
   async getDashboardStats(tenantId: string) {
-    const [tankCount, customerCount, driverCount, todaysRefills, atRiskCustomers] = await Promise.all([
-      this.prisma.tank.count({ where: { tenantId } }),
-      this.prisma.customer.count({ where: { tenantId } }),
-      this.prisma.driver.count({ where: { tenantId } }),
-      this.prisma.refillOrder.count({
+    const [tankCount, customerCount, driverCount, todaysRefills, atRiskCustomers, activeDriverCount] =
+      await Promise.all([
+        this.prisma.tank.count({ where: { tenantId } }),
+        this.prisma.customer.count({ where: { tenantId } }),
+        this.prisma.driver.count({ where: { tenantId } }),
+        this.prisma.refillOrder.count({
+          where: {
+            tenantId,
+            status: 'COMPLETED',
+            completedAt: { gte: startOfDay() },
+          },
+        }),
+        this.prisma.customer.count({
+          where: { tenantId, status: 'AT_RISK' },
+        }),
+        this.prisma.driver.count({
+          where: { tenantId, status: { in: ['AVAILABLE', 'ON_ROUTE'] } },
+        }),
+      ]);
+
+    // Revenue periods
+    const [todayRev, weekRev, monthRev] = await Promise.all([
+      this.prisma.refillOrder.aggregate({
+        where: { tenantId, status: 'COMPLETED', completedAt: { gte: startOfDay() } },
+        _sum: { paidAmountIqd: true },
+      }),
+      this.prisma.refillOrder.aggregate({
         where: {
           tenantId,
           status: 'COMPLETED',
-          completedAt: { gte: startOfDay() },
+          completedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
         },
+        _sum: { paidAmountIqd: true },
       }),
-      this.prisma.customer.count({
-        where: { tenantId, status: 'AT_RISK' },
+      this.prisma.refillOrder.aggregate({
+        where: { tenantId, status: 'COMPLETED', completedAt: { gte: startOfMonth() } },
+        _sum: { paidAmountIqd: true },
       }),
     ]);
 
-    const monthRevenue = await this.prisma.refillOrder.aggregate({
-      where: {
-        tenantId,
-        status: 'COMPLETED',
-        completedAt: { gte: startOfMonth() },
-      },
+    // Revenue by day (last 7 days)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const recentOrders = await this.prisma.refillOrder.findMany({
+      where: { tenantId, status: 'COMPLETED', completedAt: { gte: sevenDaysAgo } },
+      select: { completedAt: true, paidAmountIqd: true },
+    });
+    const byDay = new Map<string, { revenueIqd: number; refills: number }>();
+    for (const o of recentOrders) {
+      if (!o.completedAt) continue;
+      const key = o.completedAt.toISOString().slice(0, 10);
+      const cur = byDay.get(key) ?? { revenueIqd: 0, refills: 0 };
+      cur.revenueIqd += o.paidAmountIqd;
+      cur.refills += 1;
+      byDay.set(key, cur);
+    }
+    const revenueByDay = Array.from(byDay.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, v]) => ({ date: date.slice(5), ...v }));
+
+    // Top 5 customers by total refill spend (lifetime)
+    const topCustomersAgg = await this.prisma.refillOrder.groupBy({
+      by: ['customerId'],
+      where: { tenantId, status: 'COMPLETED' },
       _sum: { paidAmountIqd: true },
+      _count: true,
+      orderBy: { _sum: { paidAmountIqd: 'desc' } },
+      take: 5,
+    });
+    const customerIds = topCustomersAgg.map((c) => c.customerId).filter((id): id is string => !!id);
+    const customers = customerIds.length
+      ? await this.prisma.customer.findMany({
+          where: { id: { in: customerIds } },
+          select: { id: true, fullName: true, balanceIqd: true },
+        })
+      : [];
+    const topCustomers = topCustomersAgg.map((agg) => {
+      const c = customers.find((x) => x.id === agg.customerId);
+      return {
+        id: agg.customerId,
+        fullName: c?.fullName ?? 'مجهول',
+        totalRefills: agg._count,
+        balanceIqd: c?.balanceIqd ?? 0,
+      };
     });
 
     return {
@@ -97,7 +157,153 @@ export class TenantsService {
       driverCount,
       todaysRefills,
       atRiskCustomers,
-      monthRevenueIqd: monthRevenue._sum.paidAmountIqd ?? 0,
+      todayRevenueIqd: todayRev._sum.paidAmountIqd ?? 0,
+      weekRevenueIqd: weekRev._sum.paidAmountIqd ?? 0,
+      monthRevenueIqd: monthRev._sum.paidAmountIqd ?? 0,
+      revenueByDay,
+      topCustomers,
+      activeDrivers: Array.from({ length: activeDriverCount }, (_, i) => ({
+        id: `${i}`,
+        fullName: '',
+        status: 'AVAILABLE',
+        todayDeliveries: 0,
+      })),
+    };
+  }
+
+  /**
+   * Plant settings — أسعار، ساعات عمل، نطاق توصيل.
+   * يقرأ كل الحقول من جدول Tenant.
+   */
+  async getSettings(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) throw new Error('Tenant not found');
+    return {
+      name: tenant.name,
+      ownerName: tenant.ownerName,
+      ownerPhone: tenant.ownerPhone,
+      city: tenant.city,
+      refillPriceIqd: (tenant as any).refillPriceIqd ?? 1000,
+      deliveryFeeIqd: (tenant as any).deliveryFeeIqd ?? 0,
+      freeDeliveryThresholdIqd: (tenant as any).freeDeliveryThresholdIqd ?? null,
+      coverageKm: tenant.coverageKm ?? 7,
+      workingHoursStart: (tenant as any).workingHoursStart ?? '08:00',
+      workingHoursEnd: (tenant as any).workingHoursEnd ?? '22:00',
+      refillBonusIqd: tenant.refillBonusIqd ?? 0,
+      newCustomerBonusIqd: tenant.newCustomerBonusIqd ?? 0,
+    };
+  }
+
+  async updateSettings(tenantId: string, input: Record<string, unknown>) {
+    // Whitelist الحقول القابلة للتعديل من Settings page
+    const allowed: Record<string, unknown> = {};
+    const intFields = [
+      'coverageKm',
+      'refillPriceIqd', 'deliveryFeeIqd', 'freeDeliveryThresholdIqd',
+      'refillBonusIqd', 'newCustomerBonusIqd',
+    ];
+    const stringFields = [
+      'name', 'ownerName', 'city',
+      'workingHoursStart', 'workingHoursEnd',
+    ];
+    for (const f of intFields) {
+      if (input[f] !== undefined && input[f] !== null && input[f] !== '') {
+        allowed[f] = Number(input[f]);
+      } else if (f === 'freeDeliveryThresholdIqd' && (input[f] === null || Number(input[f]) === 0)) {
+        allowed[f] = null;
+      }
+    }
+    for (const f of stringFields) {
+      if (input[f] !== undefined && input[f] !== null) {
+        allowed[f] = String(input[f]);
+      }
+    }
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: allowed,
+    });
+    return this.getSettings(tenantId);
+  }
+
+  /**
+   * Reports — analytics للـ admin بفترة (week/month/year).
+   */
+  async getReports(tenantId: string, range: 'week' | 'month' | 'year') {
+    const since = new Date();
+    if (range === 'week') since.setDate(since.getDate() - 7);
+    else if (range === 'month') since.setMonth(since.getMonth() - 1);
+    else since.setFullYear(since.getFullYear() - 1);
+
+    const [revenueAgg, ordersCount, newCustomers, orders, statusAgg] = await Promise.all([
+      this.prisma.refillOrder.aggregate({
+        where: { tenantId, status: 'COMPLETED', completedAt: { gte: since } },
+        _sum: { paidAmountIqd: true },
+      }),
+      this.prisma.refillOrder.count({
+        where: { tenantId, requestedAt: { gte: since } },
+      }),
+      this.prisma.customer.count({
+        where: { tenantId, registeredAt: { gte: since } },
+      }),
+      this.prisma.refillOrder.findMany({
+        where: { tenantId, status: 'COMPLETED', completedAt: { gte: since } },
+        select: { completedAt: true, paidAmountIqd: true },
+      }),
+      this.prisma.refillOrder.groupBy({
+        by: ['status'],
+        where: { tenantId, requestedAt: { gte: since } },
+        _count: true,
+      }),
+    ]);
+
+    // refills by day
+    const byDay = new Map<string, { refills: number; revenue: number }>();
+    for (const o of orders) {
+      if (!o.completedAt) continue;
+      const key = o.completedAt.toISOString().slice(0, 10);
+      const cur = byDay.get(key) ?? { refills: 0, revenue: 0 };
+      cur.refills += 1;
+      cur.revenue += o.paidAmountIqd;
+      byDay.set(key, cur);
+    }
+    const refillsByDay = Array.from(byDay.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, v]) => ({ date: date.slice(5), ...v }));
+
+    // Top 10 customers
+    const topAgg = await this.prisma.refillOrder.groupBy({
+      by: ['customerId'],
+      where: { tenantId, status: 'COMPLETED', completedAt: { gte: since } },
+      _sum: { paidAmountIqd: true },
+      _count: true,
+      orderBy: { _sum: { paidAmountIqd: 'desc' } },
+      take: 10,
+    });
+    const ids = topAgg.map((c) => c.customerId).filter((id): id is string => !!id);
+    const customerRows = ids.length
+      ? await this.prisma.customer.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, fullName: true },
+        })
+      : [];
+    const topCustomers = topAgg.map((agg) => {
+      const c = customerRows.find((x) => x.id === agg.customerId);
+      return {
+        id: agg.customerId,
+        name: c?.fullName ?? 'مجهول',
+        refills: agg._count,
+        revenue: agg._sum.paidAmountIqd ?? 0,
+      };
+    });
+
+    return {
+      range,
+      totalRevenue: revenueAgg._sum.paidAmountIqd ?? 0,
+      totalOrders: ordersCount,
+      newCustomers,
+      refillsByDay,
+      topCustomers,
+      ordersByStatus: statusAgg.map((s) => ({ status: s.status, count: s._count })),
     };
   }
 
@@ -177,6 +383,58 @@ export class TenantsService {
     // Prefer a plant whose coverage circle actually contains the customer.
     const inside = ranked.find((c) => c.distanceKm <= c.coverageKm);
     return inside ?? ranked[0] ?? null;
+  }
+
+  /**
+   * Public discovery — returns up to N plants ordered by distance, plus
+   * the consumer-facing fields they need to pick one (price, hours, etc).
+   * Used by the customer mobile's "find a plant" Welcome flow.
+   */
+  async discoverPlants(lng: number, lat: number, maxDistanceKm = 30) {
+    const candidates = await this.prisma.tenant.findMany({
+      where: {
+        status: { in: [TenantStatus.ACTIVE, TenantStatus.TRIAL] },
+        coverageLat: { not: null },
+        coverageLng: { not: null },
+      },
+      select: {
+        id: true,
+        name: true,
+        city: true,
+        ownerPhone: true,
+        coverageLat: true,
+        coverageLng: true,
+        coverageKm: true,
+        refillPriceIqd: true,
+        deliveryFeeIqd: true,
+        workingHoursStart: true,
+        workingHoursEnd: true,
+      },
+    });
+    return candidates
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        city: c.city,
+        contactPhone: c.ownerPhone,
+        refillPriceIqd: c.refillPriceIqd ?? 1000,
+        deliveryFeeIqd: c.deliveryFeeIqd ?? 0,
+        workingHoursStart: c.workingHoursStart ?? '08:00',
+        workingHoursEnd: c.workingHoursEnd ?? '22:00',
+        coverageKm: c.coverageKm ?? 7,
+        distanceKm: Number(
+          haversineKm(lat, lng, c.coverageLat!, c.coverageLng!).toFixed(2),
+        ),
+        servesYourArea:
+          haversineKm(lat, lng, c.coverageLat!, c.coverageLng!) <= (c.coverageKm ?? 7),
+      }))
+      .filter((c) => c.distanceKm <= maxDistanceKm)
+      .sort((a, b) => {
+        // Plants whose coverage circle includes the customer come first
+        if (a.servesYourArea !== b.servesYourArea) return a.servesYourArea ? -1 : 1;
+        return a.distanceKm - b.distanceKm;
+      })
+      .slice(0, 10);
   }
 
   // ─── Platform admin operations ────────────────────────────────────────

@@ -83,3 +83,9 @@ mockup-server.log
 # ─── Personal notes (not for repo) ────────────────
 notes-private/
 TODO.private.md
+
+# ─── Build artifacts (too big for git) ────────────
+*.aab
+*.apk
+*.ipa
+store-assets/aabs/bundletool.jar

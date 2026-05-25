@@ -1,8 +1,11 @@
 import { ScrollView, View, Text, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/lib/auth-store';
 import { useMyProfile } from '@/lib/queries';
+import { api } from '@/lib/api';
 import { iqd } from '@/lib/format';
 
 export default function Profile() {
@@ -13,79 +16,215 @@ export default function Profile() {
   if (isLoading || !profile) {
     return (
       <SafeAreaView className="flex-1 bg-slate-50 items-center justify-center">
-        <ActivityIndicator color="#0891b2" />
+        <ActivityIndicator color="#0284c7" />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
-      <ScrollView className="flex-1 px-4 pt-4" contentContainerStyle={{ paddingBottom: 24 }}>
-        <View className="bg-aqua-600 rounded-2xl p-5 items-center">
-          <View className="w-20 h-20 rounded-full bg-white/20 items-center justify-center mb-2">
-            <Text className="text-4xl">👤</Text>
+    <View className="flex-1 bg-slate-50">
+      {/* Sky gradient header — يطابق الـ home */}
+      <LinearGradient
+        colors={['#38bdf8', '#0ea5e9', '#0284c7']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={{
+          paddingBottom: 24,
+          borderBottomLeftRadius: 28,
+          borderBottomRightRadius: 28,
+        }}
+      >
+        <SafeAreaView edges={['top']}>
+          <View className="px-4 pt-2 items-center">
+            {/* Avatar */}
+            <View
+              style={{
+                width: 84,
+                height: 84,
+                borderRadius: 42,
+                backgroundColor: 'rgba(255,255,255,0.22)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 2,
+                borderColor: 'rgba(255,255,255,0.35)',
+              }}
+            >
+              <MaterialIcons name="person" size={48} color="#fff" />
+            </View>
+            <Text className="text-white font-bold text-lg mt-3">{profile.fullName}</Text>
+            <Text className="text-sky-100 text-xs mt-0.5">{profile.phone}</Text>
           </View>
-          <Text className="text-white font-bold text-lg">{profile.fullName}</Text>
-          <Text className="text-aqua-100 text-xs mt-0.5">{profile.phone}</Text>
-        </View>
+        </SafeAreaView>
+      </LinearGradient>
 
-        <View className="bg-white rounded-2xl shadow-sm mt-3">
-          <Row label="العنوان" value={profile.addressLine} />
-          <Row label="المنطقة" value={profile.district} />
+      <ScrollView
+        className="flex-1 px-4"
+        contentContainerStyle={{ paddingBottom: 32, paddingTop: 14 }}
+      >
+        {/* Profile details card */}
+        <View
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: 18,
+            shadowColor: '#0f172a',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.04,
+            shadowRadius: 8,
+            elevation: 1,
+            overflow: 'hidden',
+          }}
+        >
+          <Row icon="place" label="العنوان" value={profile.addressLine} />
+          <Row icon="map" label="المنطقة" value={profile.district} />
           <Row
+            icon="local-drink"
             label="إجمالي التعبئات"
-            value={String(profile.totalRefills)}
-            highlight="text-aqua-700"
+            value={profile.totalRefills.toLocaleString('ar-IQ')}
+            highlight="#0284c7"
           />
           <Row
+            icon={profile.balanceIqd === 0 ? 'verified' : 'account-balance-wallet'}
             label="الرصيد"
             value={profile.balanceIqd === 0 ? 'مدفوع' : iqd(profile.balanceIqd)}
-            highlight={profile.balanceIqd >= 0 ? 'text-leaf-600' : 'text-danger-600'}
+            highlight={profile.balanceIqd >= 0 ? '#10b981' : '#dc2626'}
             last
           />
         </View>
 
+        {/* Contract signed indicator */}
         {profile.acceptedTermsAt && (
-          <View className="bg-leaf-50 border border-leaf-200 rounded-2xl p-4 mt-3 flex-row gap-2">
-            <Text className="text-leaf-600 text-lg">📝</Text>
-            <View className="flex-1">
-              <Text className="font-bold text-sm text-leaf-800 text-right">عقدك موقّع</Text>
-              <Text className="text-[11px] text-leaf-700 text-right">
-                وقّعتَ شروط الخدمة في {new Date(profile.acceptedTermsAt).toLocaleDateString('ar-IQ')}
+          <View
+            style={{
+              backgroundColor: '#f0fdf4',
+              borderColor: '#bbf7d0',
+              borderWidth: 1,
+              borderRadius: 14,
+              padding: 12,
+              marginTop: 12,
+              flexDirection: 'row-reverse',
+              alignItems: 'center',
+              gap: 10,
+            }}
+          >
+            <MaterialIcons name="task-alt" size={22} color="#059669" />
+            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+              <Text style={{ color: '#065f46', fontWeight: '700', fontSize: 12 }}>عقدك موقّع</Text>
+              <Text style={{ color: '#047857', fontSize: 10, marginTop: 2 }}>
+                وقّعت شروط الخدمة في{' '}
+                {new Date(profile.acceptedTermsAt).toLocaleDateString('ar-IQ')}
               </Text>
             </View>
           </View>
         )}
 
+        {/* Action: I moved */}
         <Pressable
           onPress={() =>
             Alert.alert('انتقلت لبيت جديد؟', 'فعّل GPS عند البيت الجديد وسنحدّث عنوانك تلقائياً')
           }
-          className="bg-white rounded-2xl py-4 shadow-sm mt-3 flex-row items-center justify-center gap-2"
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: 14,
+            paddingVertical: 14,
+            paddingHorizontal: 14,
+            marginTop: 12,
+            flexDirection: 'row-reverse',
+            alignItems: 'center',
+            gap: 10,
+            shadowColor: '#0f172a',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.04,
+            shadowRadius: 4,
+            elevation: 1,
+          }}
         >
-          <Text className="text-warn-600 font-bold">📦 انتقلت لبيت جديد</Text>
+          <MaterialIcons name="move-up" size={22} color="#d97706" />
+          <Text style={{ color: '#d97706', fontWeight: '700', fontSize: 13, flex: 1, textAlign: 'right' }}>
+            انتقلت لبيت جديد
+          </Text>
+          <MaterialIcons name="chevron-left" size={22} color="#94a3b8" />
         </Pressable>
 
+        {/* Logout */}
         <Pressable
           onPress={async () => {
             await logout();
             router.replace('/(auth)/login');
           }}
-          className="bg-white rounded-2xl py-4 shadow-sm mt-3"
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: 14,
+            paddingVertical: 14,
+            paddingHorizontal: 14,
+            marginTop: 12,
+            flexDirection: 'row-reverse',
+            alignItems: 'center',
+            gap: 10,
+            shadowColor: '#0f172a',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.04,
+            shadowRadius: 4,
+            elevation: 1,
+          }}
         >
-          <Text className="text-danger-600 font-bold text-center">↩️ تسجيل خروج</Text>
+          <MaterialIcons name="logout" size={22} color="#dc2626" />
+          <Text style={{ color: '#dc2626', fontWeight: '700', fontSize: 13, flex: 1, textAlign: 'right' }}>
+            تسجيل خروج
+          </Text>
+        </Pressable>
+
+        {/* Delete account — App Store / Play Store legal requirement.
+            Double-confirm because the action is destructive + irreversible. */}
+        <Pressable
+          onPress={() => {
+            Alert.alert(
+              'حذف الحساب',
+              'سيتم حذف بياناتك الشخصية نهائياً. الطلبات المكتملة تبقى في سجل المعمل المحاسبي. لن تستطيع تسجيل الدخول بعد الحذف.',
+              [
+                { text: 'إلغاء', style: 'cancel' },
+                {
+                  text: 'تأكيد الحذف',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await api.delete('/auth/me');
+                      await logout();
+                      router.replace('/(auth)/login');
+                      Alert.alert('تم الحذف', 'شكراً لاستخدامك داري.');
+                    } catch (e: any) {
+                      Alert.alert(
+                        'فشل الحذف',
+                        e?.response?.data?.message ?? 'حاول مرة أخرى',
+                      );
+                    }
+                  },
+                },
+              ],
+            );
+          }}
+          style={{
+            marginTop: 16,
+            paddingVertical: 12,
+            alignItems: 'center',
+          }}
+        >
+          <Text style={{ color: '#94a3b8', fontSize: 11, textDecorationLine: 'underline' }}>
+            حذف حسابي نهائياً
+          </Text>
         </Pressable>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 function Row({
+  icon,
   label,
   value,
   highlight,
   last,
 }: {
+  icon: React.ComponentProps<typeof MaterialIcons>['name'];
   label: string;
   value: string;
   highlight?: string;
@@ -93,12 +232,38 @@ function Row({
 }) {
   return (
     <View
-      className={`flex-row justify-between items-center px-4 py-3 ${
-        last ? '' : 'border-b border-slate-100'
-      }`}
+      style={{
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: 10,
+        paddingHorizontal: 14,
+        paddingVertical: 13,
+        borderBottomWidth: last ? 0 : 1,
+        borderBottomColor: '#f1f5f9',
+      }}
     >
-      <Text className="text-slate-500 text-sm">{label}</Text>
-      <Text className={`font-bold text-sm ${highlight ?? 'text-slate-900'}`}>{value}</Text>
+      <View
+        style={{
+          backgroundColor: '#e0f2fe',
+          width: 32,
+          height: 32,
+          borderRadius: 10,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <MaterialIcons name={icon} size={18} color="#0284c7" />
+      </View>
+      <Text style={{ color: '#64748b', fontSize: 12, flex: 1, textAlign: 'right' }}>{label}</Text>
+      <Text
+        style={{
+          color: highlight ?? '#0f172a',
+          fontWeight: '900',
+          fontSize: 13,
+        }}
+      >
+        {value}
+      </Text>
     </View>
   );
 }

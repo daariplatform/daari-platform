@@ -102,11 +102,12 @@ async function main() {
     });
   }
 
-  // a few tanks
+  // a few tanks — now scoped per-tenant since qrCode is composite-unique
+  // on (tenantId, qrCode). Two seeded plants can use T-1001 independently.
   for (let i = 1; i <= 3; i++) {
     const serial = `T-${1000 + i}`;
     await prisma.tank.upsert({
-      where: { qrCode: serial },
+      where: { tenantId_qrCode: { tenantId: tenant.id, qrCode: serial } },
       update: {},
       create: {
         tenantId: tenant.id,

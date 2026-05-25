@@ -49,7 +49,9 @@ export const useAuth = create<AuthState>((set) => ({
       const { data } = await api.post('/auth/login', { phone, password });
       await setTokens(data.accessToken, data.refreshToken);
       const me = await api.get<MeResponse>('/auth/me');
-      set({ user: me.data, capabilities: me.data.capabilities });
+      // مهم: نطفي demoMode صراحةً — لو كان المستخدم في demo قبل، الـ queries
+      // كانت لسه ترجع DEMO_PROFILE حتى بعد تسجيل دخول حقيقي.
+      set({ user: me.data, capabilities: me.data.capabilities, demoMode: false });
     } finally {
       set({ loading: false });
     }
@@ -61,7 +63,7 @@ export const useAuth = create<AuthState>((set) => ({
       const { data } = await api.post('/auth/login/otp', { phone, otp, fullName });
       await setTokens(data.accessToken, data.refreshToken);
       const me = await api.get<MeResponse>('/auth/me');
-      set({ user: me.data, capabilities: me.data.capabilities });
+      set({ user: me.data, capabilities: me.data.capabilities, demoMode: false });
     } finally {
       set({ loading: false });
     }

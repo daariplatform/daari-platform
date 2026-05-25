@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto';
 interface CreateTankInput {
   serialNumber: string;
   capacity: TankCapacity;
+  qrCode?: string;
 }
 
 @Injectable()
@@ -13,7 +14,12 @@ export class TanksService {
   constructor(private prisma: PrismaService) {}
 
   async create(tenantId: string, input: CreateTankInput) {
-    const qrCode = `MAA-${tenantId.slice(0, 6)}-${randomUUID().slice(0, 8)}`.toUpperCase();
+    // Prefer the operator-supplied code so printed stickers can stay short
+    // and human-readable (T-1001, T-1002 …). Fall back to a long unique
+    // code only when nothing was provided.
+    const qrCode =
+      input.qrCode?.trim() ||
+      `MAA-${tenantId.slice(0, 6)}-${randomUUID().slice(0, 8)}`.toUpperCase();
     return this.prisma.tank.create({
       data: {
         tenantId,
@@ -75,29 +81,29 @@ export class TanksService {
   /**
    * Look up a tank by its QR code, scoped to the caller's plant.
    *
-   * Three distinct failure modes — keep them distinct so the driver app
-   * shows the correct error message instead of a generic "not found":
-   *  - QR doesn't exist anywhere  → invalid QR
-   *  - QR belongs to another plant → cross-tenant violation
-   *  - QR exists in this plant but unassigned → no customer to refill
+   * Since QR codes are now per-tenant unique (two plants can legitimately
+   * issue T-1001 to different customers), we scope the lookup to the
+   * caller's tenant from the start. We deliberately do NOT tell the driver
+   * "this tank belongs to another plant" — that would leak existence of
+   * cross-tenant data. Just "not in your plant" is the right UX.
+   *
+   * Two failure modes left:
+   *  - QR not in this plant  → unknown to you
+   *  - QR in this plant but unassigned → no customer to refill
    */
   async findByQr(tenantId: string, qrCode: string) {
-    const tankAnywhere = await this.prisma.tank.findUnique({
-      where: { qrCode },
-      include: { customer: true, tenant: { select: { id: true, name: true } } },
+    const tank = await this.prisma.tank.findFirst({
+      where: { tenantId, qrCode },
+      include: { customer: true },
     });
-    if (!tankAnywhere) {
-      throw new NotFoundException('QR code does not match any tank');
-    }
-    if (tankAnywhere.tenantId !== tenantId) {
-      throw new ForbiddenException(
-        `This tank belongs to another plant (${tankAnywhere.tenant.name}). ` +
-          `Per inter-plant agreement, you may not refill it.`,
+    if (!tank) {
+      throw new NotFoundException(
+        `لا يوجد خزان بهذا الرقم (${qrCode}) في معملك`,
       );
     }
-    if (!tankAnywhere.customerId) {
+    if (!tank.customerId) {
       throw new BadRequestException('Tank exists but is not assigned to a customer');
     }
-    return tankAnywhere;
+    return tank;
   }
 }

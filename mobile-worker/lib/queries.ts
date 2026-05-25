@@ -93,6 +93,25 @@ export function useCompleteOrder() {
       const { data } = await api.post(`/orders/${orderId}/complete`, body);
       return data;
     },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.myTodayTasks });
+      qc.invalidateQueries({ queryKey: queryKeys.myHistory });
+    },
+  });
+}
+
+/**
+ * Driver hits "ابدأ الجولة" — transitions the order from ASSIGNED → EN_ROUTE.
+ * The customer's app picks up the new status on its next poll (every 15s)
+ * and shows the "السائق متجه إليك" badge.
+ */
+export function useStartOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (orderId: string) => {
+      const { data } = await api.post(`/orders/${orderId}/start`);
+      return data;
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.myTodayTasks }),
   });
 }

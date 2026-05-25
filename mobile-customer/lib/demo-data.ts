@@ -16,6 +16,7 @@ export const DEMO_PROFILE: CustomerProfile = {
   lastRefillAt: '2026-04-23T10:00:00Z',
   acceptedTermsAt: '2025-09-12T10:00:00Z',
   movedAt: null,
+  refillPriceIqd: 1000,
   tanks: [
     {
       id: 'demo-tank',

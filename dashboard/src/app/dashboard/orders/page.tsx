@@ -1,9 +1,10 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { fmtDate } from '@/lib/format';
-import { iqd } from '@/lib/format';
+import { fmtDate, iqd } from '@/lib/format';
+import { Truck, UserCheck, X, Phone, MapPin, Clock, ChevronDown } from 'lucide-react';
 
 interface Order {
   id: string;
@@ -13,22 +14,39 @@ interface Order {
   paidAmountIqd: number;
   requestedAt: string;
   completedAt: string | null;
-  customer: { fullName: string; phone: string; district: string };
+  customer: { id: string; fullName: string; phone: string; district: string };
   driver: { id: string; user: { fullName: string } } | null;
   tank: { qrCode: string; capacity: string } | null;
 }
 
-const STATUS: Record<string, { label: string; klass: string }> = {
-  PENDING: { label: 'قيد الانتظار', klass: 'bg-slate-100 text-slate-700' },
-  ASSIGNED: { label: 'مُسنَد', klass: 'bg-blue-50 text-blue-700' },
-  EN_ROUTE: { label: 'في الطريق', klass: 'bg-amber-50 text-amber-700' },
-  COMPLETED: { label: 'مكتمل', klass: 'bg-emerald-50 text-emerald-700' },
-  CANCELLED: { label: 'ملغى', klass: 'bg-red-50 text-red-700' },
-  FAILED: { label: 'فشل', klass: 'bg-red-50 text-red-700' },
+interface Driver {
+  id: string;
+  status: 'OFFLINE' | 'AVAILABLE' | 'ON_ROUTE' | 'BREAK';
+  user: { fullName: string; phone: string };
+  todayDeliveries?: number;
+}
+
+const STATUS: Record<string, { label: string; klass: string; col: number }> = {
+  PENDING: { label: 'قيد الانتظار', klass: 'bg-amber-50 text-amber-700 ring-amber-200', col: 0 },
+  ASSIGNED: { label: 'مُسنَد', klass: 'bg-blue-50 text-blue-700 ring-blue-200', col: 1 },
+  EN_ROUTE: { label: 'في الطريق', klass: 'bg-orange-50 text-orange-700 ring-orange-200', col: 2 },
+  COMPLETED: { label: 'مكتمل', klass: 'bg-emerald-50 text-emerald-700 ring-emerald-200', col: 3 },
+  CANCELLED: { label: 'ملغى', klass: 'bg-red-50 text-red-700 ring-red-200', col: -1 },
+  FAILED: { label: 'فشل', klass: 'bg-red-50 text-red-700 ring-red-200', col: -1 },
 };
 
+const COLUMNS: { key: string; title: string; statuses: string[]; color: string }[] = [
+  { key: 'pending', title: 'قيد الانتظار', statuses: ['PENDING'], color: '#f59e0b' },
+  { key: 'assigned', title: 'مُسنَد', statuses: ['ASSIGNED'], color: '#2563eb' },
+  { key: 'enroute', title: 'في الطريق', statuses: ['EN_ROUTE'], color: '#ea580c' },
+  { key: 'completed', title: 'مكتمل اليوم', statuses: ['COMPLETED'], color: '#059669' },
+];
+
 export default function OrdersPage() {
-  const { data } = useQuery<Order[]>({
+  const [view, setView] = useState<'kanban' | 'list'>('kanban');
+  const [assigningOrder, setAssigningOrder] = useState<Order | null>(null);
+
+  const { data: orders } = useQuery<Order[]>({
     queryKey: ['orders'],
     queryFn: async () => (await api.get('/orders')).data,
     refetchInterval: 15_000,
@@ -36,44 +54,229 @@ export default function OrdersPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">الطلبات</h1>
-        <p className="text-slate-500">يتم تحديثها تلقائياً كل ١٥ ثانية</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">الطلبات</h1>
+          <p className="text-slate-500 text-sm mt-1">يتم التحديث تلقائياً كل ١٥ ثانية</p>
+        </div>
+        <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
+          <button
+            onClick={() => setView('kanban')}
+            className={`px-4 py-1.5 rounded text-sm font-medium ${
+              view === 'kanban' ? 'bg-white shadow-sm text-aqua-700' : 'text-slate-500'
+            }`}
+          >
+            لوحة (Kanban)
+          </button>
+          <button
+            onClick={() => setView('list')}
+            className={`px-4 py-1.5 rounded text-sm font-medium ${
+              view === 'list' ? 'bg-white shadow-sm text-aqua-700' : 'text-slate-500'
+            }`}
+          >
+            قائمة
+          </button>
+        </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-600">
-            <tr>
-              <th className="text-right px-4 py-3">الزبون</th>
-              <th className="text-right px-4 py-3">المنطقة</th>
-              <th className="text-right px-4 py-3">السائق</th>
-              <th className="text-right px-4 py-3">الحالة</th>
-              <th className="text-right px-4 py-3">المبلغ</th>
-              <th className="text-right px-4 py-3">التاريخ</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data?.map((o) => (
-              <tr key={o.id} className="border-t hover:bg-slate-50">
-                <td className="px-4 py-3 font-medium">{o.customer.fullName}</td>
-                <td className="px-4 py-3">{o.customer.district}</td>
-                <td className="px-4 py-3 text-slate-600">
-                  {o.driver?.user.fullName ?? <span className="text-slate-400">غير مُسنَد</span>}
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`px-2 py-1 rounded text-xs ${STATUS[o.status]?.klass ?? ''}`}>
-                    {STATUS[o.status]?.label ?? o.status}
+      {view === 'kanban' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {COLUMNS.map((col) => {
+            const colOrders = (orders ?? []).filter((o) => col.statuses.includes(o.status));
+            return (
+              <div key={col.key} className="bg-slate-50 rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: col.color }} />
+                    <h3 className="font-bold text-sm">{col.title}</h3>
+                  </div>
+                  <span
+                    className="text-xs font-bold px-2 py-0.5 rounded-full text-white"
+                    style={{ backgroundColor: col.color }}
+                  >
+                    {colOrders.length}
                   </span>
-                </td>
-                <td className="px-4 py-3">{iqd(o.priceIqd)}</td>
-                <td className="px-4 py-3 text-slate-500">
-                  {fmtDate(o.completedAt ?? o.requestedAt)}
-                </td>
-              </tr>
+                </div>
+                <div className="space-y-2 max-h-[70vh] overflow-y-auto">
+                  {colOrders.map((o) => (
+                    <OrderCard key={o.id} order={o} onAssign={() => setAssigningOrder(o)} />
+                  ))}
+                  {colOrders.length === 0 && (
+                    <p className="text-center text-xs text-slate-400 py-6">لا توجد طلبات</p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <OrdersTable orders={orders} onAssign={setAssigningOrder} />
+      )}
+
+      {assigningOrder && (
+        <AssignDriverModal
+          order={assigningOrder}
+          onClose={() => setAssigningOrder(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function OrderCard({ order, onAssign }: { order: Order; onAssign: () => void }) {
+  return (
+    <div className="bg-white rounded-xl p-3 shadow-sm border border-slate-100">
+      <div className="flex items-start justify-between mb-2">
+        <p className="font-bold text-sm">{order.customer.fullName}</p>
+        <p className="text-sm font-bold text-aqua-700">{iqd(order.priceIqd)}</p>
+      </div>
+      <div className="flex items-center gap-1 text-xs text-slate-500 mb-1">
+        <MapPin size={11} /> {order.customer.district}
+      </div>
+      <div className="flex items-center gap-1 text-xs text-slate-500 mb-2">
+        <Phone size={11} /> <span dir="ltr">{order.customer.phone}</span>
+      </div>
+      <div className="flex items-center gap-1 text-xs text-slate-400 mb-3">
+        <Clock size={11} /> {fmtDate(order.requestedAt)}
+      </div>
+      {order.driver ? (
+        <div className="bg-blue-50 rounded-lg p-2 flex items-center gap-2">
+          <Truck size={14} className="text-blue-600" />
+          <span className="text-xs font-medium text-blue-700">{order.driver.user.fullName}</span>
+        </div>
+      ) : (
+        <button
+          onClick={onAssign}
+          className="w-full bg-aqua-50 hover:bg-aqua-100 text-aqua-700 text-xs font-bold rounded-lg py-2 flex items-center justify-center gap-1.5"
+        >
+          <UserCheck size={14} /> تعيين سائق
+        </button>
+      )}
+    </div>
+  );
+}
+
+function OrdersTable({ orders, onAssign }: { orders?: Order[]; onAssign: (o: Order) => void }) {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+      <table className="w-full text-sm">
+        <thead className="bg-slate-50 text-slate-600">
+          <tr>
+            <th className="text-right px-4 py-3">الزبون</th>
+            <th className="text-right px-4 py-3">المنطقة</th>
+            <th className="text-right px-4 py-3">السائق</th>
+            <th className="text-right px-4 py-3">الحالة</th>
+            <th className="text-right px-4 py-3">المبلغ</th>
+            <th className="text-right px-4 py-3">التاريخ</th>
+            <th className="text-right px-4 py-3">إجراءات</th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders?.map((o) => (
+            <tr key={o.id} className="border-t hover:bg-slate-50">
+              <td className="px-4 py-3 font-medium">{o.customer.fullName}</td>
+              <td className="px-4 py-3">{o.customer.district}</td>
+              <td className="px-4 py-3 text-slate-600">
+                {o.driver?.user.fullName ?? <span className="text-slate-400">—</span>}
+              </td>
+              <td className="px-4 py-3">
+                <span
+                  className={`px-2 py-1 rounded-full text-xs ring-1 ${
+                    STATUS[o.status]?.klass ?? ''
+                  }`}
+                >
+                  {STATUS[o.status]?.label ?? o.status}
+                </span>
+              </td>
+              <td className="px-4 py-3 font-bold">{iqd(o.priceIqd)}</td>
+              <td className="px-4 py-3 text-slate-500 text-xs">
+                {fmtDate(o.completedAt ?? o.requestedAt)}
+              </td>
+              <td className="px-4 py-3">
+                {!o.driver && o.status === 'PENDING' && (
+                  <button
+                    onClick={() => onAssign(o)}
+                    className="text-xs text-aqua-700 hover:text-aqua-900 font-medium"
+                  >
+                    تعيين سائق
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function AssignDriverModal({ order, onClose }: { order: Order; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { data: drivers } = useQuery<Driver[]>({
+    queryKey: ['drivers'],
+    queryFn: async () => (await api.get('/drivers')).data,
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: async (driverId: string) =>
+      (await api.post(`/orders/${order.id}/assign`, { driverId })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      onClose();
+    },
+    onError: (err: any) => alert(err?.response?.data?.message ?? 'فشل التعيين'),
+  });
+
+  const available = (drivers ?? []).filter((d) => d.status === 'AVAILABLE');
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" dir="rtl">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-bold">تعيين سائق</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              للطلب من {order.customer.fullName} • {order.customer.district}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X size={20} />
+          </button>
+        </div>
+
+        {available.length === 0 ? (
+          <div className="bg-amber-50 rounded-lg p-4 text-center">
+            <p className="text-amber-700 text-sm font-medium">لا يوجد سائقون متاحون الآن</p>
+            <p className="text-xs text-amber-600 mt-1">
+              {drivers?.length ?? 0} سائق غير متاح ({(drivers ?? []).filter((d) => d.status === 'ON_ROUTE').length} في جولة)
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {available.map((d) => (
+              <button
+                key={d.id}
+                onClick={() => assignMutation.mutate(d.id)}
+                disabled={assignMutation.isPending}
+                className="w-full text-right p-3 rounded-lg border border-slate-200 hover:border-aqua-600 hover:bg-aqua-50 transition flex items-center justify-between disabled:opacity-50"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                    <Truck size={18} className="text-emerald-700" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm">{d.user.fullName}</p>
+                    <p className="text-xs text-slate-500">
+                      <span className="text-emerald-600">متاح</span>
+                      {d.todayDeliveries !== undefined && ` • ${d.todayDeliveries} توصيلة اليوم`}
+                    </p>
+                  </div>
+                </div>
+                <ChevronDown size={16} className="text-slate-400 rotate-90" />
+              </button>
             ))}
-          </tbody>
-        </table>
+          </div>
+        )}
       </div>
     </div>
   );

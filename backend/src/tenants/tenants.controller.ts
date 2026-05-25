@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { IsInt, IsLatitude, IsLongitude, IsString, MinLength, IsEnum, IsOptional, Matches, Min } from 'class-validator';
 import { SubscriptionPlan, TenantStatus, UserRole } from '@prisma/client';
@@ -62,6 +62,29 @@ export class TenantsController {
     return this.tenants.getDashboardStats(user.tenantId!);
   }
 
+  /** Plant settings (prices, hours, coverage, bonuses) */
+  @RequireCapability('plant_admin')
+  @Get('me/settings')
+  getMySettings(@CurrentUser() user: AuthUser) {
+    return this.tenants.getSettings(user.tenantId!);
+  }
+
+  @RequireCapability('plant_admin')
+  @Patch('me/settings')
+  updateMySettings(@CurrentUser() user: AuthUser, @Body() dto: Record<string, unknown>) {
+    return this.tenants.updateSettings(user.tenantId!, dto);
+  }
+
+  /** Reports — analytics بفترة (week/month/year) */
+  @RequireCapability('plant_admin')
+  @Get('me/reports')
+  getReports(
+    @CurrentUser() user: AuthUser,
+    @Query('range') range: 'week' | 'month' | 'year' = 'month',
+  ) {
+    return this.tenants.getReports(user.tenantId!, range);
+  }
+
   /**
    * Public lookup so a new customer can find which plant covers
    * their neighbourhood. Used during first-launch onboarding.
@@ -70,6 +93,17 @@ export class TenantsController {
   @Get('nearest')
   nearest(@Query('lng') lng: string, @Query('lat') lat: string) {
     return this.tenants.findNearestPlant(Number(lng), Number(lat));
+  }
+
+  /**
+   * Public discovery — returns up to 10 plants within 30 km ordered by
+   * "serves you?" first, then distance. Used by the customer mobile
+   * Welcome screen so a prospect can pick a plant before signing up.
+   */
+  @Public()
+  @Get('discover')
+  discover(@Query('lng') lng: string, @Query('lat') lat: string) {
+    return this.tenants.discoverPlants(Number(lng), Number(lat));
   }
 
   /** Plant owner with multiple branches lists them for the switcher. */

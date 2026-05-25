@@ -70,6 +70,32 @@ export class DriversController {
     return this.drivers.list(user.tenantId!);
   }
 
+  /**
+   * Live tracking — كل سائقي المعمل مع آخر موقع + علم inactivity (لو
+   * `lastLocationAt` أقدم من ٣٠ دقيقة). الداشبورد يستدعيها كل ١٥ ثانية.
+   * يجب أن تأتي قبل /:id حتى لا تُطابق "live" كـ ID.
+   */
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)
+  @Get('live')
+  liveLocations(@CurrentUser() user: AuthUser) {
+    return this.drivers.liveLocations(user.tenantId!);
+  }
+
+  /**
+   * Route history — مسار سائق ليوم محدد. الداشبورد يستعملها لرسم خط
+   * على الخريطة. `date` بصيغة YYYY-MM-DD (افتراضياً اليوم).
+   * يجب أن تأتي قبل /:id العامة.
+   */
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)
+  @Get(':id/route')
+  driverRoute(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Query('date') date?: string,
+  ) {
+    return this.drivers.routeForDate(user.tenantId!, id, date);
+  }
+
   @RequireCapability('driver')
   @Get('me')
   me(@CurrentUser() user: AuthUser) {

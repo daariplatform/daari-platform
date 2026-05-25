@@ -1,30 +1,23 @@
 import { create } from 'zustand';
-import { api } from './api';
+import { api, registerSessionExpiredHandler } from './api';
 import { clearTokens, getAccessToken, setTokens } from './tokens';
 import type { Capability, MeResponse } from './types';
 
-type WorkerMode = 'driver' | 'vendor';
-
+/**
+ * Driver-only auth store. The vendor mode (بائع مستقل) is deferred to
+ * phase 2 — when it returns, re-introduce WorkerMode + ModeSwitcher.
+ */
 interface AuthState {
   loading: boolean;
   hydrating: boolean;
   user: MeResponse | null;
   capabilities: Capability[];
-  currentMode: WorkerMode | null;
   /** True when we're showing seeded mock data because no backend is reachable. */
   demoMode: boolean;
   hydrate: () => Promise<void>;
   loginWithPassword: (phone: string, password: string) => Promise<void>;
-  loginWithOtp: (phone: string, otp: string, fullName?: string) => Promise<void>;
-  loginAsDemo: (mode: WorkerMode) => void;
-  setMode: (mode: WorkerMode) => void;
+  loginAsDemo: () => void;
   logout: () => Promise<void>;
-}
-
-function pickDefaultMode(caps: Capability[]): WorkerMode | null {
-  if (caps.includes('driver')) return 'driver';
-  if (caps.includes('vendor')) return 'vendor';
-  return null;
 }
 
 export const useAuth = create<AuthState>((set) => ({
@@ -32,7 +25,6 @@ export const useAuth = create<AuthState>((set) => ({
   hydrating: true,
   user: null,
   capabilities: [],
-  currentMode: null,
   demoMode: false,
 
   async hydrate() {
@@ -47,7 +39,6 @@ export const useAuth = create<AuthState>((set) => ({
       set({
         user: data,
         capabilities: data.capabilities,
-        currentMode: pickDefaultMode(data.capabilities),
         hydrating: false,
       });
     } catch {
@@ -65,23 +56,9 @@ export const useAuth = create<AuthState>((set) => ({
       set({
         user: me.data,
         capabilities: me.data.capabilities,
-        currentMode: pickDefaultMode(me.data.capabilities),
-      });
-    } finally {
-      set({ loading: false });
-    }
-  },
-
-  async loginWithOtp(phone, otp, fullName) {
-    set({ loading: true });
-    try {
-      const { data } = await api.post('/auth/login/otp', { phone, otp, fullName });
-      await setTokens(data.accessToken, data.refreshToken);
-      const me = await api.get<MeResponse>('/auth/me');
-      set({
-        user: me.data,
-        capabilities: me.data.capabilities,
-        currentMode: pickDefaultMode(me.data.capabilities),
+        // طفي demo mode بعد الدخول الحقيقي — كانت bug إذا الـ user دخل
+        // demo أول ثم login حقيقي، الـ queries كانت لسه ترجع demo data.
+        demoMode: false,
       });
     } finally {
       set({ loading: false });
@@ -89,31 +66,33 @@ export const useAuth = create<AuthState>((set) => ({
   },
 
   /**
-   * Skips backend entirely and shows the demo dataset. Both 'driver' and
-   * 'vendor' capabilities are granted so the user can flip the mode
-   * switcher inside the worker UI.
+   * Skips backend entirely and shows the demo dataset for a driver.
+   * Visible only in dev builds (gated in login screen via EXPO_PUBLIC_DEMO_MODE / __DEV__).
    */
-  loginAsDemo(mode) {
+  loginAsDemo() {
     set({
       demoMode: true,
-      currentMode: mode,
-      capabilities: ['driver', 'vendor'],
+      capabilities: ['driver'],
       user: {
         id: 'demo-worker',
         phone: '07700000002',
         role: 'DRIVER',
         tenantId: 'demo-tenant',
-        capabilities: ['driver', 'vendor'],
+        capabilities: ['driver'],
       },
     });
   },
 
-  setMode(mode) {
-    set({ currentMode: mode });
-  },
-
   async logout() {
     await clearTokens();
-    set({ user: null, capabilities: [], currentMode: null, demoMode: false });
+    set({ user: null, capabilities: [], demoMode: false });
   },
 }));
+
+// Wire api.ts's 401-refresh-fails callback to our logout(). Without this
+// the token would be cleared but `user` would stay in the store, leaving
+// the app stuck on inner screens that 401 on every call. After logout,
+// _layout's redirect effect kicks in and pushes the user back to login.
+registerSessionExpiredHandler(async () => {
+  await useAuth.getState().logout();
+});

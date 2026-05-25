@@ -11,16 +11,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MotiView } from 'moti';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/lib/auth-store';
+import { hap } from '@/lib/haptics';
+import { AnimatedLogo } from '@/components/AnimatedLogo';
+import { RainBackground } from '@/components/RainBackground';
 
 /**
- * Phone + password login. Plant admin provisions the account from the
- * dashboard and gives the customer the temp password (verbally or via
- * WhatsApp). Customer can change it later from settings.
- *
- * Future: OTP self-signup will appear behind a "إنشاء حساب جديد" link
- * once we wire a real SMS provider and flip OTP_SELF_SIGNUP_ENABLED on
- * the backend.
+ * Login screen — sky-blue gradient + animated water drop logo + rain bg + haptics.
  */
 export default function LoginScreen() {
   const router = useRouter();
@@ -28,43 +28,34 @@ export default function LoginScreen() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [phoneFocus, setPhoneFocus] = useState(false);
+  const [passFocus, setPassFocus] = useState(false);
 
-  const isDemoMode = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+  // زر "تجربة بدون تسجيل" يظهر في dev builds فقط — لكن submit() يستعمل
+  // login() الحقيقي **دائماً**. الفصل مهم: لو خلطنا الزرّين، الزبون ما
+  // يقدر يدخل بحسابه الحقيقي في Debug build.
+  const showDemoButton = process.env.EXPO_PUBLIC_DEMO_MODE === 'true' || __DEV__;
   const canSubmit = /^07\d{9}$/.test(phone) && password.length >= 6;
 
   async function submit() {
     if (!canSubmit) {
-      Alert.alert(
-        'بيانات ناقصة',
-        'أدخل رقم هاتفك (يبدأ بـ 07 ويتكون من 11 رقماً) وكلمة المرور (6 خانات أو أكثر)',
-      );
+      hap.error();
+      Alert.alert('بيانات ناقصة', 'أدخل رقم هاتفك (11 رقم) وكلمة المرور (6 أحرف على الأقل)');
       return;
     }
-
-    // Demo / no-backend mode: any phone with a non-empty password drops
-    // into the seeded session. Lets us test on BlueStacks without a server.
-    if (isDemoMode) {
-      loginAsDemo();
-      router.replace('/(tabs)/home');
-      return;
-    }
-
+    hap.press();
     try {
       await login(phone, password);
+      hap.success();
       router.replace('/(tabs)/home');
     } catch (err: any) {
+      hap.error();
       const status = err?.response?.status;
       const msg = err?.response?.data?.message;
       if (status === 429) {
-        Alert.alert(
-          'محاولات كثيرة',
-          'تم تجاوز الحد المسموح به من المحاولات. حاول بعد 15 دقيقة، أو تواصل مع معمل المياه لإعادة تعيين كلمة المرور.',
-        );
+        Alert.alert('محاولات كثيرة', 'تجاوزت الحد، حاول بعد ١٥ دقيقة.');
       } else if (status === 401) {
-        Alert.alert(
-          'بيانات غير صحيحة',
-          'رقم الهاتف أو كلمة المرور خاطئة. إذا نسيت كلمة المرور تواصل مع معمل المياه التابع لك ليرسلها لك.',
-        );
+        Alert.alert('بيانات غير صحيحة', 'تواصل مع معمل المياه لإعادة تعيين كلمة المرور');
       } else {
         Alert.alert('فشل تسجيل الدخول', msg ?? 'حاول مرة أخرى');
       }
@@ -72,102 +63,261 @@ export default function LoginScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-aqua-600">
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        className="flex-1"
-      >
-        <View className="flex-1 px-6 pt-12 pb-8">
-          <View className="items-center mb-10">
-            <Text className="text-7xl mb-2">🏠</Text>
-            <Text className="text-white text-3xl font-bold">داري</Text>
-            <Text className="text-aqua-100 text-sm mt-1">خدمات منزلك بضغطة زر</Text>
-          </View>
+    <LinearGradient
+      // ألوان فاتحة (sky bright)، ٣ ستوبات بدل ٤، توحّد مع الـ home
+      colors={['#7dd3fc', '#38bdf8', '#0ea5e9']}
+      style={{ flex: 1 }}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0, y: 1 }}
+    >
+      {/* Rain animation behind content */}
+      <RainBackground density="medium" />
 
-          <View className="bg-white rounded-3xl p-6 shadow-2xl">
-            <Text className="text-slate-900 text-xl font-bold mb-1 text-right">
-              تسجيل الدخول
-            </Text>
-            <Text className="text-slate-500 text-xs mb-5 text-right leading-5">
-              استخدم رقم الهاتف وكلمة المرور التي زوّدك بها معمل المياه التابع لك
-            </Text>
+      <SafeAreaView className="flex-1">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          className="flex-1"
+        >
+          <View className="flex-1 px-6 pt-6 pb-8 justify-center">
+            {/* Animated Hero */}
+            <MotiView
+              from={{ opacity: 0, translateY: -20 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ type: 'timing', duration: 700 }}
+              style={{ alignItems: 'center', marginBottom: 36 }}
+            >
+              <AnimatedLogo size={100} showText={true} textColor="#ffffff" />
+              <Text className="text-sky-100 text-sm mt-2">خدمات منزلك بضغطة زر</Text>
+            </MotiView>
 
-            <Text className="text-slate-700 text-sm mb-2 text-right">رقم الهاتف</Text>
-            <TextInput
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="07XXXXXXXXX"
-              keyboardType="phone-pad"
-              maxLength={11}
-              autoComplete="tel"
-              className="border border-slate-200 rounded-xl px-4 py-3 text-base bg-slate-50 text-right mb-4"
-            />
+            {/* Glass card */}
+            <MotiView
+              from={{ opacity: 0, translateY: 30 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ type: 'timing', duration: 700, delay: 300 }}
+              style={{
+                backgroundColor: 'rgba(255,255,255,0.97)',
+                borderRadius: 32,
+                padding: 26,
+                shadowColor: '#001233',
+                shadowOffset: { width: 0, height: 16 },
+                shadowOpacity: 0.35,
+                shadowRadius: 28,
+                elevation: 16,
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.6)',
+              }}
+            >
+              <Text className="text-slate-900 text-2xl font-bold mb-1 text-right" style={{ letterSpacing: -0.5 }}>
+                تسجيل الدخول
+              </Text>
+              <Text className="text-slate-500 text-xs mb-5 text-right leading-5">
+                استخدم رقم الهاتف وكلمة المرور التي زوّدك بها معمل المياه
+              </Text>
 
-            <Text className="text-slate-700 text-sm mb-2 text-right">كلمة المرور</Text>
-            <View className="flex-row-reverse items-center border border-slate-200 rounded-xl bg-slate-50">
-              <TextInput
-                value={password}
-                onChangeText={setPassword}
-                placeholder="••••••"
-                secureTextEntry={!showPassword}
-                autoComplete="password"
-                className="flex-1 px-4 py-3 text-base text-right"
-              />
-              <Pressable onPress={() => setShowPassword((v) => !v)} className="px-3 py-3">
-                <Text className="text-aqua-700 text-xs">
-                  {showPassword ? 'إخفاء' : 'إظهار'}
+              {/* Phone field */}
+              <Text className="text-slate-700 text-sm mb-2 text-right">رقم الهاتف</Text>
+              <MotiView
+                animate={{
+                  borderColor: phoneFocus ? '#0284c7' : '#e2e8f0',
+                  backgroundColor: phoneFocus ? '#ffffff' : '#f8fafc',
+                }}
+                transition={{ type: 'timing', duration: 180 }}
+                style={{
+                  flexDirection: 'row-reverse',
+                  alignItems: 'center',
+                  borderWidth: 2,
+                  borderRadius: 16,
+                  marginBottom: 14,
+                  paddingHorizontal: 12,
+                }}
+              >
+                <MaterialIcons
+                  name="phone-iphone"
+                  size={22}
+                  color={phoneFocus ? '#0284c7' : '#94a3b8'}
+                />
+                <TextInput
+                  value={phone}
+                  onChangeText={(v) => {
+                    setPhone(v);
+                    if (v.length === 11) hap.tap();
+                  }}
+                  onFocus={() => {
+                    setPhoneFocus(true);
+                    hap.tap();
+                  }}
+                  onBlur={() => setPhoneFocus(false)}
+                  placeholder="07XXXXXXXXX"
+                  keyboardType="phone-pad"
+                  maxLength={11}
+                  autoComplete="tel"
+                  className="flex-1 px-3 py-3.5 text-base text-right"
+                  placeholderTextColor="#cbd5e1"
+                />
+              </MotiView>
+
+              {/* Password field */}
+              <Text className="text-slate-700 text-sm mb-2 text-right">كلمة المرور</Text>
+              <MotiView
+                animate={{
+                  borderColor: passFocus ? '#0284c7' : '#e2e8f0',
+                  backgroundColor: passFocus ? '#ffffff' : '#f8fafc',
+                }}
+                transition={{ type: 'timing', duration: 180 }}
+                style={{
+                  flexDirection: 'row-reverse',
+                  alignItems: 'center',
+                  borderWidth: 2,
+                  borderRadius: 16,
+                  paddingHorizontal: 12,
+                }}
+              >
+                <MaterialIcons name="lock-outline" size={22} color={passFocus ? '#0284c7' : '#94a3b8'} />
+                <TextInput
+                  value={password}
+                  onChangeText={setPassword}
+                  onFocus={() => {
+                    setPassFocus(true);
+                    hap.tap();
+                  }}
+                  onBlur={() => setPassFocus(false)}
+                  placeholder="••••••"
+                  secureTextEntry={!showPassword}
+                  autoComplete="password"
+                  className="flex-1 px-3 py-3.5 text-base text-right"
+                  placeholderTextColor="#cbd5e1"
+                />
+                <Pressable
+                  onPress={() => {
+                    setShowPassword((v) => !v);
+                    hap.tap();
+                  }}
+                  hitSlop={10}
+                  style={{ padding: 6 }}
+                >
+                  <MaterialIcons
+                    name={showPassword ? 'visibility-off' : 'visibility'}
+                    size={22}
+                    color={showPassword ? '#0284c7' : '#94a3b8'}
+                  />
+                </Pressable>
+              </MotiView>
+
+              {/* Login button with scale animation */}
+              <PressableScale
+                onPress={submit}
+                disabled={loading || !canSubmit}
+                style={{ marginTop: 22 }}
+              >
+                {canSubmit && !loading ? (
+                  <LinearGradient
+                    colors={['#38bdf8', '#0ea5e9', '#0284c7']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{
+                      borderRadius: 16,
+                      paddingVertical: 16,
+                      alignItems: 'center',
+                      shadowColor: '#0ea5e9',
+                      shadowOffset: { width: 0, height: 8 },
+                      shadowOpacity: 0.35,
+                      shadowRadius: 16,
+                    }}
+                  >
+                    <Text className="text-white font-bold text-base" style={{ letterSpacing: 0.5 }}>دخول</Text>
+                  </LinearGradient>
+                ) : (
+                  <View
+                    style={{
+                      borderRadius: 16,
+                      paddingVertical: 16,
+                      alignItems: 'center',
+                      backgroundColor: '#cbd5e1',
+                    }}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text className="text-white font-bold text-base">دخول</Text>
+                    )}
+                  </View>
+                )}
+              </PressableScale>
+
+              <Pressable
+                onPress={() => router.push('/(auth)/forgot' as any)}
+                className="mt-4 items-center"
+              >
+                <Text className="text-sky-700 text-[12px] font-bold">
+                  نسيت كلمة المرور؟
                 </Text>
               </Pressable>
-            </View>
 
-            <Pressable
-              onPress={submit}
-              disabled={loading || !canSubmit}
-              className={`mt-5 rounded-xl py-4 items-center ${
-                loading || !canSubmit ? 'bg-slate-300' : 'bg-aqua-600'
-              }`}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text className="text-white font-bold text-base">دخول</Text>
-              )}
-            </Pressable>
+              <View className="mt-3 pt-3 border-t border-slate-100">
+                <Text className="text-slate-500 text-[11px] text-center leading-5">
+                  ليس عندك حساب؟ تواصل مع معمل المياه التابع لك ليُنشئ لك حساباً.
+                </Text>
+              </View>
+            </MotiView>
 
-            <View className="mt-5 pt-4 border-t border-slate-100">
-              <Text className="text-slate-500 text-[11px] text-center leading-5">
-                ليس عندك حساب؟ تواصل مع معمل المياه التابع لك ليُنشئ لك حساباً.
-                {'\n'}إذا نسيت كلمة المرور اطلب من المعمل إعادة تعيينها.
-              </Text>
-            </View>
+            {showDemoButton && (
+              <MotiView
+                from={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ type: 'timing', delay: 700 }}
+              >
+                <Pressable
+                  onPress={() => {
+                    hap.press();
+                    loginAsDemo();
+                    router.replace('/(tabs)/home');
+                  }}
+                  className="mt-5 bg-white/10 rounded-2xl py-3 items-center border border-white/30"
+                >
+                  <Text className="text-white font-bold text-sm">تجربة بدون تسجيل</Text>
+                </Pressable>
+              </MotiView>
+            )}
+
+            <Text className="text-sky-100 text-[11px] text-center mt-6 leading-5">
+              باستخدامك التطبيق توافق على{' '}
+              <Text className="underline">الشروط والأحكام</Text> و{' '}
+              <Text className="underline">سياسة الخصوصية</Text>
+            </Text>
           </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </LinearGradient>
+  );
+}
 
-          {/* Demo bypass — hidden in production builds via EAS env var.
-              Only visible in dev/preview channels (EXPO_PUBLIC_DEMO_MODE=true). */}
-          {isDemoMode && (
-            <Pressable
-              onPress={() => {
-                loginAsDemo();
-                router.replace('/(tabs)/home');
-              }}
-              className="mt-5 bg-white/10 rounded-xl py-3 items-center border border-white/30"
-            >
-              <Text className="text-white font-bold text-sm">
-                🎬 تجربة بدون تسجيل (وضع العرض)
-              </Text>
-              <Text className="text-aqua-100 text-[10px] mt-0.5">
-                يدخل بحساب وهمي لتشاهد الشاشات
-              </Text>
-            </Pressable>
-          )}
-
-          <Text className="text-aqua-100 text-[11px] text-center mt-6 leading-5">
-            باستخدامك التطبيق توافق على{' '}
-            <Text className="underline">الشروط والأحكام</Text> و{' '}
-            <Text className="underline">سياسة الخصوصية</Text>
-          </Text>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+function PressableScale({
+  onPress,
+  disabled,
+  style,
+  children,
+}: {
+  onPress: () => void;
+  disabled?: boolean;
+  style?: any;
+  children: React.ReactNode;
+}) {
+  const [pressed, setPressed] = useState(false);
+  return (
+    <MotiView
+      animate={{ scale: pressed ? 0.96 : 1 }}
+      transition={{ type: 'timing', duration: 120 }}
+      style={style}
+    >
+      <Pressable
+        onPress={onPress}
+        onPressIn={() => setPressed(true)}
+        onPressOut={() => setPressed(false)}
+        disabled={disabled}
+      >
+        {children}
+      </Pressable>
+    </MotiView>
   );
 }

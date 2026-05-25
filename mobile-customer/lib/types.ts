@@ -22,6 +22,7 @@ export interface MeResponse {
   role: string;
   tenantId: string | null;
   capabilities: Capability[];
+  fullName?: string;
 }
 
 export type TankCapacity = 'L350' | 'L500';
@@ -53,6 +54,8 @@ export interface CustomerProfile {
   acceptedTermsAt: string | null;
   movedAt: string | null;
   tanks: Tank[];
+  /** السعر الحالي لتعبئة الخزان (يأتي من Tenant.refillPriceIqd). */
+  refillPriceIqd: number;
 }
 
 export interface Tank {

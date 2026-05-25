@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
-import { PaymentMethod, RefillOrderKind, RefillOrderStatus, UserRole } from '@prisma/client';
+import { PaymentMethod, RefillOrderKind, RefillOrderStatus, TankReclaimReason, UserRole } from '@prisma/client';
 import { OrdersService } from './orders.service';
 import { DriversService } from '../drivers/drivers.service';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -48,6 +48,15 @@ class CompleteOrderDto {
 
   @IsOptional()
   completionLat?: number;
+
+  // ── Reclaim-only fields ──
+  // مطلوبة فقط عند tank-reclaim؛ الـ service يتحقق
+  // من وجود `reclaimReason` لو الطلب من نوع TANK_RECLAIM.
+  @IsOptional() @IsEnum(TankReclaimReason)
+  reclaimReason?: TankReclaimReason;
+
+  @IsOptional() @IsString()
+  reclaimNotes?: string;
 }
 
 class CancelOrderDto {
@@ -56,6 +65,35 @@ class CancelOrderDto {
 
 class DisputeDto {
   @IsString() reason!: string;
+}
+
+class WalkinRefillDto {
+  @IsOptional() @IsString()
+  customerId?: string;
+
+  @IsOptional() @IsString()
+  walkinBuyerName?: string;
+
+  @IsOptional() @IsString()
+  walkinBuyerPhone?: string;
+
+  @IsOptional() @IsInt() @Min(1)
+  walkinLiters?: number;
+
+  @IsEnum(PaymentMethod)
+  paymentMethod!: PaymentMethod;
+
+  @IsInt() @Min(0)
+  paidAmountIqd!: number;
+
+  @IsString()
+  proofPhotoUrl!: string;
+
+  @IsOptional()
+  completionLng?: number;
+
+  @IsOptional()
+  completionLat?: number;
 }
 
 @ApiBearerAuth()
@@ -98,6 +136,49 @@ export class OrdersController {
   async myToday(@CurrentUser() user: AuthUser) {
     const driver = await this.drivers.getMyDriverProfile(user.id);
     return this.orders.myTasksToday(driver.id);
+  }
+
+  /**
+   * Driver's full history (completed + cancelled + active). Used by
+   * mobile-worker's History tab. Newest first, limited to 100 by default.
+   */
+  @RequireCapability('driver')
+  @Get('me/history')
+  async myHistory(
+    @CurrentUser() user: AuthUser,
+    @Query('limit') limit?: string,
+  ) {
+    const driver = await this.drivers.getMyDriverProfile(user.id);
+    const n = limit ? Math.min(parseInt(limit, 10) || 100, 200) : 100;
+    return this.orders.listMyHistory(driver.id, n);
+  }
+
+  /**
+   * Customer's own order history. Used by mobile-customer "نشاطك الأخير"
+   * + the full orders tab. Filters by customer.userId so the customer
+   * can only see their own — no tenant leak possible.
+   * Must come BEFORE any /:id route to avoid "me" being matched as an id.
+   */
+  @RequireCapability('customer')
+  @Get('me')
+  async myOrders(
+    @CurrentUser() user: AuthUser,
+    @Query('limit') limit?: string,
+  ) {
+    const n = limit ? Math.min(parseInt(limit, 10) || 50, 200) : 50;
+    return this.orders.listByCustomerUser(user.id, n);
+  }
+
+  /**
+   * Walk-in sale recorded by a driver. Either `customerId` (existing
+   * out-of-cycle customer) OR `walkinBuyerName/Phone/Liters` (one-off
+   * passerby). Pre-completed in one POST.
+   */
+  @RequireCapability('driver')
+  @Post('walkin-refill')
+  async walkinRefill(@CurrentUser() user: AuthUser, @Body() dto: WalkinRefillDto) {
+    const driver = await this.drivers.getMyDriverProfile(user.id);
+    return this.orders.createWalkinRefill(user.tenantId!, driver.id, dto);
   }
 
   @RequireCapability('driver')

@@ -1,54 +1,83 @@
 import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/lib/auth-store';
 import { stopShiftTracking } from '@/lib/location';
 
 export default function Profile() {
   const router = useRouter();
-  const { user, capabilities, logout } = useAuth();
-  const hasBoth = capabilities.includes('driver') && capabilities.includes('vendor');
+  const { user, logout } = useAuth();
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
-      <ScrollView className="flex-1 px-4 pt-4" contentContainerStyle={{ paddingBottom: 24 }}>
-        <View className="bg-slate-900 rounded-2xl p-5 items-center">
-          <View className="w-20 h-20 rounded-full bg-aqua-600 items-center justify-center mb-2">
-            <Text className="text-4xl">👤</Text>
+    <View className="flex-1 bg-slate-50">
+      {/* Sky gradient header */}
+      <LinearGradient
+        colors={['#38bdf8', '#0ea5e9', '#0284c7']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={{
+          paddingBottom: 24,
+          borderBottomLeftRadius: 28,
+          borderBottomRightRadius: 28,
+        }}
+      >
+        <SafeAreaView edges={['top']}>
+          <View className="px-4 pt-2 items-center">
+            <View
+              style={{
+                width: 84,
+                height: 84,
+                borderRadius: 42,
+                backgroundColor: 'rgba(255,255,255,0.22)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 2,
+                borderColor: 'rgba(255,255,255,0.35)',
+              }}
+            >
+              <MaterialIcons name="local-shipping" size={48} color="#fff" />
+            </View>
+            <Text className="text-white font-bold text-lg mt-3">
+              {user?.phone || 'مستخدم'}
+            </Text>
+            <View className="bg-white/22 px-3 py-1 rounded-full mt-2">
+              <Text className="text-white text-[11px] font-bold">سائق معمل</Text>
+            </View>
           </View>
-          <Text className="text-white font-bold text-lg">{user?.phone}</Text>
-          <View className="flex-row gap-2 mt-3">
-            {capabilities.map((c) => (
-              <View key={c} className="bg-white/10 px-2 py-1 rounded-full">
-                <Text className="text-white text-[10px] font-bold">{c}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
+        </SafeAreaView>
+      </LinearGradient>
 
-        {!hasBoth && capabilities.includes('driver') && (
-          <Pressable
-            onPress={() => router.push('/(auth)/vendor-signup')}
-            className="bg-warn-500 rounded-2xl py-4 mt-3"
-          >
-            <Text className="text-white font-bold text-center">+ سجّل كبائع مستقل أيضاً</Text>
-          </Pressable>
-        )}
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{
+          paddingBottom: 32,
+          paddingTop: 14,
+          paddingHorizontal: 12,
+        }}
+      >
+        <ActionRow
+          icon="settings"
+          iconBg="#e0f2fe"
+          iconFg="#0284c7"
+          label="الإعدادات"
+          color="#0f172a"
+          onPress={() => Alert.alert('قريباً', 'صفحة الإعدادات قيد التطوير')}
+        />
 
-        <Pressable className="bg-white rounded-2xl py-4 shadow-sm mt-3 flex-row items-center justify-center gap-2">
-          <Text className="font-bold">⚙️ الإعدادات</Text>
-        </Pressable>
-
-        <Pressable
+        <ActionRow
+          icon="logout"
+          iconBg="#fef2f2"
+          iconFg="#dc2626"
+          label="تسجيل خروج"
+          color="#dc2626"
           onPress={async () => {
             await stopShiftTracking();
             await logout();
-            router.replace('/(auth)/role');
+            router.replace('/(auth)/driver-login');
           }}
-          className="bg-white rounded-2xl py-4 shadow-sm mt-3"
-        >
-          <Text className="text-danger-600 font-bold text-center">↩️ تسجيل خروج</Text>
-        </Pressable>
+        />
 
         <Pressable
           onPress={() =>
@@ -59,11 +88,68 @@ export default function Profile() {
           }
           className="mt-6"
         >
-          <Text className="text-slate-400 text-xs text-center underline">
+          <Text className="text-slate-400 text-[11px] text-center underline">
             سياسة الخصوصية والشروط
           </Text>
         </Pressable>
       </ScrollView>
-    </SafeAreaView>
+    </View>
+  );
+}
+
+/**
+ * Single profile row — consistent styling matching customer app's profile.
+ */
+function ActionRow({
+  icon,
+  iconBg,
+  iconFg,
+  label,
+  color,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof MaterialIcons>['name'];
+  iconBg: string;
+  iconFg: string;
+  label: string;
+  color: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        backgroundColor: '#fff',
+        borderRadius: 14,
+        paddingVertical: 14,
+        paddingHorizontal: 14,
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: 10,
+        shadowColor: '#0f172a',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 4,
+        elevation: 1,
+        marginBottom: 12,
+      }}
+    >
+      <View
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 12,
+          backgroundColor: iconBg,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <MaterialIcons name={icon} size={20} color={iconFg} />
+      </View>
+      <Text style={{ flex: 1, color, fontWeight: '700', fontSize: 13, textAlign: 'right' }}>
+        {label}
+      </Text>
+      <MaterialIcons name="chevron-left" size={22} color="#94a3b8" />
+    </Pressable>
   );
 }

@@ -14,6 +14,11 @@ class CreateTankDto {
 
   @IsEnum(TankCapacity)
   capacity!: TankCapacity;
+
+  /** Optional. If omitted, backend generates a long unique code.
+   *  Plants usually prefer friendly codes (T-1001) for printed stickers. */
+  @IsOptional() @IsString() @MinLength(2)
+  qrCode?: string;
 }
 
 class AssignTankDto {

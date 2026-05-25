@@ -6,11 +6,19 @@ import {
   Pressable,
   Alert,
   ActivityIndicator,
+  Linking,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { useMyTodayTasks, useCompleteOrder, useReclaimTank } from '@/lib/queries';
+import {
+  useMyTodayTasks,
+  useCompleteOrder,
+  useReclaimTank,
+  useUploadProofPhoto,
+  useStartOrder,
+} from '@/lib/queries';
 import { getCurrentCoords, distanceMetres } from '@/lib/location';
 import { enqueue } from '@/lib/offline-queue';
 import { iqd } from '@/lib/format';
@@ -32,6 +40,8 @@ export default function TaskDetail() {
   const { data: tasks } = useMyTodayTasks();
   const completeOrder = useCompleteOrder();
   const reclaim = useReclaimTank();
+  const uploadProof = useUploadProofPhoto();
+  const startOrder = useStartOrder();
   const [reclaimReason, setReclaimReason] =
     useState<typeof RECLAIM_REASONS[number]['id'] | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -46,14 +56,29 @@ export default function TaskDetail() {
   }
 
   async function captureProofPhoto(): Promise<string | null> {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (perm.status !== 'granted') {
-      Alert.alert('لا يوجد إذن', 'فعّل إذن الكاميرا لإثبات التعبئة');
-      return null;
+    // Production path: real device camera. Falls back to the photo library
+    // when (a) the iOS Simulator throws "Camera not available", or (b) the
+    // user denies the camera permission. Letting them pick from the library
+    // is better than blocking the whole flow.
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (perm.status !== 'granted') {
+        throw new Error('camera-permission-denied');
+      }
+      const r = await ImagePicker.launchCameraAsync({ quality: 0.6, base64: false });
+      if (r.canceled) return null;
+      return r.assets[0].uri;
+    } catch (cameraErr: any) {
+      console.warn('[task] camera unavailable, falling back to library:', cameraErr?.message);
+      const libPerm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (libPerm.status !== 'granted') {
+        Alert.alert('لا يوجد إذن', 'فعّل الكاميرا أو معرض الصور لإثبات التعبئة');
+        return null;
+      }
+      const r = await ImagePicker.launchImageLibraryAsync({ quality: 0.6, base64: false });
+      if (r.canceled) return null;
+      return r.assets[0].uri;
     }
-    const r = await ImagePicker.launchCameraAsync({ quality: 0.6, base64: false });
-    if (r.canceled) return null;
-    return r.assets[0].uri;
   }
 
   async function verifyArrivalGPS(): Promise<{ lng: number; lat: number } | null> {
@@ -78,30 +103,86 @@ export default function TaskDetail() {
     return coords;
   }
 
+  /**
+   * يرفع الصورة من المحاكي/الجهاز للـ backend عبر /uploads/proof،
+   * ويرجع URL دائم يصلح ليُحفَظ على الطلب. لو الإنترنت فشل، نرجع URI
+   * المحلي كـ fallback (الـ offline queue سيُعيد المحاولة لاحقاً).
+   */
+  async function captureAndUploadProof(): Promise<string | null> {
+    const localUri = await captureProofPhoto();
+    if (!localUri) return null;
+    try {
+      const remoteUrl = await uploadProof.mutateAsync(localUri);
+      return remoteUrl;
+    } catch (err) {
+      // Offline أو خطأ سيرفر — نحتفظ بالـ URI المحلي ونعتمد على الـ
+      // offline queue إعادة الإرسال لاحقاً (متى ما يتصل بالإنترنت).
+      return localUri;
+    }
+  }
+
   async function onCompleteRefill() {
     setSubmitting(true);
     try {
       const coords = await verifyArrivalGPS();
       if (!coords) return setSubmitting(false);
-      const photo = await captureProofPhoto();
+      const photo = await captureAndUploadProof();
       if (!photo) return setSubmitting(false);
 
       const body = {
         paymentMethod: 'CASH' as const,
         paidAmountIqd: task!.priceIqd,
-        proofPhotoUrl: photo, // backend uploader will rewrite to S3 URL
+        proofPhotoUrl: photo,
         completionLng: coords.lng,
         completionLat: coords.lat,
       };
 
       try {
         await completeOrder.mutateAsync({ orderId: task!.id, body });
+        router.back();
       } catch (e: any) {
-        // Connection failed — queue and tell the user.
-        await enqueue('POST', `/orders/${task!.id}/complete`, body);
-        Alert.alert('محفوظ محلياً', 'سيُزامَن مع المعمل عند عودة الإنترنت');
+        // Distinguish offline vs. a real backend rejection. If we got an
+        // HTTP status the server is reachable and the order really cannot
+        // be completed as-is — show the message so the driver can fix it
+        // (e.g. wrong status, missing tank). Only true network failures
+        // should fall through to the offline queue.
+        const status = e?.response?.status;
+        const msg = e?.response?.data?.message;
+        if (status) {
+          Alert.alert(
+            'تعذّر إتمام الطلب',
+            typeof msg === 'string'
+              ? msg
+              : `الخادم رفض الطلب (${status}). راجع المعمل.`,
+          );
+        } else {
+          await enqueue('POST', `/orders/${task!.id}/complete`, body);
+          Alert.alert('محفوظ محلياً', 'سيُزامَن مع المعمل عند عودة الإنترنت');
+          router.back();
+        }
       }
-      router.back();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  /**
+   * "ابدأ الجولة" — ASSIGNED → EN_ROUTE. Optional step that lets the customer
+   * see "السائق متجه إليك" in their app. If the driver skips it and goes
+   * straight to "أكّد التعبئة", the backend's complete() will gracefully
+   * accept (it doesn't require EN_ROUTE first).
+   */
+  async function onStartTrip() {
+    if (!task) return;
+    setSubmitting(true);
+    try {
+      await startOrder.mutateAsync(task.id);
+    } catch (e: any) {
+      const msg = e?.response?.data?.message;
+      Alert.alert(
+        'تعذّر بدء الجولة',
+        typeof msg === 'string' ? msg : 'حاول مرة أخرى',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -116,7 +197,7 @@ export default function TaskDetail() {
     try {
       const coords = await verifyArrivalGPS();
       if (!coords) return setSubmitting(false);
-      const photo = await captureProofPhoto();
+      const photo = await captureAndUploadProof();
       if (!photo) return setSubmitting(false);
 
       const body = {
@@ -129,14 +210,49 @@ export default function TaskDetail() {
       };
       try {
         await reclaim.mutateAsync({ orderId: task!.id, body });
-      } catch {
-        await enqueue('POST', `/orders/${task!.id}/complete`, body);
-        Alert.alert('محفوظ محلياً', 'سيُزامَن مع المعمل عند عودة الإنترنت');
+        router.back();
+      } catch (e: any) {
+        const status = e?.response?.status;
+        const msg = e?.response?.data?.message;
+        if (status) {
+          Alert.alert(
+            'تعذّر إتمام السحب',
+            typeof msg === 'string'
+              ? msg
+              : `الخادم رفض الطلب (${status}). راجع المعمل.`,
+          );
+        } else {
+          await enqueue('POST', `/orders/${task!.id}/complete`, body);
+          Alert.alert('محفوظ محلياً', 'سيُزامَن مع المعمل عند عودة الإنترنت');
+          router.back();
+        }
       }
-      router.back();
     } finally {
       setSubmitting(false);
     }
+  }
+
+  /**
+   * يفتح Google Maps (أو Apple Maps على iOS) للملاحة لعنوان الزبون.
+   * يفضّل GPS الدقيق إن وُجد، وإلا يستعمل العنوان كنص.
+   */
+  function openNavigation() {
+    const c = task!.customer;
+    let url: string;
+    if (c.locationLat && c.locationLng) {
+      // عنوان GPS دقيق — أفضل خيار للملاحة
+      url = Platform.select({
+        ios: `maps://?daddr=${c.locationLat},${c.locationLng}&dirflg=d`,
+        default: `https://www.google.com/maps/dir/?api=1&destination=${c.locationLat},${c.locationLng}&travelmode=driving`,
+      }) as string;
+    } else {
+      // نُستعمل العنوان كنص (less accurate)
+      const q = encodeURIComponent(`${c.addressLine}, ${c.district}, بغداد`);
+      url = `https://www.google.com/maps/search/?api=1&query=${q}`;
+    }
+    Linking.openURL(url).catch(() =>
+      Alert.alert('تعذّر فتح الخرائط', 'تأكد من تثبيت Google Maps'),
+    );
   }
 
   return (
@@ -158,6 +274,17 @@ export default function TaskDetail() {
               QR: {task.tank.qrCode}
             </Text>
           )}
+          {/* زر الملاحة — يفتح Google Maps / Apple Maps بالـ GPS الدقيق إن وُجد */}
+          <Pressable
+            onPress={openNavigation}
+            className="mt-3 bg-aqua-50 border border-aqua-200 rounded-xl py-3 px-3 flex-row-reverse items-center justify-between"
+          >
+            <View className="flex-row-reverse items-center gap-2">
+              <Text className="text-lg">🗺️</Text>
+              <Text className="text-aqua-700 font-bold text-sm">افتح في Google Maps</Text>
+            </View>
+            <Text className="text-aqua-600 text-xs">›</Text>
+          </Pressable>
         </View>
 
         {task.kind === 'TANK_RECLAIM' ? (
@@ -202,6 +329,58 @@ export default function TaskDetail() {
           </View>
         ) : (
           <View className="mt-4">
+            {/* Status badge — يعرض المرحلة الحالية للسائق + للزبون
+                (الزبون يستلم نفس الحالة عبر تحديث الـ polling) */}
+            <View
+              className="rounded-xl p-3 mb-3 flex-row-reverse items-center gap-2"
+              style={{
+                backgroundColor: task.status === 'EN_ROUTE' ? '#ecfeff' : '#f1f5f9',
+                borderWidth: 1,
+                borderColor: task.status === 'EN_ROUTE' ? '#67e8f9' : '#e2e8f0',
+              }}
+            >
+              <View
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  backgroundColor: task.status === 'EN_ROUTE' ? '#0891b2' : '#94a3b8',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text className="text-white text-xs">
+                  {task.status === 'EN_ROUTE' ? '🚐' : '📋'}
+                </Text>
+              </View>
+              <Text className="flex-1 text-xs font-bold text-slate-800 text-right">
+                {task.status === 'EN_ROUTE'
+                  ? 'أنت في الطريق — الزبون يرى موقعك'
+                  : task.status === 'ASSIGNED'
+                    ? 'الطلب مُسند لك — ابدأ الجولة لإخبار الزبون'
+                    : 'حالة الطلب: ' + task.status}
+              </Text>
+            </View>
+
+            {/* Step 1: ابدأ الجولة (visible only when ASSIGNED) */}
+            {task.status === 'ASSIGNED' && (
+              <Pressable
+                onPress={onStartTrip}
+                disabled={submitting}
+                className={`rounded-xl py-4 items-center mb-3 ${
+                  submitting ? 'bg-slate-300' : 'bg-sky-600'
+                }`}
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text className="text-white font-bold">
+                    🚐 ابدأ الجولة (إخبار الزبون)
+                  </Text>
+                )}
+              </Pressable>
+            )}
+
             <View className="bg-slate-50 rounded-xl p-3 mb-3">
               <Text className="text-[11px] text-slate-600 leading-5 text-right">
                 ✓ سيُؤخذ GPS تلقائياً للتحقق من وصولك للعنوان{'\n'}

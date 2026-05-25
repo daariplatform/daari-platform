@@ -24,9 +24,22 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
  */
 let refreshInflight: Promise<string | null> | null = null;
 
+// Session-expired callback. Registered by the auth store after first
+// mount so that api.ts can drop the user back to the login screen when
+// refresh fails — we used to clear tokens but leave the zustand `user`
+// in place, which caused silent 401-storms on every screen the user
+// had already navigated into.
+let onSessionExpired: (() => Promise<void> | void) | null = null;
+export function registerSessionExpiredHandler(fn: () => Promise<void> | void) {
+  onSessionExpired = fn;
+}
+
 async function refreshAccess(): Promise<string | null> {
   const refresh = await getRefreshToken();
-  if (!refresh) return null;
+  if (!refresh) {
+    if (onSessionExpired) await onSessionExpired();
+    return null;
+  }
   try {
     const res = await axios.post<AuthResponse>(`${API_BASE_URL}/auth/refresh`, {
       refreshToken: refresh,
@@ -35,6 +48,7 @@ async function refreshAccess(): Promise<string | null> {
     return res.data.accessToken;
   } catch {
     await clearTokens();
+    if (onSessionExpired) await onSessionExpired();
     return null;
   }
 }

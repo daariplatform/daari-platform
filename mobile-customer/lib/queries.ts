@@ -19,7 +19,13 @@ export function useMyProfile() {
       if (demo) return DEMO_PROFILE;
       return (await api.get<CustomerProfile>('/customers/me')).data;
     },
-    staleTime: 60_000,
+    // Short stale so the customer sees an updated refill price within ~10s
+    // of the plant admin editing it. Also re-fetches when the app is
+    // brought back to foreground so the price refreshes after settings
+    // changes the customer wasn't watching live.
+    staleTime: 10_000,
+    refetchOnMount: 'always',
+    refetchOnReconnect: true,
   });
 }
 
@@ -31,7 +37,14 @@ export function useMyOrders() {
       if (demo) return DEMO_ORDERS;
       return (await api.get<RefillOrder[]>('/orders/me')).data;
     },
-    staleTime: 30_000,
+    // Poll every 15s so the customer sees the driver's status transitions
+    // (ASSIGNED → EN_ROUTE → COMPLETED) without manually pulling to refresh.
+    // This is the "live tracking lite" — cheap and good enough until we
+    // bolt on websockets/SSE.
+    staleTime: 10_000,
+    refetchInterval: demo ? false : 15_000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 }
 
