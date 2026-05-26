@@ -321,3 +321,80 @@ export function useSubscription() {
     },
   });
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Promo campaigns + wallet
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * Promo wallet + price-discount campaign system.
+ *
+ * Money flow:
+ *   - Plant owner asks Ahmed to top up their promo wallet (off-platform).
+ *   - Owner creates a campaign with a discounted price + window (1–48h).
+ *   - On every order that completes at the promo price, 1,000 د.ع is
+ *     deducted from the wallet. When the wallet hits zero, the backend
+ *     auto-flips status → OUT_OF_BUDGET.
+ *   - Owner can pause early; no refunds.
+ *
+ * Live stats refetch on a 60s interval so the "active campaign" card
+ * shows fresh order/revenue numbers without a manual pull-to-refresh.
+ */
+
+export type PromoCampaignStatus =
+  | 'ACTIVE'
+  | 'PAUSED_BY_OWNER'
+  | 'EXPIRED'
+  | 'OUT_OF_BUDGET';
+
+export interface PromoCampaign {
+  id: string;
+  originalPriceIqd: number;
+  promoPriceIqd: number;
+  costPerOrderIqd: number;
+  startAt: string;
+  endAt: string;
+  status: PromoCampaignStatus;
+  walletBalanceAtStartIqd: number;
+  pushSentCount: number;
+  pushFailedCount: number;
+  orderCount: number;
+  totalDeductedIqd: number;
+  totalRevenueIqd: number;
+  createdAt: string;
+}
+
+export interface PromosListResult {
+  walletBalanceIqd: number;
+  campaigns: PromoCampaign[];
+}
+
+export function usePromos() {
+  return useQuery({
+    queryKey: ['plant', 'promos'],
+    queryFn: async () => (await api.get<PromosListResult>('/plant/promos')).data,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useCreatePromo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { promoPriceIqd: number; durationHours: number }) => {
+      const { data } = await api.post<PromoCampaign>('/plant/promos', input);
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['plant', 'promos'] }),
+  });
+}
+
+export function usePausePromo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data } = await api.post<PromoCampaign>(`/plant/promos/${id}/pause`);
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['plant', 'promos'] }),
+  });
+}

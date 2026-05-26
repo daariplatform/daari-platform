@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { usePostHog } from 'posthog-react-native';
+import { useRouter } from 'expo-router';
 
 import { useAuth } from '@/lib/auth-store';
 import { useSubscription } from '@/lib/queries';
@@ -41,6 +42,7 @@ const PLAN_LABELS: Record<string, string> = {
  */
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
+  const router = useRouter();
   const subQuery = useSubscription();
   const ph = usePostHog();
 
@@ -233,6 +235,30 @@ export default function SettingsScreen() {
               تعذّر تحميل بيانات الاشتراك
             </Text>
           )}
+        </Section>
+
+        {/* Promos shortcut */}
+        <Section icon="campaign" title="العروض">
+          <Pressable
+            onPress={() => router.push('/promos' as any)}
+            style={({ pressed }) => ({
+              flexDirection: 'row-reverse',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingVertical: 4,
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>
+                إدارة العروض الترويجية
+              </Text>
+              <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                أنشئ عرض خصم وتابع رصيد المحفظة
+              </Text>
+            </View>
+            <MaterialIcons name="chevron-left" size={22} color="#0e9384" />
+          </Pressable>
         </Section>
 
         {/* About */}

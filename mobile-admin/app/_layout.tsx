@@ -128,6 +128,9 @@ function RootLayoutInner() {
         <Stack.Screen name="order/[id]" options={{ presentation: 'card' }} />
         <Stack.Screen name="customer/[id]" options={{ presentation: 'card' }} />
         <Stack.Screen name="walkin" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="promos" options={{ presentation: 'card' }} />
+        <Stack.Screen name="promo-create" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="promo/[id]" options={{ presentation: 'card' }} />
       </Stack>
     </View>
   );

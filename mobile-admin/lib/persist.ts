@@ -35,6 +35,7 @@ const PERSIST_PREFIXES: string[][] = [
   ['plant', 'stock'],
   ['plant', 'subscription'],
   ['plant', 'driver-performance'],
+  ['plant', 'promos'],
   ['orders', 'list'],
   ['orders', 'detail'],
   ['customers', 'list'],

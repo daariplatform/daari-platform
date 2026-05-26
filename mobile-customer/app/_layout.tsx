@@ -100,7 +100,16 @@ function RootLayoutInner() {
       (notif) => console.log('[push] received in fg:', notif.request.content.title),
       (response) => {
         // Tap → route based on payload
-        const data = response.notification.request.content.data as { orderId?: string };
+        const data = response.notification.request.content.data as {
+          orderId?: string;
+          kind?: string;
+        };
+        // Promo push lands the customer on home — the active-promo CTA
+        // morph is what we want them to see, no dedicated screen exists.
+        if (data?.kind === 'promo') {
+          router.push('/(tabs)/home');
+          return;
+        }
         if (data?.orderId) router.push(`/order/${data.orderId}` as any);
       },
     );

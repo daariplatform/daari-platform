@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { clearTokens, getAccessToken } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
+import { api, clearTokens, getAccessToken } from '@/lib/api';
 import { resetPostHog, trackEvent } from '@/lib/posthog';
 import { useEffect } from 'react';
 import {
@@ -20,7 +21,16 @@ import {
   Crown,
   History,
   LogOut,
+  Megaphone,
+  Wallet,
 } from 'lucide-react';
+
+interface MeShape {
+  id: string;
+  phone: string;
+  role: string;
+  tenantId: string | null;
+}
 
 // Next.js typed routes — cast href to any since dynamic + new routes break literal narrowing
 const NAV: Array<{ href: string; label: string; icon: any }> = [
@@ -34,9 +44,10 @@ const NAV: Array<{ href: string; label: string; icon: any }> = [
   { href: '/dashboard/accounting', label: 'المحاسبة', icon: CreditCard },
   { href: '/dashboard/notifications', label: 'التنبيهات', icon: Bell },
   { href: '/dashboard/reports', label: 'التقارير', icon: BarChart3 },
-  { href: '/dashboard/subscription', label: 'الاشتراك والعروض', icon: Crown },
-  { href: '/dashboard/audit-log', label: 'سجل التعديلات', icon: History },
   { href: '/dashboard/settings', label: 'الإعدادات', icon: Settings },
+  { href: '/dashboard/promos', label: 'العروض', icon: Megaphone },
+  { href: '/dashboard/subscription', label: 'الاشتراك', icon: Crown },
+  { href: '/dashboard/audit-log', label: 'سجل التعديلات', icon: History },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -46,6 +57,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (!getAccessToken()) router.push('/login');
   }, [router]);
+
+  // Platform-admin (Ahmed/PhiBit) only sees the "Wallets" admin row. We don't
+  // want to surface it to plant owners since it'd 403 anyway, but more
+  // importantly it'd be confusing.
+  const meQuery = useQuery<MeShape>({
+    queryKey: ['auth-me'],
+    queryFn: async () => (await api.get<MeShape>('/auth/me')).data,
+    enabled: typeof window !== 'undefined' && !!getAccessToken(),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const isPlatformAdmin = meQuery.data?.role === 'PLATFORM_ADMIN';
 
   function logout() {
     trackEvent('logout');
@@ -61,7 +84,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <h2 className="font-bold text-primary-700 text-xl">منصة داري</h2>
           <p className="text-xs text-slate-500 mt-1">لوحة المعمل</p>
         </div>
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {NAV.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href || pathname?.startsWith(item.href + '/');
@@ -78,6 +101,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </Link>
             );
           })}
+          {isPlatformAdmin && (
+            <>
+              <div className="pt-3 mt-3 border-t border-slate-200">
+                <p className="px-3 pb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                  إدارة المنصّة
+                </p>
+              </div>
+              <Link
+                href={'/dashboard/platform/wallets' as any}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition ${
+                  pathname === '/dashboard/platform/wallets'
+                    ? 'bg-primary-50 text-primary-700'
+                    : 'hover:bg-slate-50'
+                }`}
+              >
+                <Wallet size={18} />
+                <span>محافظ المعامل</span>
+              </Link>
+            </>
+          )}
         </nav>
         <button
           onClick={logout}

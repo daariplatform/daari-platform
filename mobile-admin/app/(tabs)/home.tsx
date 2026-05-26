@@ -463,9 +463,9 @@ export default function PlantHome() {
                 primary
               />
               <QuickAction
-                icon="local-shipping"
-                label="تتبّع السائقين"
-                onPress={() => router.push('/(tabs)/orders')}
+                icon="campaign"
+                label="العروض"
+                onPress={() => router.push('/promos' as any)}
               />
             </View>
           </>

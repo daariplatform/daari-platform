@@ -4,7 +4,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView } from 'moti';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
-import { useMyProfile, useCreateRefillOrder, useMyOrders } from '@/lib/queries';
+import {
+  useMyProfile,
+  useCreateRefillOrder,
+  useMyOrders,
+  useActivePromo,
+  type ActivePromo,
+} from '@/lib/queries';
 import { useRouter } from 'expo-router';
 import { usePostHog } from 'posthog-react-native';
 import { track } from '@/lib/posthog';
@@ -33,6 +39,7 @@ export default function Home() {
   const router = useRouter();
   const { data: profile, isLoading } = useMyProfile();
   const { data: orders } = useMyOrders();
+  const { data: activePromo } = useActivePromo();
   const createOrder = useCreateRefillOrder();
   const ph = usePostHog();
 
@@ -58,7 +65,10 @@ export default function Home() {
       await createOrder.mutateAsync(profile.id);
       hap.success();
       track(ph, 'order_created', {
-        priceIqd: profile.refillPriceIqd,
+        priceIqd: activePromo?.promoPriceIqd ?? profile.refillPriceIqd,
+        // Attribute the conversion to a running campaign when one exists —
+        // lets the plant see how many orders the promo actually generated.
+        promoId: activePromo?.id,
         // No `liters` field on the customer flow — the tank size is a
         // tenant-level setting; we omit it here and the worker fires the
         // detailed event with liters in `order_completed`.
@@ -174,6 +184,10 @@ export default function Home() {
                   ? (activeOrder.status as 'PENDING' | 'ASSIGNED' | 'EN_ROUTE')
                   : null
               }
+              // Only surface the promo when there's no in-flight order —
+              // an active order short-circuits the CTA into "track" mode,
+              // and stacking a "discount countdown" on top of that is noise.
+              promo={!activeOrder ? activePromo ?? null : null}
             />
           </MotiView>
 
@@ -219,12 +233,18 @@ export default function Home() {
 /**
  * The main "اطلب الآن" CTA. Pulse animation when idle, scale on press,
  * loading spinner when submitting.
+ *
+ * Three visual states, mutually exclusive:
+ *   - `activeOrderStatus` set    → amber "track existing order" mode
+ *   - `promo` set                → emerald-badged discount mode w/ countdown
+ *   - neither                    → standard sky-blue order CTA
  */
 function OrderButton({
   onPress,
   loading,
   priceIqd,
   activeOrderStatus,
+  promo,
 }: {
   onPress: () => void;
   loading: boolean;
@@ -233,10 +253,14 @@ function OrderButton({
    *  of "place a new one" — prevents the customer from spamming duplicate
    *  requests for the same tank. */
   activeOrderStatus: 'PENDING' | 'ASSIGNED' | 'EN_ROUTE' | null;
+  /** When set, the CTA morphs into a discount variant: strikethrough original
+   *  price + promo price + countdown to `endAt`. Suppressed by `activeOrderStatus`. */
+  promo: ActivePromo | null;
 }) {
   const pulse = useSharedValue(1);
   const [pressed, setPressed] = useState(false);
   const hasActive = activeOrderStatus !== null;
+  const hasPromo = !hasActive && promo !== null;
 
   useEffect(() => {
     // Stop pulsing when an order is already in flight — calmer state matches
@@ -271,110 +295,232 @@ function OrderButton({
           : '';
 
   return (
-    <Animated.View style={pulseStyle}>
-      <Animated.View style={pressStyle}>
-        <Pressable
-          onPress={onPress}
-          disabled={loading}
-          onPressIn={() => setPressed(true)}
-          onPressOut={() => setPressed(false)}
-        >
-          <LinearGradient
-            colors={
-              loading
-                ? ['#bae6fd', '#7dd3fc']
-                : hasActive
-                  ? ['#fbbf24', '#f59e0b', '#d97706']   // amber — "in progress, wait"
-                  : ['#38bdf8', '#0ea5e9', '#0284c7']   // sky — "ready to order"
-            }
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{
-              borderRadius: 26,
-              paddingVertical: 18,
-              paddingHorizontal: 18,
-              flexDirection: 'row-reverse',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 14,
-              shadowColor: hasActive ? '#d97706' : '#0ea5e9',
-              shadowOffset: { width: 0, height: 10 },
-              shadowOpacity: 0.35,
-              shadowRadius: 20,
-              elevation: 10,
-            }}
+    <View>
+      {hasPromo && promo && (
+        <PromoBadge endAt={promo.endAt} />
+      )}
+      <Animated.View style={pulseStyle}>
+        <Animated.View style={pressStyle}>
+          <Pressable
+            onPress={onPress}
+            disabled={loading}
+            onPressIn={() => setPressed(true)}
+            onPressOut={() => setPressed(false)}
           >
-            <View style={{ flex: 1, alignItems: 'flex-end' }}>
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : hasActive ? (
-                <>
-                  <Text className="text-white font-bold text-lg">طلبك قيد التنفيذ</Text>
-                  <Text
-                    style={{
-                      color: '#fff',
-                      fontWeight: '900',
-                      fontSize: 18,
-                      marginTop: 4,
-                      lineHeight: 22,
-                    }}
-                  >
-                    {activeLabel}
-                  </Text>
-                  <Text style={{ color: '#fef3c7', fontSize: 10, marginTop: 4 }}>
-                    اضغط لمتابعة الطلب الحالي
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <Text className="text-white font-bold text-lg">اطلب تعبئة الآن</Text>
-                  {/* السعر بسطر مستقل + بحجم كبير (24px) — أكثر بروزاً من قبل. */}
-                  <Text
-                    style={{
-                      color: '#fff',
-                      fontWeight: '900',
-                      fontSize: 24,
-                      marginTop: 4,
-                      lineHeight: 26,
-                    }}
-                  >
-                    {(priceIqd ?? 0).toLocaleString('en-US')}{' '}
-                    <Text style={{ fontSize: 13, opacity: 0.85, fontWeight: '700' }}>
-                      د.ع
+            <LinearGradient
+              colors={
+                loading
+                  ? ['#bae6fd', '#7dd3fc']
+                  : hasActive
+                    ? ['#fbbf24', '#f59e0b', '#d97706']   // amber — "in progress, wait"
+                    : hasPromo
+                      ? ['#0ea5e9', '#0284c7', '#0369a1'] // deeper sky — promo variant
+                      : ['#38bdf8', '#0ea5e9', '#0284c7'] // sky — "ready to order"
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                borderRadius: 26,
+                paddingVertical: 18,
+                paddingHorizontal: 18,
+                flexDirection: 'row-reverse',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 14,
+                shadowColor: hasActive ? '#d97706' : hasPromo ? '#10b981' : '#0ea5e9',
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: 0.35,
+                shadowRadius: 20,
+                elevation: 10,
+              }}
+            >
+              <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : hasActive ? (
+                  <>
+                    <Text className="text-white font-bold text-lg">طلبك قيد التنفيذ</Text>
+                    <Text
+                      style={{
+                        color: '#fff',
+                        fontWeight: '900',
+                        fontSize: 18,
+                        marginTop: 4,
+                        lineHeight: 22,
+                      }}
+                    >
+                      {activeLabel}
                     </Text>
-                  </Text>
-                  <Text style={{ color: '#bae6fd', fontSize: 10, marginTop: 4 }}>
-                    يصلك خلال ساعة · دفع نقدي
-                  </Text>
-                </>
-              )}
-            </View>
-            {!loading && (
-              <View
-                style={{
-                  width: 60,
-                  height: 60,
-                  borderRadius: 18,
-                  backgroundColor: 'rgba(255,255,255,0.22)',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.3)',
-                }}
-              >
-                {/* قطرة ماء عند طلب جديد، ساعة عند طلب نشط — نشير بصرياً
-                    لحالة الزر دون الحاجة لقراءة النص. */}
-                <MaterialIcons
-                  name={hasActive ? 'access-time' : 'water-drop'}
-                  size={32}
-                  color="#fff"
-                />
+                    <Text style={{ color: '#fef3c7', fontSize: 10, marginTop: 4 }}>
+                      اضغط لمتابعة الطلب الحالي
+                    </Text>
+                  </>
+                ) : hasPromo && promo ? (
+                  <>
+                    <Text className="text-white font-bold text-lg">اطلب الآن</Text>
+                    {/* Strikethrough original price — small, dim — sits ABOVE
+                        the big new price so the eye reads "10,000 → 7,000". */}
+                    <Text
+                      style={{
+                        color: '#94a3b8',
+                        fontSize: 14,
+                        marginTop: 4,
+                        textDecorationLine: 'line-through',
+                        fontWeight: '700',
+                      }}
+                    >
+                      بدلاً من {promo.originalPriceIqd.toLocaleString('en-US')} د.ع
+                    </Text>
+                    <Text
+                      style={{
+                        color: '#fff',
+                        fontWeight: '900',
+                        fontSize: 28,
+                        marginTop: 2,
+                        lineHeight: 30,
+                      }}
+                    >
+                      {promo.promoPriceIqd.toLocaleString('en-US')}{' '}
+                      <Text style={{ fontSize: 14, opacity: 0.9, fontWeight: '700' }}>
+                        د.ع
+                      </Text>
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text className="text-white font-bold text-lg">اطلب تعبئة الآن</Text>
+                    {/* السعر بسطر مستقل + بحجم كبير (24px) — أكثر بروزاً من قبل. */}
+                    <Text
+                      style={{
+                        color: '#fff',
+                        fontWeight: '900',
+                        fontSize: 24,
+                        marginTop: 4,
+                        lineHeight: 26,
+                      }}
+                    >
+                      {(priceIqd ?? 0).toLocaleString('en-US')}{' '}
+                      <Text style={{ fontSize: 13, opacity: 0.85, fontWeight: '700' }}>
+                        د.ع
+                      </Text>
+                    </Text>
+                    <Text style={{ color: '#bae6fd', fontSize: 10, marginTop: 4 }}>
+                      يصلك خلال ساعة · دفع نقدي
+                    </Text>
+                  </>
+                )}
               </View>
-            )}
-          </LinearGradient>
-        </Pressable>
+              {!loading && (
+                <View
+                  style={{
+                    width: 60,
+                    height: 60,
+                    borderRadius: 18,
+                    backgroundColor: 'rgba(255,255,255,0.22)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.3)',
+                  }}
+                >
+                  {/* قطرة ماء عند طلب جديد، ساعة عند طلب نشط، تخفيض عند العرض —
+                      نشير بصرياً لحالة الزر دون الحاجة لقراءة النص. */}
+                  <MaterialIcons
+                    name={
+                      hasActive
+                        ? 'access-time'
+                        : hasPromo
+                          ? 'local-offer'
+                          : 'water-drop'
+                    }
+                    size={32}
+                    color="#fff"
+                  />
+                </View>
+              )}
+            </LinearGradient>
+          </Pressable>
+        </Animated.View>
       </Animated.View>
-    </Animated.View>
+      {hasPromo && promo && (
+        <PromoCountdown endAt={promo.endAt} />
+      )}
+    </View>
+  );
+}
+
+/**
+ * Emerald "limited offer" pill that sits above the promo CTA. Kept as a
+ * separate component so the OrderButton tree stays readable.
+ */
+function PromoBadge({ endAt: _endAt }: { endAt: string }) {
+  return (
+    <View
+      style={{
+        alignSelf: 'flex-end',
+        backgroundColor: '#10b981',
+        paddingHorizontal: 12,
+        paddingVertical: 5,
+        borderRadius: 999,
+        marginBottom: 8,
+        shadowColor: '#10b981',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.35,
+        shadowRadius: 8,
+        elevation: 4,
+      }}
+    >
+      <Text style={{ color: '#fff', fontWeight: '900', fontSize: 12 }}>
+        🎉 عرض محدود!
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * Auto-updating countdown line below the promo CTA. Recomputes from
+ * `endAt` (server clock) on every tick — never accumulates from a local
+ * `secondsRemaining` counter to avoid drift if the device clock is wrong.
+ *
+ * Ticks every 30s — fine for "X ساعة و Y دقيقة" granularity. The final
+ * 5 minutes flash red as an urgency cue.
+ */
+function PromoCountdown({ endAt }: { endAt: string }) {
+  const computeMs = () => new Date(endAt).getTime() - Date.now();
+  const [msLeft, setMsLeft] = useState<number>(computeMs);
+
+  useEffect(() => {
+    // Re-sync immediately whenever `endAt` changes (e.g. plant extended the campaign).
+    setMsLeft(computeMs());
+    const id = setInterval(() => setMsLeft(computeMs()), 30_000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endAt]);
+
+  if (msLeft <= 0) return null;
+
+  const totalMinutes = Math.floor(msLeft / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  const isUrgent = msLeft <= 5 * 60_000;
+
+  const label =
+    hours > 0
+      ? `ينتهي خلال ${hours} ساعة و ${minutes} دقيقة`
+      : `ينتهي خلال ${minutes} دقيقة`;
+
+  return (
+    <View style={{ alignItems: 'center', marginTop: 8 }}>
+      <Text
+        style={{
+          color: isUrgent ? '#ef4444' : '#64748b',
+          fontSize: 12,
+          fontWeight: isUrgent ? '900' : '700',
+        }}
+      >
+        {label}
+      </Text>
+    </View>
   );
 }
 
