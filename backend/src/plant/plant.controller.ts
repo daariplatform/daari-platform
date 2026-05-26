@@ -492,6 +492,148 @@ export class PlantController {
     return row;
   }
 
+  /**
+   * Activity feed — last N events across this tenant's day, used by the
+   * mobile-admin home dashboard's "آخر النشاط" timeline. Aggregates four
+   * sources (orders, pending leads, stock changes via audit, driver
+   * location heartbeats), merges them chronologically, and trims to the
+   * requested limit.
+   *
+   * Each row is shaped for the UI directly (id/kind/title/subtitle/createdAt
+   * + optional deeplink) so the client doesn't have to format anything.
+   */
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)
+  @Get('activity-feed')
+  async activityFeed(@CurrentUser() user: AuthUser, @Query('limit') limit?: string) {
+    const tenantId = user.tenantId!;
+    const n = Math.min(parseInt(limit ?? '8', 10) || 8, 50);
+    const since = new Date();
+    since.setDate(since.getDate() - 7);
+
+    type Event = {
+      id: string;
+      kind: 'order' | 'lead' | 'stock' | 'driver';
+      title: string;
+      subtitle: string;
+      createdAt: string;
+      deeplink?: string;
+    };
+
+    // Pull a small slice from each source — we over-fetch a bit then trim
+    // after the merge so the final feed is the freshest N across sources.
+    const perSource = Math.max(n, 5);
+
+    const [orders, leads, stockChanges, driverPings] = await Promise.all([
+      this.prisma.refillOrder.findMany({
+        where: { tenantId, requestedAt: { gte: since } },
+        orderBy: { requestedAt: 'desc' },
+        take: perSource,
+        include: {
+          customer: { select: { fullName: true } },
+          // Tank capacity is an enum (L350 / L500), not a numeric column.
+          // We map it to a liters number when shaping the event subtitle.
+          tank: { select: { capacity: true } },
+        },
+      }),
+      this.prisma.customer.findMany({
+        where: { tenantId, status: 'PENDING_APPROVAL', registeredAt: { gte: since } },
+        orderBy: { registeredAt: 'desc' },
+        take: perSource,
+        select: { id: true, fullName: true, registeredAt: true, phone: true },
+      }),
+      this.prisma.auditLog.findMany({
+        where: { tenantId, entityType: 'stock', createdAt: { gte: since } },
+        orderBy: { createdAt: 'desc' },
+        take: perSource,
+        select: { id: true, action: true, createdAt: true, after: true },
+      }),
+      this.prisma.driver.findMany({
+        where: { tenantId, lastLocationAt: { gte: since } },
+        orderBy: { lastLocationAt: 'desc' },
+        take: perSource,
+        include: { user: { select: { fullName: true } } },
+      }),
+    ]);
+
+    const events: Event[] = [];
+
+    for (const o of orders) {
+      const status = o.status;
+      const customerName = o.customer?.fullName ?? o.walkinBuyerName ?? 'زبون';
+      let title: string;
+      if (status === 'COMPLETED') title = `تمّ طلب ${customerName}`;
+      else if (status === 'CANCELLED') title = `أُلغي طلب ${customerName}`;
+      else if (status === 'EN_ROUTE') title = `سائق ينقل طلب ${customerName}`;
+      else if (status === 'ASSIGNED') title = `تمّ تعيين سائق لطلب ${customerName}`;
+      else title = `طلب جديد من ${customerName}`;
+      // Subtitle: prefer tank capacity (refill — enum mapped to liters),
+      // fall back to walkinLiters (walk-in sale), then to the price.
+      let liters = 0;
+      if (o.tank?.capacity === 'L350') liters = 350;
+      else if (o.tank?.capacity === 'L500') liters = 500;
+      else if (o.walkinLiters) liters = o.walkinLiters;
+      const subtitle = liters > 0
+        ? `${liters.toLocaleString('en-US')} لتر`
+        : `${(o.priceIqd ?? 0).toLocaleString('en-US')} د.ع`;
+      events.push({
+        id: `order:${o.id}`,
+        kind: 'order',
+        title,
+        subtitle,
+        createdAt: o.requestedAt.toISOString(),
+        deeplink: `/orders/${o.id}`,
+      });
+    }
+
+    for (const l of leads) {
+      events.push({
+        id: `lead:${l.id}`,
+        kind: 'lead',
+        title: `طلب انضمام: ${l.fullName}`,
+        subtitle: l.phone ?? 'بانتظار المراجعة',
+        createdAt: l.registeredAt.toISOString(),
+        deeplink: `/customers/${l.id}`,
+      });
+    }
+
+    for (const s of stockChanges) {
+      // audit `after` is a JSON blob — try to extract liters if present
+      let subtitle = 'تحديث المخزون';
+      try {
+        const after = s.after as any;
+        if (after && typeof after.currentLiters === 'number') {
+          subtitle = `الرصيد ${after.currentLiters.toLocaleString('en-US')} لتر`;
+        }
+      } catch {
+        // swallow — subtitle stays as default
+      }
+      events.push({
+        id: `stock:${s.id}`,
+        kind: 'stock',
+        title: s.action === 'topup' ? 'تعبئة مخزون' : 'تحديث مخزون',
+        subtitle,
+        createdAt: s.createdAt.toISOString(),
+        deeplink: '/stock',
+      });
+    }
+
+    for (const d of driverPings) {
+      if (!d.lastLocationAt) continue;
+      events.push({
+        id: `driver:${d.id}:${d.lastLocationAt.getTime()}`,
+        kind: 'driver',
+        title: `${d.user.fullName} متصل`,
+        subtitle: d.vehiclePlate ? `لوحة ${d.vehiclePlate}` : 'سائق نشط',
+        createdAt: d.lastLocationAt.toISOString(),
+        deeplink: `/drivers/${d.id}`,
+      });
+    }
+
+    // Merge + sort by createdAt desc, then trim
+    events.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    return events.slice(0, n);
+  }
+
   // ─── helpers ─────────────────────────────────────────────────────
 
   private async audit(

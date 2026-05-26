@@ -1067,14 +1067,32 @@ export interface TopCustomer {
   orderCount: number;
 }
 
+// Backend ships these rows with `customerId` + `spentIqd` (groupBy semantics),
+// not `id` + `totalSpendIqd`. Normalize at the edge so all UI consumers get
+// the camel shape they expect — this also stabilizes `key={c.id}` in lists
+// (otherwise key=undefined → React warnings + reconciliation bugs).
+interface TopCustomerWire {
+  customerId: string;
+  fullName: string;
+  phone: string | null;
+  district: string | null;
+  spentIqd: number;
+  orderCount: number;
+}
+
 export function useTopCustomers(limit = 5) {
   return useQuery({
     queryKey: ['plant', 'reports', 'top-customers', limit],
     queryFn: async () => {
-      const { data } = await api.get<TopCustomer[]>('/plant/reports/top-customers', {
+      const { data } = await api.get<TopCustomerWire[]>('/plant/reports/top-customers', {
         params: { limit },
       });
-      return data;
+      return data.map<TopCustomer>((r) => ({
+        id: r.customerId,
+        fullName: r.fullName,
+        totalSpendIqd: r.spentIqd,
+        orderCount: r.orderCount,
+      }));
     },
     staleTime: 60_000,
   });
@@ -1087,14 +1105,30 @@ export interface TopDriver {
   revenueIqd: number;
 }
 
+// Backend returns `driverId` + extra fields; normalize for the list UI.
+interface TopDriverWire {
+  driverId: string;
+  fullName: string;
+  phone: string | null;
+  vehiclePlate: string | null;
+  completedOrders: number;
+  revenueIqd: number;
+  bonusIqd: number;
+}
+
 export function useTopDrivers(limit = 5) {
   return useQuery({
     queryKey: ['plant', 'reports', 'top-drivers', limit],
     queryFn: async () => {
-      const { data } = await api.get<TopDriver[]>('/plant/reports/top-drivers', {
+      const { data } = await api.get<TopDriverWire[]>('/plant/reports/top-drivers', {
         params: { limit },
       });
-      return data;
+      return data.map<TopDriver>((r) => ({
+        id: r.driverId,
+        fullName: r.fullName,
+        completedOrders: r.completedOrders,
+        revenueIqd: r.revenueIqd,
+      }));
     },
     staleTime: 60_000,
   });

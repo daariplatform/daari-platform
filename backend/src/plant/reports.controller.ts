@@ -160,6 +160,141 @@ export class PlantReportsController {
   }
 
   /**
+   * "نظرة سريعة" tiles for the mobile-admin home screen. Aggregates four
+   * loosely-related signals in one round-trip so the dashboard renders in
+   * a single network call:
+   *
+   *  - bestDriver:        driver with the most completed orders this month
+   *  - topCustomer:       customer with the highest spend this month
+   *  - peakHourToday:     hour (0..23) with the most completed orders today
+   *  - growthVsLastWeek:  revenue trend, last-7-days vs the 7 days before
+   *
+   * Each field is independently nullable so a brand-new tenant doesn't 500
+   * the whole tile group when there's nothing to summarise.
+   */
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)
+  @Get('insights')
+  async insights(@CurrentUser() user: AuthUser) {
+    const tenantId = user.tenantId!;
+    const monthStart = startOfMonth();
+
+    // Best driver this month (by completed-order count)
+    const bestDriverGroup = await this.prisma.refillOrder.groupBy({
+      by: ['driverId'],
+      where: {
+        tenantId,
+        status: RefillOrderStatus.COMPLETED,
+        completedAt: { gte: monthStart },
+        driverId: { not: null },
+      },
+      _count: { _all: true },
+      orderBy: { _count: { driverId: 'desc' } },
+      take: 1,
+    });
+    let bestDriver: { id: string; fullName: string; completedOrders: number } | null = null;
+    if (bestDriverGroup.length > 0 && bestDriverGroup[0].driverId) {
+      const d = await this.prisma.driver.findFirst({
+        where: { id: bestDriverGroup[0].driverId, tenantId },
+        include: { user: { select: { fullName: true } } },
+      });
+      if (d) {
+        bestDriver = {
+          id: d.id,
+          fullName: d.user.fullName,
+          completedOrders: bestDriverGroup[0]._count._all,
+        };
+      }
+    }
+
+    // Top customer this month (by total spend)
+    const topCustomerGroup = await this.prisma.refillOrder.groupBy({
+      by: ['customerId'],
+      where: {
+        tenantId,
+        status: RefillOrderStatus.COMPLETED,
+        completedAt: { gte: monthStart },
+        customerId: { not: null },
+      },
+      _sum: { paidAmountIqd: true },
+      orderBy: { _sum: { paidAmountIqd: 'desc' } },
+      take: 1,
+    });
+    let topCustomer: { id: string; fullName: string; totalSpendIqd: number } | null = null;
+    if (topCustomerGroup.length > 0 && topCustomerGroup[0].customerId) {
+      const c = await this.prisma.customer.findFirst({
+        where: { id: topCustomerGroup[0].customerId, tenantId },
+        select: { id: true, fullName: true },
+      });
+      if (c) {
+        topCustomer = {
+          id: c.id,
+          fullName: c.fullName,
+          totalSpendIqd: topCustomerGroup[0]._sum.paidAmountIqd ?? 0,
+        };
+      }
+    }
+
+    // Peak hour TODAY only — separate query from the 30-day endpoint because
+    // "what's hot right now" is more actionable than the all-time pattern.
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const ordersToday = await this.prisma.refillOrder.findMany({
+      where: {
+        tenantId,
+        status: RefillOrderStatus.COMPLETED,
+        completedAt: { gte: todayStart },
+      },
+      select: { completedAt: true },
+    });
+    let peakHourToday: number | null = null;
+    if (ordersToday.length > 0) {
+      const buckets = Array(24).fill(0);
+      for (const o of ordersToday) buckets[o.completedAt!.getHours()]++;
+      let maxIdx = 0;
+      for (let i = 1; i < 24; i++) if (buckets[i] > buckets[maxIdx]) maxIdx = i;
+      // Only surface a peak if there's enough signal — 1 order is not a "peak".
+      if (buckets[maxIdx] >= 2) peakHourToday = maxIdx;
+    }
+
+    // Growth vs last week — sum revenue for last 7 days vs the 7 days before
+    const now = new Date();
+    const last7Start = new Date(now);
+    last7Start.setDate(last7Start.getDate() - 7);
+    const prior7Start = new Date(now);
+    prior7Start.setDate(prior7Start.getDate() - 14);
+
+    const [thisWeek, lastWeek] = await Promise.all([
+      this.prisma.refillOrder.aggregate({
+        where: {
+          tenantId,
+          status: RefillOrderStatus.COMPLETED,
+          completedAt: { gte: last7Start, lt: now },
+        },
+        _sum: { paidAmountIqd: true },
+      }),
+      this.prisma.refillOrder.aggregate({
+        where: {
+          tenantId,
+          status: RefillOrderStatus.COMPLETED,
+          completedAt: { gte: prior7Start, lt: last7Start },
+        },
+        _sum: { paidAmountIqd: true },
+      }),
+    ]);
+    const thisRev = thisWeek._sum.paidAmountIqd ?? 0;
+    const lastRev = lastWeek._sum.paidAmountIqd ?? 0;
+    let growthVsLastWeekPct = 0;
+    if (lastRev > 0) {
+      growthVsLastWeekPct = Math.round(((thisRev - lastRev) / lastRev) * 100);
+    } else if (thisRev > 0) {
+      // No prior baseline → cap at +100% rather than ∞ so the tile renders sanely.
+      growthVsLastWeekPct = 100;
+    }
+
+    return { bestDriver, topCustomer, peakHourToday, growthVsLastWeekPct };
+  }
+
+  /**
    * Order-count distribution by hour-of-day across the last 30 days. Used
    * by the mobile-admin "Peak Hours" heatmap. Returns 24 buckets — even
    * if a slot saw zero orders — so the heatmap renders against a fixed
