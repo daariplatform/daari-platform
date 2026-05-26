@@ -11,13 +11,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
-import { usePostHog } from 'posthog-react-native';
 import { useRouter } from 'expo-router';
 
 import { useAuth } from '@/lib/auth-store';
 import { useSubscription } from '@/lib/queries';
 import { Skeleton } from '@/components/Skeleton';
-import { track } from '@/lib/posthog';
+import { POSTHOG_API_KEY, trackLogoutSafe } from '@/lib/posthog';
 
 type MaterialIconName = React.ComponentProps<typeof MaterialIcons>['name'];
 
@@ -44,7 +43,6 @@ export default function SettingsScreen() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const subQuery = useSubscription();
-  const ph = usePostHog();
 
   const version =
     (Constants.expoConfig as any)?.version ?? Constants.expoConfig?.version ?? '0.1.0';
@@ -72,11 +70,11 @@ export default function SettingsScreen() {
         text: 'خروج',
         style: 'destructive',
         onPress: async () => {
-          try {
-            track(ph, 'logout');
-          } catch {
-            /* ignore */
-          }
+          // trackLogoutSafe is a no-op when POSTHOG_API_KEY is empty —
+          // it short-circuits BEFORE touching usePostHog(), so we never
+          // hit the "called without a PostHog client" warning in dev
+          // builds that have no analytics key configured.
+          await trackLogoutSafe();
           await logout();
         },
       },

@@ -95,3 +95,32 @@ export function track(
     // ignore
   }
 }
+
+/**
+ * Hookless safe-tracking for screens that aren't inside a PostHogProvider
+ * (e.g. the settings tab when EXPO_PUBLIC_POSTHOG_KEY isn't set). Calling
+ * `usePostHog()` outside a provider logs a noisy red dev warning even
+ * though it returns null — this helper short-circuits BEFORE the hook so
+ * we never reach that path when analytics are off.
+ *
+ * When PostHog IS configured, we still don't have access to the same
+ * provider-bound client here. Posting directly to the Expo HTTP capture
+ * endpoint is the cleanest workaround for a single fire-and-forget event
+ * like logout, where we just want a counter, not session continuity.
+ */
+export async function trackLogoutSafe() {
+  if (!POSTHOG_API_KEY) return; // analytics disabled — no-op
+  try {
+    await fetch(`${POSTHOG_HOST}/capture/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: POSTHOG_API_KEY,
+        event: 'logout',
+        properties: { app: APP_ID },
+      }),
+    });
+  } catch {
+    // Logout must never fail because analytics failed.
+  }
+}
