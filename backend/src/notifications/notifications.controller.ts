@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { IsIn, IsString } from 'class-validator';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { IsBooleanString, IsIn, IsString } from 'class-validator';
 import { UserRole } from '@prisma/client';
 
 import { NotificationsService } from './notifications.service';
@@ -8,6 +8,7 @@ import { PushService } from './push.service';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 class RegisterPushTokenDto {
   @IsString() token!: string;
@@ -45,5 +46,40 @@ export class NotificationsController {
   @Post('push-token')
   registerPushToken(@CurrentUser() user: AuthUser, @Body() dto: RegisterPushTokenDto) {
     return this.push.registerToken(user.id, dto.token, dto.platform);
+  }
+
+  /**
+   * Mobile-admin "Inbox" tab. Paginated NotificationLog scoped to tenant.
+   * Returns `{ items, total, page, pageSize, totalPages, unreadCount }`
+   * so the UI can render a badge on the bell icon in one round-trip.
+   */
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiQuery({ name: 'unreadOnly', required: false, type: Boolean })
+  @Get('inbox')
+  inbox(
+    @CurrentUser() user: AuthUser,
+    @Query() pagination: PaginationDto,
+    @Query('unreadOnly') unreadOnly?: string,
+  ) {
+    return this.notifications.inbox(
+      user.tenantId!,
+      pagination.page,
+      pagination.pageSize,
+      unreadOnly === 'true' || unreadOnly === '1',
+    );
+  }
+
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)
+  @Post(':id/mark-read')
+  markRead(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.notifications.markRead(user.tenantId!, id);
+  }
+
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)
+  @Post('mark-all-read')
+  markAllRead(@CurrentUser() user: AuthUser) {
+    return this.notifications.markAllRead(user.tenantId!);
   }
 }

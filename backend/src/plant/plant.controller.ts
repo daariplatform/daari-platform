@@ -21,6 +21,7 @@ import { UserScopedCacheInterceptor } from '../cache/user-scoped-cache.intercept
 import { WHATSAPP_BLAST_QUEUE } from '../queue/queue.constants';
 import { IsEnum, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 import { PromoChannel, UserRole } from '@prisma/client';
+import { PaginationDto, paginated } from '../common/dto/pagination.dto';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../notifications/push.service';
@@ -128,19 +129,64 @@ export class PlantController {
 
   // ─── Wave 4: Audit log ─────────────────────────────────────────────
 
+  /**
+   * Audit-log feed. Two calling shapes are supported on the same route:
+   *
+   * 1. Legacy dashboard call — `?limit=N&action=string` returns a flat
+   *    array of rows (no envelope). Preserved so the web admin keeps
+   *    working while mobile rolls out.
+   *
+   * 2. Mobile-admin call — `?page=&pageSize=&actor=&action=` returns the
+   *    standard PaginatedResult envelope so the UI can show a "load more"
+   *    spinner with total counts.
+   *
+   * We detect which shape the caller wants by presence of `page` — only
+   * the paginated path opts into the envelope.
+   */
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @Get('audit-log')
-  auditLog(
+  async auditLog(
     @CurrentUser() user: AuthUser,
     @Query('limit') limit?: string,
     @Query('action') action?: string,
+    @Query('actor') actor?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
+    const tenantId = user.tenantId!;
+    // Build a single WHERE shared by both code paths.
+    const where = {
+      tenantId,
+      ...(action && { action: { contains: action } }),
+      ...(actor && {
+        OR: [
+          { actorId: actor },
+          { actorName: { contains: actor, mode: 'insensitive' as const } },
+        ],
+      }),
+    };
+
+    // Paginated path (mobile)
+    if (page) {
+      const p = Math.max(parseInt(page, 10) || 1, 1);
+      const ps = Math.min(Math.max(parseInt(pageSize ?? '50', 10) || 50, 1), 200);
+      const skip = (p - 1) * ps;
+      const [items, total] = await this.prisma.$transaction([
+        this.prisma.auditLog.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: ps,
+        }),
+        this.prisma.auditLog.count({ where }),
+      ]);
+      return paginated(items, total, { page: p, pageSize: ps });
+    }
+
+    // Legacy flat path (web dashboard)
     const n = limit ? Math.min(parseInt(limit, 10) || 200, 1000) : 200;
     return this.prisma.auditLog.findMany({
-      where: {
-        tenantId: user.tenantId!,
-        ...(action && { action }),
-      },
+      where,
       orderBy: { createdAt: 'desc' },
       take: n,
     });

@@ -12,6 +12,7 @@ import { ensureRTL } from '@/lib/i18n';
 import { initSentry, Sentry } from '@/lib/sentry';
 import { registerForPushNotifications, setupNotificationListener } from '@/lib/push';
 import { persister, shouldPersistQuery, CACHE_MAX_AGE_MS } from '@/lib/persist';
+import { useOnboardingStatus } from '@/lib/queries';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import {
   POSTHOG_API_KEY,
@@ -90,6 +91,26 @@ function RootLayoutInner() {
     SplashScreen.hideAsync().catch(() => {});
   }, [hydrating, user, segments]);
 
+  // First-launch onboarding redirect — runs only once the user is hydrated
+  // AND the status fetch has resolved. Brand-new plants get pushed into the
+  // 5-step wizard; everyone else (already complete OR explicitly skipped)
+  // falls through and the auth effect above handles routing.
+  //
+  // Demo mode is skipped — the seeded demo tenant has all flags pre-set
+  // anyway, but we also short-circuit to avoid hitting a route that may
+  // 404 against the no-backend dev profile.
+  const onboardingQuery = useOnboardingStatus();
+  useEffect(() => {
+    if (hydrating || !user) return;
+    if (user.id?.startsWith('demo-')) return;
+    const status = onboardingQuery.data;
+    if (!status) return;
+    if (status.skipped || status.allComplete) return;
+    if (segments[0] === 'onboarding') return; // already there
+    if (segments[0] === '(auth)') return; // login is still in charge
+    router.replace('/onboarding' as any);
+  }, [user, hydrating, onboardingQuery.data, segments]);
+
   useEffect(() => {
     if (!user) return;
     registerForPushNotifications().catch((err) =>
@@ -125,12 +146,22 @@ function RootLayoutInner() {
       <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="order/[id]" options={{ presentation: 'card' }} />
         <Stack.Screen name="customer/[id]" options={{ presentation: 'card' }} />
         <Stack.Screen name="walkin" options={{ presentation: 'modal' }} />
         <Stack.Screen name="promos" options={{ presentation: 'card' }} />
         <Stack.Screen name="promo-create" options={{ presentation: 'modal' }} />
         <Stack.Screen name="promo/[id]" options={{ presentation: 'card' }} />
+        <Stack.Screen name="tanks" options={{ presentation: 'card' }} />
+        <Stack.Screen name="drivers" options={{ presentation: 'card' }} />
+        <Stack.Screen name="drivers/[id]" options={{ presentation: 'card' }} />
+        <Stack.Screen name="drivers/live" options={{ presentation: 'card' }} />
+        <Stack.Screen name="notifications" options={{ presentation: 'card' }} />
+        <Stack.Screen name="audit-log" options={{ presentation: 'card' }} />
+        <Stack.Screen name="team" options={{ presentation: 'card' }} />
+        <Stack.Screen name="accounting" options={{ presentation: 'card' }} />
+        <Stack.Screen name="reports" options={{ presentation: 'card' }} />
       </Stack>
     </View>
   );

@@ -12,10 +12,20 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-import { usePlantKpis, usePendingLeads } from '@/lib/queries';
+import {
+  usePlantKpis,
+  usePendingLeads,
+  useRevenue7d,
+  useDailyInsights,
+  useActivityFeed,
+  type RevenueDay,
+  type DailyInsights,
+  type ActivityEvent,
+} from '@/lib/queries';
 import { useAuth } from '@/lib/auth-store';
 import { Skeleton, SkeletonCard } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
+import { Sparkline } from '@/components/charts/Sparkline';
 
 type MaterialIconName = React.ComponentProps<typeof MaterialIcons>['name'];
 
@@ -32,13 +42,24 @@ export default function PlantHome() {
 
   const kpisQuery = usePlantKpis();
   const leadsQuery = usePendingLeads();
+  const revenue7dQuery = useRevenue7d();
+  const insightsQuery = useDailyInsights();
+  const activityQuery = useActivityFeed(8);
 
-  const refreshing = kpisQuery.isFetching || leadsQuery.isFetching;
+  const refreshing =
+    kpisQuery.isFetching ||
+    leadsQuery.isFetching ||
+    revenue7dQuery.isFetching ||
+    insightsQuery.isFetching ||
+    activityQuery.isFetching;
 
   const onRefresh = useCallback(() => {
     kpisQuery.refetch();
     leadsQuery.refetch();
-  }, [kpisQuery, leadsQuery]);
+    revenue7dQuery.refetch();
+    insightsQuery.refetch();
+    activityQuery.refetch();
+  }, [kpisQuery, leadsQuery, revenue7dQuery, insightsQuery, activityQuery]);
 
   // Build the Arabic "today" string lazily so it always reflects local time.
   const todayLabel = new Intl.DateTimeFormat('ar-IQ', {
@@ -391,6 +412,25 @@ export default function PlantHome() {
               </View>
             </View>
 
+            {/* ── Revenue sparkline (7-day trend) ───────────────────
+                Sits between the revenue strip and the 2×2 grid: gives a
+                visual "is this week up or down?" before the eye lands on
+                the numeric tiles. The line auto-scales to data so any
+                shape is readable even on slow weeks. */}
+            <RevenueTrendCard
+              query={revenue7dQuery}
+              isLoading={revenue7dQuery.isLoading && !revenue7dQuery.data}
+            />
+
+            {/* ── "نظرة سريعة" insight cards ────────────────────────
+                Horizontal scroller with three signals: best driver, top
+                customer, weekly growth. Each falls back to "—" when the
+                backend returns null, so the row never collapses. */}
+            <InsightsRow
+              data={insightsQuery.data ?? null}
+              isLoading={insightsQuery.isLoading && !insightsQuery.data}
+            />
+
             {/* ── 2×2 stat grid ─────────────────────────────────────── */}
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <StatTile
@@ -480,6 +520,24 @@ export default function PlantHome() {
                 </LinearGradient>
               </Pressable>
             )}
+
+            {/* ── "آخر النشاط" activity feed ──────────────────────
+                Last 8 events across the plant (orders, leads, stock,
+                drivers). Sits between the KPI grid and the admin tools so
+                the owner can scan "what changed?" without leaving home.
+                Tappable items deep-link into the relevant tab. */}
+            <ActivityFeedSection
+              data={activityQuery.data ?? []}
+              isLoading={activityQuery.isLoading && !activityQuery.data}
+              onTap={(ev) => {
+                if (ev.deeplink) {
+                  // Deep-links are validated by the router; cast keeps
+                  // TS happy because the string isn't in the static
+                  // typed-routes union.
+                  router.push(ev.deeplink as any);
+                }
+              }}
+            />
 
             {/* ── Admin quick actions ───────────────────────────────
                 Small icon buttons (NOT large CTAs). These are management
@@ -809,3 +867,571 @@ function QuickAction({
     </Pressable>
   );
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Trend + insights + activity feed sub-components
+// ────────────────────────────────────────────────────────────────────
+
+/** Short Arabic weekday name (أحد، اثنين، ...) from a YYYY-MM-DD date. */
+const AR_WEEKDAY_SHORT = ['أحد', 'اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
+function arabicShortDay(dateStr: string): string {
+  // Treat the backend's plain "YYYY-MM-DD" as a local-time date — using
+  // `new Date('YYYY-MM-DD')` parses as UTC and can shift the weekday by
+  // one in Baghdad time zones, which would make the labels wrong.
+  const [y, m, d] = dateStr.split('-').map((s) => parseInt(s, 10));
+  if (!y || !m || !d) return '—';
+  const dt = new Date(y, m - 1, d);
+  const wd = dt.getDay();
+  return AR_WEEKDAY_SHORT[wd] ?? '—';
+}
+
+/** Compact Latin-digit IQD short form for sidebars: "12ك" / "3.4م". */
+function iqdCompact(amount: number): string {
+  if (amount >= 1_000_000) {
+    return (amount / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'م';
+  }
+  if (amount >= 1_000) {
+    return Math.round(amount / 1_000).toLocaleString('en-US') + 'ك';
+  }
+  return Math.round(amount).toLocaleString('en-US');
+}
+
+/** Human-relative time in Arabic: "قبل ٥ د"، "قبل ٢ سا"، "أمس". */
+function relativeTimeAr(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '';
+  const diffMs = Date.now() - t;
+  const diffMin = Math.floor(diffMs / 60_000);
+  if (diffMin < 1) return 'الآن';
+  if (diffMin < 60) return `قبل ${diffMin.toLocaleString('en-US')} د`;
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return `قبل ${diffH.toLocaleString('en-US')} سا`;
+  const diffD = Math.floor(diffH / 24);
+  if (diffD === 1) return 'أمس';
+  if (diffD < 7) return `قبل ${diffD.toLocaleString('en-US')} يوم`;
+  return new Intl.DateTimeFormat('ar-IQ', { day: 'numeric', month: 'short' }).format(
+    new Date(t),
+  );
+}
+
+/**
+ * RevenueTrendCard — sparkline + day labels + total/avg/peak side stats.
+ *
+ * The card is intentionally one row: the sparkline fills the left (in RTL,
+ * the visual right), and a thin stats column hugs the trailing edge. When
+ * the API returns 0 days we render a static empty state instead of a
+ * deceptive flat-line at 0 — the difference between "no data" and "zero
+ * revenue all week" matters to an owner.
+ */
+function RevenueTrendCard({
+  query,
+  isLoading,
+}: {
+  query: { data?: RevenueDay[]; isError?: boolean };
+  isLoading: boolean;
+}) {
+  const data = query.data ?? [];
+  const values = data.map((d) => d.revenueIqd);
+  const total = values.reduce((a, b) => a + b, 0);
+  const avg = values.length ? total / values.length : 0;
+  const peak = values.length ? Math.max(...values) : 0;
+
+  return (
+    <View
+      style={{
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+      }}
+    >
+      <View
+        style={{
+          flexDirection: 'row-reverse',
+          alignItems: 'center',
+          gap: 6,
+          marginBottom: 10,
+        }}
+      >
+        <MaterialIcons name="show-chart" size={14} color="#0e9384" />
+        <Text style={{ fontSize: 12, color: '#0f172a', fontWeight: '800' }}>
+          اتجاه الإيرادات
+        </Text>
+        <Text style={{ fontSize: 10, color: '#64748b', fontWeight: '600' }}>
+          (آخر 7 أيام)
+        </Text>
+      </View>
+
+      {isLoading ? (
+        <Skeleton height={70} borderRadius={10} />
+      ) : data.length === 0 ? (
+        <View
+          style={{
+            flexDirection: 'row-reverse',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            paddingVertical: 18,
+          }}
+        >
+          <MaterialIcons name="bar-chart" size={18} color="#94a3b8" />
+          <Text style={{ color: '#64748b', fontSize: 12 }}>
+            لا توجد بيانات لعرض الاتجاه بعد
+          </Text>
+        </View>
+      ) : (
+        <View style={{ flexDirection: 'row-reverse', gap: 12 }}>
+          {/* Chart + day-label row */}
+          <View style={{ flex: 1 }}>
+            <Sparkline
+              data={values}
+              height={60}
+              color="#0e9384"
+              fillColor="#ccfbf1"
+            />
+            {/* Day labels — RTL row so the rightmost label is the oldest day. */}
+            <View
+              style={{
+                flexDirection: 'row-reverse',
+                justifyContent: 'space-between',
+                marginTop: 6,
+              }}
+            >
+              {data.map((d) => (
+                <Text
+                  key={d.date}
+                  style={{
+                    fontSize: 9,
+                    color: '#94a3b8',
+                    fontWeight: '600',
+                    width: 32,
+                    textAlign: 'center',
+                  }}
+                  numberOfLines={1}
+                >
+                  {arabicShortDay(d.date)}
+                </Text>
+              ))}
+            </View>
+          </View>
+
+          {/* Side stats column */}
+          <View
+            style={{
+              width: 64,
+              borderLeftWidth: 1,
+              borderLeftColor: '#e2e8f0',
+              paddingLeft: 10,
+              gap: 8,
+              alignItems: 'flex-end',
+            }}
+          >
+            <SideStat label="الإجمالي" value={iqdCompact(total)} tone="#0f172a" />
+            <SideStat label="المعدل" value={iqdCompact(avg)} tone="#0e9384" />
+            <SideStat label="الذروة" value={iqdCompact(peak)} tone="#f59e0b" />
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function SideStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: string;
+}) {
+  return (
+    <View style={{ alignItems: 'flex-end' }}>
+      <Text style={{ fontSize: 9, color: '#94a3b8', fontWeight: '600' }}>{label}</Text>
+      <Text style={{ fontSize: 13, color: tone, fontWeight: '900', marginTop: 1 }}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * InsightsRow — three "نظرة سريعة" cards in a horizontal scroller.
+ *
+ * The row scrolls because three full-width cards would stack vertically
+ * and balloon the home; a horizontal flick keeps the dashboard feel
+ * dense. RTL is honoured via `inverted`-style ScrollView config (we
+ * just reverse the children order — easier than wrestling RN's RTL
+ * scroll behaviour, which differs subtly across platforms).
+ */
+function InsightsRow({
+  data,
+  isLoading,
+}: {
+  data: DailyInsights | null;
+  isLoading: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <View style={{ marginTop: 12 }}>
+        <Text
+          style={{
+            fontSize: 11,
+            color: '#64748b',
+            fontWeight: '700',
+            textAlign: 'right',
+            marginBottom: 8,
+          }}
+        >
+          نظرة سريعة
+        </Text>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Skeleton height={84} borderRadius={14} style={{ flex: 1 }} />
+          <Skeleton height={84} borderRadius={14} style={{ flex: 1 }} />
+          <Skeleton height={84} borderRadius={14} style={{ flex: 1 }} />
+        </View>
+      </View>
+    );
+  }
+
+  const growth = data?.growthVsLastWeekPct ?? 0;
+  const growthSign = growth > 0 ? '+' : growth < 0 ? '−' : '';
+  const growthAbs = Math.abs(growth).toLocaleString('en-US', {
+    maximumFractionDigits: 1,
+  });
+  const growthTint = growth > 0 ? '#10b981' : growth < 0 ? '#ef4444' : '#64748b';
+  const growthIcon: MaterialIconName =
+    growth > 0 ? 'trending-up' : growth < 0 ? 'trending-down' : 'trending-flat';
+
+  return (
+    <View style={{ marginTop: 12 }}>
+      <Text
+        style={{
+          fontSize: 11,
+          color: '#64748b',
+          fontWeight: '700',
+          textAlign: 'right',
+          marginBottom: 8,
+        }}
+      >
+        نظرة سريعة
+      </Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{
+          gap: 8,
+          flexDirection: 'row-reverse',
+          paddingHorizontal: 2,
+        }}
+      >
+        <InsightCard
+          icon="emoji-events"
+          tint="#0e9384"
+          label="أفضل سائق"
+          primary={data?.bestDriver?.fullName ?? '—'}
+          secondary={
+            data?.bestDriver
+              ? `${data.bestDriver.completedOrders.toLocaleString('en-US')} طلب`
+              : 'لا توجد بيانات'
+          }
+        />
+        <InsightCard
+          icon="person"
+          tint="#0891b2"
+          label="أعلى زبون"
+          primary={data?.topCustomer?.fullName ?? '—'}
+          secondary={
+            data?.topCustomer
+              ? `${data.topCustomer.totalSpendIqd.toLocaleString('en-US')} د.ع`
+              : 'لا توجد بيانات'
+          }
+        />
+        <InsightCard
+          icon={growthIcon}
+          tint={growthTint}
+          label="النمو هذا الأسبوع"
+          primary={data ? `${growthSign}${growthAbs}%` : '—'}
+          secondary={
+            data
+              ? growth === 0
+                ? 'بدون تغيير'
+                : growth > 0
+                ? 'مقارنة بالأسبوع الماضي'
+                : 'مقارنة بالأسبوع الماضي'
+              : 'لا توجد بيانات'
+          }
+          highlight={growthTint}
+        />
+      </ScrollView>
+    </View>
+  );
+}
+
+function InsightCard({
+  icon,
+  tint,
+  label,
+  primary,
+  secondary,
+  highlight,
+}: {
+  icon: MaterialIconName;
+  tint: string;
+  label: string;
+  primary: string;
+  secondary: string;
+  /** If set, paints the `primary` value in this colour (used by growth). */
+  highlight?: string;
+}) {
+  return (
+    <View
+      style={{
+        width: 170,
+        backgroundColor: '#fff',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        padding: 12,
+      }}
+    >
+      <View
+        style={{
+          flexDirection: 'row-reverse',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 10,
+            color: '#94a3b8',
+            fontWeight: '700',
+            flex: 1,
+            textAlign: 'right',
+            paddingRight: 6,
+          }}
+        >
+          {label}
+        </Text>
+        <View
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            backgroundColor: tint + '1A',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <MaterialIcons name={icon} size={16} color={tint} />
+        </View>
+      </View>
+      <Text
+        style={{
+          marginTop: 8,
+          fontSize: 14,
+          fontWeight: '900',
+          color: highlight ?? '#0f172a',
+          textAlign: 'right',
+        }}
+        numberOfLines={1}
+      >
+        {primary}
+      </Text>
+      <Text
+        style={{
+          marginTop: 2,
+          fontSize: 10,
+          color: '#64748b',
+          textAlign: 'right',
+        }}
+        numberOfLines={1}
+      >
+        {secondary}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * ActivityFeedSection — "آخر النشاط" list of the last N events.
+ *
+ * Each row is tappable when a `deeplink` is present. Empty state uses a
+ * compact inline message (not the big EmptyState component) because we're
+ * in a dense dashboard scroll — a giant empty illustration would push the
+ * admin tools off-screen even on a busy plant.
+ */
+function ActivityFeedSection({
+  data,
+  isLoading,
+  onTap,
+}: {
+  data: ActivityEvent[];
+  isLoading: boolean;
+  onTap: (ev: ActivityEvent) => void;
+}) {
+  if (isLoading) {
+    return (
+      <View style={{ marginTop: 16 }}>
+        <Text
+          style={{
+            fontSize: 11,
+            color: '#64748b',
+            fontWeight: '700',
+            textAlign: 'right',
+            marginBottom: 8,
+          }}
+        >
+          آخر النشاط
+        </Text>
+        <SkeletonCard height={64} />
+        <SkeletonCard height={64} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ marginTop: 16 }}>
+      <Text
+        style={{
+          fontSize: 11,
+          color: '#64748b',
+          fontWeight: '700',
+          textAlign: 'right',
+          marginBottom: 8,
+        }}
+      >
+        آخر النشاط
+      </Text>
+      {data.length === 0 ? (
+        <View
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: '#e2e8f0',
+            paddingVertical: 18,
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          <MaterialIcons name="history" size={22} color="#94a3b8" />
+          <Text style={{ color: '#64748b', fontSize: 12 }}>
+            لا يوجد نشاط حديث
+          </Text>
+        </View>
+      ) : (
+        <View
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: '#e2e8f0',
+            overflow: 'hidden',
+          }}
+        >
+          {data.map((ev, i) => (
+            <ActivityRow
+              key={ev.id}
+              event={ev}
+              showDivider={i < data.length - 1}
+              onPress={() => onTap(ev)}
+            />
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function ActivityRow({
+  event,
+  showDivider,
+  onPress,
+}: {
+  event: ActivityEvent;
+  showDivider: boolean;
+  onPress: () => void;
+}) {
+  const meta = ACTIVITY_KIND_META[event.kind] ?? ACTIVITY_KIND_META.order;
+  const tappable = !!event.deeplink;
+
+  return (
+    <Pressable
+      onPress={tappable ? onPress : undefined}
+      style={({ pressed }) => ({
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: 10,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderBottomWidth: showDivider ? 1 : 0,
+        borderBottomColor: '#f1f5f9',
+        opacity: pressed && tappable ? 0.75 : 1,
+      })}
+    >
+      <View
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 10,
+          backgroundColor: meta.tint + '1A',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <MaterialIcons name={meta.icon} size={16} color={meta.tint} />
+      </View>
+      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+        <Text
+          style={{
+            color: '#0f172a',
+            fontWeight: '700',
+            fontSize: 12,
+            textAlign: 'right',
+          }}
+          numberOfLines={1}
+        >
+          {event.title}
+        </Text>
+        <Text
+          style={{
+            color: '#64748b',
+            fontSize: 10,
+            marginTop: 2,
+            textAlign: 'right',
+          }}
+          numberOfLines={1}
+        >
+          {event.subtitle}
+        </Text>
+      </View>
+      <Text
+        style={{
+          color: '#94a3b8',
+          fontSize: 9,
+          fontWeight: '600',
+          marginLeft: 4,
+        }}
+      >
+        {relativeTimeAr(event.createdAt)}
+      </Text>
+      {tappable && (
+        <MaterialIcons name="chevron-left" size={18} color="#94a3b8" />
+      )}
+    </Pressable>
+  );
+}
+
+const ACTIVITY_KIND_META: Record<
+  ActivityEvent['kind'],
+  { icon: MaterialIconName; tint: string }
+> = {
+  order: { icon: 'receipt-long', tint: '#0e9384' },
+  lead: { icon: 'person-add', tint: '#f59e0b' },
+  stock: { icon: 'water-drop', tint: '#0891b2' },
+  driver: { icon: 'local-shipping', tint: '#7c3aed' },
+};

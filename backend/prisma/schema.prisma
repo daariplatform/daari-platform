@@ -97,6 +97,12 @@ model Tenant {
   // auto-expires.
   promoWalletIqd Int @default(0)
 
+  // Onboarding checklist: when the plant owner clicks "skip the tour" on
+  // the mobile-admin first-run experience, we stamp this so we don't show
+  // the checklist again. NULL = not yet skipped (checklist still appears
+  // until allComplete is true).
+  onboardingSkippedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -723,8 +729,22 @@ model NotificationLog {
   sentAt     DateTime?
   createdAt  DateTime            @default(now())
 
+  // Inbox state — the mobile-admin app shows a notifications inbox per
+  // tenant. `readAt` is stamped when the admin opens the message; a NULL
+  // value means it's still unread. We don't track per-user read state
+  // here because every plant admin sees the same shared inbox (matches
+  // the audit-log behaviour). When mobile-admin gets multi-user fan-out
+  // later, migrate to a join table.
+  readAt   DateTime?
+
+  // Optional short title (the inbox list shows title + first line of body).
+  // Reminders / system messages set this; legacy WhatsApp/SMS rows keep it
+  // null and the list falls back to using the kind enum for the heading.
+  title    String?
+
   @@index([tenantId, kind, createdAt])
   @@index([status])
+  @@index([tenantId, readAt])
 }
 
 // ─── Data monetization ────────────────────────────────────────────────────────

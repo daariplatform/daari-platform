@@ -36,12 +36,30 @@ const PERSIST_PREFIXES: string[][] = [
   ['plant', 'subscription'],
   ['plant', 'driver-performance'],
   ['plant', 'promos'],
+  ['plant', 'onboarding'],
+  ['plant', 'audit'],
+  ['plant', 'team'],
+  ['plant', 'revenue-7d'],
+  ['plant', 'insights'],
+  ['plant', 'activity'],
   ['orders', 'list'],
   ['orders', 'detail'],
   ['customers', 'list'],
   ['customers', 'pending-leads'],
   ['customers', 'detail'],
+  ['tanks', 'list'],
   ['drivers', 'list'],
+  ['drivers', 'live'],
+  ['notifications', 'inbox'],
+  // Reports — top customers/drivers/peak hours all live under
+  // ['plant', 'reports', ...]. Keeping a single prefix means new sub-reports
+  // get cached automatically.
+  ['plant', 'reports'],
+  // Accounting summary + first page of transactions survive cold-starts so
+  // the owner sees yesterday's P&L immediately. Expense mutations are never
+  // persisted (handled by `query.state.status !== 'success'` upstream).
+  ['accounting', 'summary'],
+  ['accounting', 'transactions'],
 ];
 
 function keyMatchesPrefix(queryKey: readonly unknown[], prefix: string[]): boolean {

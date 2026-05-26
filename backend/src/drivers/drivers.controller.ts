@@ -1,6 +1,29 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { IsEnum, IsLatitude, IsLongitude, IsOptional, IsString, Matches, Min, IsInt, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsDateString,
+  IsEnum,
+  IsIn,
+  IsLatitude,
+  IsLongitude,
+  IsOptional,
+  IsString,
+  Matches,
+  Min,
+  IsInt,
+  MinLength,
+} from 'class-validator';
 import { DriverStatus, UserRole } from '@prisma/client';
 import { DriversService } from './drivers.service';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -30,8 +53,46 @@ class CreateDriverDto {
   @IsOptional() @IsInt() @Min(0)
   baseSalaryIqd?: number;
 
+  /** Alias accepted from the mobile-admin "hire driver" form. */
+  @IsOptional() @IsInt() @Min(0)
+  salaryIqd?: number;
+
   @IsOptional() @IsInt() @Min(0)
   commissionPerRefillIqd?: number;
+
+  /** Alias — mobile uses baseCommissionPct in the form but persists as IQD per refill.
+   *  When provided, we treat it as IQD per refill (no FX conversion). */
+  @IsOptional() @IsInt() @Min(0)
+  baseCommissionPct?: number;
+
+  @IsOptional() @IsDateString()
+  joinDate?: string;
+}
+
+class UpdateDriverDto {
+  @IsOptional() @IsString() @MinLength(2)
+  fullName?: string;
+
+  @IsOptional() @IsString()
+  vehiclePlate?: string;
+
+  @IsOptional() @IsInt() @Min(0)
+  baseSalaryIqd?: number;
+
+  @IsOptional() @IsInt() @Min(0)
+  salaryIqd?: number;
+
+  @IsOptional() @IsInt() @Min(0)
+  commissionPerRefillIqd?: number;
+
+  @IsOptional() @IsInt() @Min(0)
+  baseCommissionPct?: number;
+
+  @IsOptional() @IsEnum(DriverStatus)
+  status?: DriverStatus;
+
+  @IsOptional() @IsBoolean()
+  isActive?: boolean;
 }
 
 class ResetDriverPasswordDto {
@@ -62,7 +123,41 @@ export class DriversController {
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @Post()
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateDriverDto) {
-    return this.drivers.create(user.tenantId!, dto);
+    return this.drivers.create(user.tenantId!, {
+      fullName: dto.fullName,
+      phone: dto.phone,
+      password: dto.password,
+      vehiclePlate: dto.vehiclePlate,
+      // Accept either canonical field or mobile-form alias.
+      baseSalaryIqd: dto.baseSalaryIqd ?? dto.salaryIqd,
+      commissionPerRefillIqd:
+        dto.commissionPerRefillIqd ?? dto.baseCommissionPct,
+      joinDate: dto.joinDate ? new Date(dto.joinDate) : undefined,
+    });
+  }
+
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @Patch(':id')
+  update(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateDriverDto,
+  ) {
+    return this.drivers.update(user.tenantId!, id, {
+      fullName: dto.fullName,
+      vehiclePlate: dto.vehiclePlate,
+      baseSalaryIqd: dto.baseSalaryIqd ?? dto.salaryIqd,
+      commissionPerRefillIqd:
+        dto.commissionPerRefillIqd ?? dto.baseCommissionPct,
+      status: dto.status,
+      isActive: dto.isActive,
+    });
+  }
+
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @Delete(':id')
+  softDelete(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.drivers.softDelete(user.tenantId!, id);
   }
 
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)
@@ -148,6 +243,24 @@ export class DriversController {
       from ? new Date(from) : startOfMonth(),
       to ? new Date(to) : new Date(),
     );
+  }
+
+  /**
+   * Mobile-admin driver detail page. Shortcut for the common week/month
+   * windows — returns the shape the mobile UI binds directly (revenue,
+   * bonus, avgCompletionMin, customerRating). For arbitrary date ranges
+   * the dashboard uses `/drivers/:id/performance?from=&to=`.
+   */
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)
+  @ApiQuery({ name: 'period', required: false, enum: ['week', 'month'] })
+  @Get(':id/perf')
+  perf(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Query('period') period?: string,
+  ) {
+    const p: 'week' | 'month' = period === 'week' ? 'week' : 'month';
+    return this.drivers.performanceByPeriod(user.tenantId!, id, p);
   }
 }
 

@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
-import { TankCapacity, TankStatus, UserRole } from '@prisma/client';
+import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { TankCapacity, TankReclaimReason, TankStatus, UserRole } from '@prisma/client';
 import { TanksService } from './tanks.service';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RequireCapability } from '../common/decorators/capabilities.decorator';
@@ -25,6 +25,18 @@ class CreateTankDto {
 class AssignTankDto {
   @IsString()
   customerId!: string;
+}
+
+class ReclaimTankDto {
+  @IsEnum(TankReclaimReason)
+  reason!: TankReclaimReason;
+
+  @IsOptional() @IsString() @MaxLength(500)
+  notes?: string;
+
+  /** Optional — set if a driver physically picked up the tank in the field. */
+  @IsOptional() @IsString()
+  reclaimedByDriverId?: string;
 }
 
 @ApiBearerAuth()
@@ -78,7 +90,11 @@ export class TanksController {
 
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @Post(':id/reclaim')
-  reclaim(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.tanks.reclaim(user.tenantId!, id);
+  reclaim(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: ReclaimTankDto,
+  ) {
+    return this.tanks.reclaim(user.tenantId!, id, dto);
   }
 }

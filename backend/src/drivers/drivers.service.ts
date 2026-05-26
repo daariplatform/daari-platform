@@ -16,6 +16,18 @@ interface CreateDriverInput {
   vehiclePlate?: string;
   baseSalaryIqd?: number;
   commissionPerRefillIqd?: number;
+  /** Optional override — defaults to now() if omitted. */
+  joinDate?: Date;
+}
+
+interface UpdateDriverInput {
+  fullName?: string;
+  vehiclePlate?: string;
+  baseSalaryIqd?: number;
+  commissionPerRefillIqd?: number;
+  status?: DriverStatus;
+  /** Toggles User.isActive — false suspends driver login without deletion. */
+  isActive?: boolean;
 }
 
 // Same alphabet/length as customers — see CustomersService for rationale.
@@ -59,6 +71,7 @@ export class DriversService {
           vehiclePlate: input.vehiclePlate,
           baseSalaryIqd: input.baseSalaryIqd ?? 0,
           commissionPerRefillIqd: input.commissionPerRefillIqd ?? 0,
+          ...(input.joinDate && { hiredAt: input.joinDate }),
         },
         include: { user: { select: { fullName: true, phone: true } } },
       });
@@ -256,6 +269,161 @@ export class DriversService {
     }
 
     return { points, totalKm: Math.round(totalKm * 10) / 10 };
+  }
+
+  /**
+   * Partial update for a driver. The plant admin can change vehicle plate,
+   * salary, commission, status, or activate/suspend the login without
+   * deleting the row. Updates are scoped to the calling tenant.
+   */
+  async update(tenantId: string, driverId: string, input: UpdateDriverInput) {
+    const driver = await this.prisma.driver.findFirst({
+      where: { id: driverId, tenantId },
+    });
+    if (!driver) throw new NotFoundException('Driver not found');
+
+    const driverData: Record<string, unknown> = {};
+    if (input.vehiclePlate !== undefined) driverData.vehiclePlate = input.vehiclePlate;
+    if (input.baseSalaryIqd !== undefined) driverData.baseSalaryIqd = input.baseSalaryIqd;
+    if (input.commissionPerRefillIqd !== undefined) {
+      driverData.commissionPerRefillIqd = input.commissionPerRefillIqd;
+    }
+    if (input.status !== undefined) driverData.status = input.status;
+
+    const userData: Record<string, unknown> = {};
+    if (input.fullName !== undefined) userData.fullName = input.fullName;
+    if (input.isActive !== undefined) userData.isActive = input.isActive;
+
+    return this.prisma.$transaction(async (tx) => {
+      if (Object.keys(userData).length > 0) {
+        await tx.user.update({ where: { id: driver.userId }, data: userData });
+      }
+      return tx.driver.update({
+        where: { id: driverId },
+        data: driverData,
+        include: { user: { select: { fullName: true, phone: true, isActive: true } } },
+      });
+    });
+  }
+
+  /**
+   * Soft-delete a driver. We never actually delete — completed RefillOrder
+   * rows still reference the driverId for historical accounting. Instead:
+   *
+   *   1. Flip User.isActive = false so the driver app signs out and can't
+   *      log back in.
+   *   2. Revoke refresh tokens (force-kill any active session).
+   *   3. Move DriverStatus to OFFLINE so the live map drops them.
+   *
+   * Returns { ok: true } so the mobile app can confirm without re-fetching.
+   */
+  async softDelete(tenantId: string, driverId: string) {
+    const driver = await this.prisma.driver.findFirst({
+      where: { id: driverId, tenantId },
+    });
+    if (!driver) throw new NotFoundException('Driver not found');
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: driver.userId },
+        data: { isActive: false },
+      }),
+      this.prisma.driver.update({
+        where: { id: driverId },
+        data: { status: DriverStatus.OFFLINE },
+      }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId: driver.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+    return { ok: true };
+  }
+
+  /**
+   * Performance summary for the driver detail page in mobile-admin. Use
+   * the `period` shortcut (week | month) for the common cases — for an
+   * arbitrary window, the dashboard-facing `performance()` method (which
+   * takes explicit dates) is the right tool.
+   *
+   * Returns: completedOrders, revenue, bonus, avgCompletionMin,
+   * customerRating. `customerRating` is currently a placeholder (we don't
+   * have a ratings model yet — derived from disputeCount / completedCount).
+   */
+  async performanceByPeriod(
+    tenantId: string,
+    driverId: string,
+    period: 'week' | 'month',
+  ) {
+    const driver = await this.prisma.driver.findFirst({
+      where: { id: driverId, tenantId },
+      include: { user: { select: { fullName: true } } },
+    });
+    if (!driver) throw new NotFoundException('Driver not found');
+
+    const now = new Date();
+    const from = new Date(now);
+    if (period === 'week') {
+      from.setDate(from.getDate() - 7);
+    } else {
+      from.setDate(1);
+      from.setHours(0, 0, 0, 0);
+    }
+
+    // Pull every completed order in the window. We need per-order timings
+    // (startedAt → completedAt) for avgCompletionMin so an aggregate is
+    // not enough on its own.
+    const orders = await this.prisma.refillOrder.findMany({
+      where: {
+        tenantId,
+        driverId,
+        status: RefillOrderStatus.COMPLETED,
+        completedAt: { gte: from, lte: now },
+      },
+      select: {
+        paidAmountIqd: true,
+        bonusIqd: true,
+        startedAt: true,
+        completedAt: true,
+        customerDisputedAt: true,
+      },
+    });
+
+    const completedOrders = orders.length;
+    const revenueIqd = orders.reduce((s, o) => s + (o.paidAmountIqd ?? 0), 0);
+    const bonusIqd = orders.reduce((s, o) => s + (o.bonusIqd ?? 0), 0);
+
+    // Average completion time = (completedAt - startedAt) across orders that
+    // have both timestamps. Skip rows missing one (older data / cancelled).
+    const durations = orders
+      .filter((o) => o.startedAt && o.completedAt)
+      .map((o) => o.completedAt!.getTime() - o.startedAt!.getTime());
+    const avgCompletionMin =
+      durations.length > 0
+        ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length / 60_000)
+        : null;
+
+    // Rating proxy: % of orders the customer didn't dispute, mapped to 1..5
+    // stars. Replace once we add an actual rating model + driver-level
+    // customer feedback. Returns null when there's nothing to score on.
+    const disputed = orders.filter((o) => o.customerDisputedAt).length;
+    const customerRating =
+      completedOrders > 0
+        ? Math.round(((completedOrders - disputed) / completedOrders) * 5 * 10) / 10
+        : null;
+
+    return {
+      driverId,
+      driverName: driver.user.fullName,
+      period,
+      from,
+      to: now,
+      completedOrders,
+      revenueIqd,
+      bonusIqd,
+      avgCompletionMin,
+      customerRating,
+    };
   }
 }
 

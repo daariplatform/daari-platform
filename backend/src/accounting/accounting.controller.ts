@@ -1,16 +1,27 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { IsDateString, IsEnum, IsIn, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
 import { ExpenseCategory, UserRole } from '@prisma/client';
-import { AccountingService } from './accounting.service';
+import { AccountingService, type AccountingPeriod, type TxKind } from './accounting.service';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 class CreateExpenseDto {
   @IsEnum(ExpenseCategory) category!: ExpenseCategory;
   @IsInt() @Min(1) amountIqd!: number;
   @IsString() @MinLength(2) description!: string;
+  @IsOptional() @IsString() receiptUrl?: string;
+  @IsOptional() @IsDateString() occurredAt?: string;
+}
+
+class QuickExpenseDto {
+  @IsInt() @Min(1) amountIqd!: number;
+  @IsEnum(ExpenseCategory) category!: ExpenseCategory;
+  /** Mobile-admin sends a short "note" rather than "description". */
+  @IsOptional() @IsString() note?: string;
+  @IsOptional() @IsString() description?: string;
   @IsOptional() @IsString() receiptUrl?: string;
   @IsOptional() @IsDateString() occurredAt?: string;
 }
@@ -86,6 +97,61 @@ export class AccountingController {
       from ? new Date(from) : startOfMonth(),
       to ? new Date(to) : new Date(),
     );
+  }
+
+  /**
+   * Mobile-admin "Accounting" summary tile. Returns revenue + expenses +
+   * net profit + growth% vs. previous comparable period.
+   */
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)
+  @ApiQuery({ name: 'period', required: false, enum: ['today', 'week', 'month', 'year'] })
+  @Get('summary')
+  summary(@CurrentUser() user: AuthUser, @Query('period') period?: string) {
+    const p: AccountingPeriod = ['today', 'week', 'month', 'year'].includes(period ?? '')
+      ? (period as AccountingPeriod)
+      : 'month';
+    return this.accounting.summary(user.tenantId!, p);
+  }
+
+  /**
+   * Unified transactions feed (sales + expenses + salaries). Paginated.
+   */
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiQuery({ name: 'kind', required: false, enum: ['all', 'sale', 'expense', 'salary'] })
+  @Get('transactions')
+  transactions(
+    @CurrentUser() user: AuthUser,
+    @Query() pagination: PaginationDto,
+    @Query('kind') kind?: string,
+  ) {
+    const k: TxKind = ['all', 'sale', 'expense', 'salary'].includes(kind ?? '')
+      ? (kind as TxKind)
+      : 'all';
+    return this.accounting.transactions(
+      user.tenantId!,
+      pagination.page,
+      pagination.pageSize,
+      k,
+    );
+  }
+
+  /**
+   * Mobile-shortcut: record an expense with a single tap. Same effect as
+   * POST /accounting/expenses but accepts the friendlier `{ amountIqd,
+   * category, note }` shape the mobile UI uses.
+   */
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)
+  @Post('expense')
+  recordQuickExpense(@CurrentUser() user: AuthUser, @Body() dto: QuickExpenseDto) {
+    return this.accounting.recordExpense(user.tenantId!, user.id, {
+      category: dto.category,
+      amountIqd: dto.amountIqd,
+      description: dto.description ?? dto.note ?? dto.category,
+      receiptUrl: dto.receiptUrl,
+      occurredAt: dto.occurredAt ? new Date(dto.occurredAt) : undefined,
+    });
   }
 }
 
