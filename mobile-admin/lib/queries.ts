@@ -1082,7 +1082,13 @@ interface TopCustomerWire {
 
 export function useTopCustomers(limit = 5) {
   return useQuery({
-    queryKey: ['plant', 'reports', 'top-customers', limit],
+    // v2 cache-buster: the persisted React-Query cache previously stored
+    // the raw wire shape `{customerId, spentIqd}`. Now that we normalize
+    // to `{id, totalSpendIqd}` in queryFn, old persisted entries would
+    // otherwise be re-hydrated with the old shape — undefined `.id` →
+    // React "unique key" warning + the 0 د.ع display bug. Bumping the
+    // queryKey forces a fresh fetch.
+    queryKey: ['plant', 'reports', 'top-customers', 'v2', limit],
     queryFn: async () => {
       const { data } = await api.get<TopCustomerWire[]>('/plant/reports/top-customers', {
         params: { limit },
@@ -1118,7 +1124,8 @@ interface TopDriverWire {
 
 export function useTopDrivers(limit = 5) {
   return useQuery({
-    queryKey: ['plant', 'reports', 'top-drivers', limit],
+    // v2 cache-buster — see useTopCustomers above for the same rationale.
+    queryKey: ['plant', 'reports', 'top-drivers', 'v2', limit],
     queryFn: async () => {
       const { data } = await api.get<TopDriverWire[]>('/plant/reports/top-drivers', {
         params: { limit },

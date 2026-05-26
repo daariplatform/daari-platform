@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { IsBooleanString, IsIn, IsString } from 'class-validator';
+import { IsBooleanString, IsIn, IsOptional, IsString } from 'class-validator';
 import { UserRole } from '@prisma/client';
 
 import { NotificationsService } from './notifications.service';
@@ -13,6 +13,18 @@ import { PaginationDto } from '../common/dto/pagination.dto';
 class RegisterPushTokenDto {
   @IsString() token!: string;
   @IsIn(['ios', 'android']) platform!: 'ios' | 'android';
+}
+
+/**
+ * Inbox query — extends PaginationDto with an optional `unreadOnly` filter.
+ * Needed as its own DTO because the global ValidationPipe runs with
+ * `forbidNonWhitelisted: true`, so passing `unreadOnly` as a separate
+ * @Query() would 400 against the bare PaginationDto.
+ */
+class InboxQueryDto extends PaginationDto {
+  @IsOptional()
+  @IsBooleanString()
+  unreadOnly?: string;
 }
 
 /**
@@ -60,14 +72,13 @@ export class NotificationsController {
   @Get('inbox')
   inbox(
     @CurrentUser() user: AuthUser,
-    @Query() pagination: PaginationDto,
-    @Query('unreadOnly') unreadOnly?: string,
+    @Query() q: InboxQueryDto,
   ) {
     return this.notifications.inbox(
       user.tenantId!,
-      pagination.page,
-      pagination.pageSize,
-      unreadOnly === 'true' || unreadOnly === '1',
+      q.page,
+      q.pageSize,
+      q.unreadOnly === 'true' || q.unreadOnly === '1',
     );
   }
 
