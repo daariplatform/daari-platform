@@ -22,6 +22,7 @@ import type { RefillOrderStatus, RefillOrder } from '@/lib/types';
 import { Skeleton } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
 import { api } from '@/lib/api';
+import { safeBack } from '@/lib/nav';
 import { useQueryClient } from '@tanstack/react-query';
 
 type MaterialIconName = React.ComponentProps<typeof MaterialIcons>['name'];
@@ -86,7 +87,7 @@ export default function OrderDetailScreen() {
             await api.post(`/orders/${order.id}/cancel`);
             qc.invalidateQueries({ queryKey: ['orders'] });
             qc.invalidateQueries({ queryKey: ['plant', 'kpis'] });
-            router.back();
+            safeBack(router);
           } catch (err: any) {
             Alert.alert('خطأ', err?.response?.data?.message ?? 'تعذّر إلغاء الطلب');
           } finally {
@@ -115,7 +116,7 @@ export default function OrderDetailScreen() {
             تفاصيل الطلب
           </Text>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => safeBack(router)}
             hitSlop={8}
             style={({ pressed }) => ({
               padding: 8,

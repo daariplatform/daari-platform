@@ -16,6 +16,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { arSA } from 'date-fns/locale';
 
 import { useDriversLive, type LiveDriver } from '@/lib/queries';
+import { safeBack } from '@/lib/nav';
 import { Skeleton } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
 
@@ -116,7 +117,7 @@ export default function DriversLiveScreen() {
               </Text>
             </Pressable>
             <Pressable
-              onPress={() => router.back()}
+              onPress={() => safeBack(router)}
               hitSlop={8}
               style={({ pressed }) => ({
                 padding: 8,

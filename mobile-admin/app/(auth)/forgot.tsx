@@ -18,6 +18,7 @@ import { api } from '@/lib/api';
 import { setTokens } from '@/lib/tokens';
 import { useAuth } from '@/lib/auth-store';
 import { OtpCodeField } from '@/components/OtpCodeField';
+import { safeBack } from '@/lib/nav';
 
 /**
  * Two-step self-service password reset.
@@ -95,7 +96,7 @@ export default function ForgotPassword() {
         >
           <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 20 }}>
             <Pressable
-              onPress={() => router.back()}
+              onPress={() => safeBack(router, '/(auth)/login')}
               hitSlop={10}
               className="flex-row-reverse items-center gap-1 self-start mb-6"
             >

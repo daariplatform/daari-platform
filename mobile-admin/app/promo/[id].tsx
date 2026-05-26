@@ -16,6 +16,7 @@ import { formatDistanceToNow, format } from 'date-fns';
 import { arSA } from 'date-fns/locale';
 
 import { usePromos, usePausePromo, type PromoCampaign } from '@/lib/queries';
+import { safeBack } from '@/lib/nav';
 import { Skeleton } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
 
@@ -94,14 +95,14 @@ export default function PromoDetailScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: '#f8fafc' }}>
         <SafeAreaView edges={['top']} style={{ backgroundColor: '#fff' }}>
-          <Header onBack={() => router.back()} title="العرض" />
+          <Header onBack={() => safeBack(router)} title="العرض" />
         </SafeAreaView>
         <EmptyState
           icon="search-off"
           title="لم يتم العثور على العرض"
           subtitle="ربما تم حذفه أو لا تملك صلاحية لعرضه."
           actionLabel="عودة"
-          onAction={() => router.back()}
+          onAction={() => safeBack(router)}
         />
       </View>
     );
@@ -135,7 +136,7 @@ export default function PromoDetailScreen() {
         }}
       >
         <SafeAreaView edges={['top']}>
-          <Header onBack={() => router.back()} title="تفاصيل العرض" light />
+          <Header onBack={() => safeBack(router)} title="تفاصيل العرض" light />
           <View style={{ paddingHorizontal: 18, paddingTop: 12 }}>
             {/* Status pill */}
             <View

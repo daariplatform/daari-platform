@@ -69,7 +69,7 @@ export default function DriverDetailScreen() {
             try {
               await update.mutateAsync({ driverId: driver.id, status: 'DISABLED' });
               Alert.alert('تم', 'عُطّل السائق');
-              router.back();
+              safeBack(router);
             } catch (err: any) {
               Alert.alert('خطأ', err?.response?.data?.message ?? 'تعذّر التعطيل');
             }
@@ -106,7 +106,7 @@ export default function DriverDetailScreen() {
             {driver?.fullName ?? 'السائق'}
           </Text>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => safeBack(router)}
             hitSlop={8}
             style={({ pressed }) => ({
               padding: 8,
@@ -134,7 +134,7 @@ export default function DriverDetailScreen() {
           title="لم يُعثر على السائق"
           subtitle="ربما حُذف من القائمة. حاول العودة وتحديثها."
           actionLabel="رجوع"
-          onAction={() => router.back()}
+          onAction={() => safeBack(router)}
         />
       )}
 

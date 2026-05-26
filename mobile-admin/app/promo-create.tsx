@@ -18,6 +18,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
 import { useCreatePromo, usePromos } from '@/lib/queries';
+import { safeBack } from '@/lib/nav';
 
 interface TenantSettings {
   refillPriceIqd: number;
@@ -89,7 +90,7 @@ export default function PromoCreateScreen() {
     try {
       await create.mutateAsync({ promoPriceIqd, durationHours });
       qc.invalidateQueries({ queryKey: ['plant', 'promos'] });
-      router.back();
+      safeBack(router);
     } catch (err: any) {
       Alert.alert('خطأ', err?.response?.data?.message ?? 'تعذّر إنشاء العرض');
     }
@@ -114,7 +115,7 @@ export default function PromoCreateScreen() {
         >
           <Text style={{ fontSize: 17, fontWeight: '900', color: '#0f172a' }}>عرض جديد</Text>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => safeBack(router)}
             hitSlop={8}
             style={({ pressed }) => ({
               padding: 8,

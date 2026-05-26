@@ -120,7 +120,7 @@ export default function ReportsScreen() {
             }}
           >
             <Pressable
-              onPress={() => router.back()}
+              onPress={() => safeBack(router)}
               hitSlop={10}
               style={({ pressed }) => ({
                 padding: 8,

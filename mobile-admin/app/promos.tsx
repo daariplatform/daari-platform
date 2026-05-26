@@ -15,6 +15,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { arSA } from 'date-fns/locale';
 
 import { usePromos, usePausePromo, type PromoCampaign } from '@/lib/queries';
+import { safeBack } from '@/lib/nav';
 import { Skeleton } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
 
@@ -124,7 +125,7 @@ export default function PromosScreen() {
             }}
           >
             <Pressable
-              onPress={() => router.back()}
+              onPress={() => safeBack(router)}
               hitSlop={10}
               style={({ pressed }) => ({
                 padding: 8,

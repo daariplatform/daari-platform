@@ -107,7 +107,7 @@ export default function DriversScreen() {
               </Text>
             </Pressable>
             <Pressable
-              onPress={() => router.back()}
+              onPress={() => safeBack(router)}
               hitSlop={8}
               style={({ pressed }) => ({
                 padding: 8,

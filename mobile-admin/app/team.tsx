@@ -154,7 +154,7 @@ export default function TeamScreen() {
         >
           <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
             <Pressable
-              onPress={() => router.back()}
+              onPress={() => safeBack(router)}
               hitSlop={8}
               style={({ pressed }) => ({
                 padding: 8,

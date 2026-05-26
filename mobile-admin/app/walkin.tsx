@@ -16,6 +16,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { useCreateWalkinOrder } from '@/lib/queries';
+import { safeBack } from '@/lib/nav';
 
 /**
  * Walk-in refill — quick over-the-counter sale. No customer record needed;
@@ -64,7 +65,7 @@ export default function WalkinScreen() {
       // closes immediately after and the orders list refresh proves it
       // landed. A toast would be nicer but adds a dep we don't need yet.
       Alert.alert('تم', 'سُجّل الطلب');
-      router.back();
+      safeBack(router);
     } catch (err: any) {
       Alert.alert('خطأ', err?.response?.data?.message ?? 'تعذّر إنشاء الطلب');
     }
@@ -88,7 +89,7 @@ export default function WalkinScreen() {
             طلب بيع مباشر
           </Text>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => safeBack(router)}
             hitSlop={8}
             style={({ pressed }) => ({
               padding: 8,

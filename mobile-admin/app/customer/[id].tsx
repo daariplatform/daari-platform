@@ -20,6 +20,7 @@ import { api } from '@/lib/api';
 import { Skeleton } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
 import type { CustomerStatus, Tank } from '@/lib/types';
+import { safeBack } from '@/lib/nav';
 
 type MaterialIconName = React.ComponentProps<typeof MaterialIcons>['name'];
 
@@ -118,7 +119,7 @@ export default function CustomerDetailScreen() {
             {customer?.fullName ?? 'الزبون'}
           </Text>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => safeBack(router)}
             hitSlop={8}
             style={({ pressed }) => ({
               padding: 8,
