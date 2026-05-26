@@ -740,20 +740,23 @@ function StatTile({
       onPress={onPress}
       style={({ pressed }) => ({
         flex: 1,
+        // Plain white card with a clearly visible slate border + drop
+        // shadow — earlier iterations used a hairline border at #e2e8f0
+        // which disappeared against the page background, making the
+        // tiles look like floating icons. Locking the border to a
+        // stronger slate (and bumping the shadow) gives each tile a
+        // proper container without going noisy.
         backgroundColor: '#fff',
         borderRadius: 18,
         padding: 14,
-        // Tinted border so each tile feels intentionally placed instead of
-        // floating against the page. The very pale `tint + '33'` reads as
-        // ink, not chrome — keeps the dashboard quiet but legible.
         borderWidth: 1,
-        borderColor: tint + '33',
+        borderColor: '#cbd5e1',
         opacity: pressed ? 0.85 : 1,
         shadowColor: '#0f172a',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-        elevation: 2,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+        elevation: 3,
         // Minimum height locks the 2×2 grid to a square-ish rhythm even
         // when one label wraps to a second line.
         minHeight: 116,
@@ -1239,18 +1242,18 @@ function InsightCard({
       style={{
         width: 180,
         backgroundColor: '#fff',
-        // Match the 2x2 StatTile styling below (radius 18 + shadow) so the
-        // two rows feel like one unified dashboard surface instead of two
-        // mismatched widgets stacked on each other.
+        // Match StatTile rhythm exactly — same border colour + shadow
+        // depth so the two card rows (insight + 2×2 stats) feel like
+        // one unified dashboard surface.
         borderRadius: 18,
         borderWidth: 1,
-        borderColor: '#e2e8f0',
-        padding: 12,
+        borderColor: '#cbd5e1',
+        padding: 14,
         shadowColor: '#0f172a',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
-        elevation: 1,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+        elevation: 3,
       }}
     >
       <View
