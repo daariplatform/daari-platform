@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../notifications/push.service';
 import { CustomersService } from '../customers/customers.service';
 import { EmailService } from '../email/email.service';
+import { PromoService } from '../plant/promo.service';
 import {
   CustomerStatus,
   PaymentMethod,
@@ -57,6 +58,7 @@ export class OrdersService {
     private push: PushService,
     private customers: CustomersService,
     private email: EmailService,
+    private promo: PromoService,
   ) {}
 
   async create(tenantId: string, input: CreateOrderInput) {
@@ -111,13 +113,24 @@ export class OrdersService {
     // plant changes the price after the order is placed, the customer
     // still pays the price they saw when they tapped "اطلب الآن". Same
     // pattern as completed-order bonus snapshots.
+    //
+    // ALSO check for an ACTIVE promo campaign — if one is running, the
+    // customer sees (and pays) the discounted price, and we tag the order
+    // with promoCampaignId so completion can deduct from the tenant wallet.
     let priceIqd = input.priceIqd;
+    let promoCampaignId: string | null = null;
     if (priceIqd == null) {
-      const tenant = await this.prisma.tenant.findUnique({
-        where: { id: tenantId },
-        select: { refillPriceIqd: true },
-      });
-      priceIqd = tenant?.refillPriceIqd ?? 1000;
+      const activePromo = await this.promo.getActiveForTenant(tenantId);
+      if (activePromo) {
+        priceIqd = activePromo.promoPriceIqd;
+        promoCampaignId = activePromo.id;
+      } else {
+        const tenant = await this.prisma.tenant.findUnique({
+          where: { id: tenantId },
+          select: { refillPriceIqd: true },
+        });
+        priceIqd = tenant?.refillPriceIqd ?? 1000;
+      }
     }
 
     // Auto-assign to a driver. Preference order:
@@ -136,6 +149,7 @@ export class OrdersService {
         tankId,
         kind,
         priceIqd,
+        promoCampaignId, // null when no active promo
         scheduledFor: input.scheduledFor,
         ...(driver
           ? {
@@ -529,6 +543,18 @@ export class OrdersService {
         } catch {
           /* stock row not initialised yet — skip */
         }
+      }
+
+      // Promo deduction: if this order was placed during an active campaign,
+      // charge the tenant wallet 1,000 IQD now (at completion, not creation —
+      // cancellations don't cost the plant anything). The helper auto-expires
+      // the campaign if the wallet ran out or the window elapsed.
+      if (order.promoCampaignId) {
+        await this.promo.chargeOrderCompletion(
+          tx,
+          order.promoCampaignId,
+          input.paidAmountIqd,
+        );
       }
 
       return completed;

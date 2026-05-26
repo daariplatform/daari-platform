@@ -43,67 +43,75 @@ enum SubscriptionStatus {
 // but the owner can switch between them or roll up reports across all.
 //
 model PlantGroup {
-  id          String   @id @default(cuid())
-  name        String
-  ownerName   String
-  ownerPhone  String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  name       String
+  ownerName  String
+  ownerPhone String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  tenants     Tenant[]
+  tenants Tenant[]
 
   @@index([ownerPhone])
 }
 
 model Tenant {
-  id            String           @id @default(cuid())
-  name          String
-  ownerName     String
-  ownerPhone    String
-  city          String
+  id         String @id @default(cuid())
+  name       String
+  ownerName  String
+  ownerPhone String
+  city       String
 
   // Coverage area for the "find my nearest plant" feature. Stored as
   // a centre point + radius (km); future versions can use PostGIS polygons.
-  coverageLng   Float?
-  coverageLat   Float?
-  coverageKm    Float            @default(5)
+  coverageLng Float?
+  coverageLat Float?
+  coverageKm  Float  @default(5)
 
-  groupId       String?
-  group         PlantGroup?      @relation(fields: [groupId], references: [id])
+  groupId String?
+  group   PlantGroup? @relation(fields: [groupId], references: [id])
 
-  plan          SubscriptionPlan @default(STARTER)
-  status        TenantStatus     @default(TRIAL)
-  trialEndsAt   DateTime?
-  billingDay    Int              @default(1)
+  plan        SubscriptionPlan @default(STARTER)
+  status      TenantStatus     @default(TRIAL)
+  trialEndsAt DateTime?
+  billingDay  Int              @default(1)
 
   // Bonus the plant pays each driver per completed action, on top of
   // salary + base commission. Adjustable from the dashboard.
-  refillBonusIqd       Int       @default(0)
-  deliveryBonusIqd     Int       @default(0)
-  reclaimBonusIqd      Int       @default(0)
-  newCustomerBonusIqd  Int       @default(0)
+  refillBonusIqd      Int @default(0)
+  deliveryBonusIqd    Int @default(0)
+  reclaimBonusIqd     Int @default(0)
+  newCustomerBonusIqd Int @default(0)
 
   // Plant-configurable pricing (edited from dashboard settings page)
-  refillPriceIqd            Int       @default(1000)
-  deliveryFeeIqd            Int       @default(0)
-  freeDeliveryThresholdIqd  Int?
+  refillPriceIqd           Int    @default(1000)
+  deliveryFeeIqd           Int    @default(0)
+  freeDeliveryThresholdIqd Int?
   // Working hours displayed in customer app + used for new-order eligibility
-  workingHoursStart String   @default("08:00")
-  workingHoursEnd   String   @default("22:00")
+  workingHoursStart        String @default("08:00")
+  workingHoursEnd          String @default("22:00")
 
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  // Promo budget — plant pays Ahmed (PhiBit) cash, Ahmed tops this up
+  // via the platform-admin console. PromoCampaign deducts 1,000 IQD per
+  // completed order while the campaign is active. Hits 0 → campaign
+  // auto-expires.
+  promoWalletIqd Int @default(0)
 
-  users         User[]
-  tanks         Tank[]
-  customers     Customer[]
-  drivers       Driver[]
-  refillOrders  RefillOrder[]
-  expenses      Expense[]
-  salaries      SalaryPayment[]
-  notifications NotificationLog[]
-  vendors       Vendor[]
-  subscriptions Subscription[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users          User[]
+  tanks          Tank[]
+  customers      Customer[]
+  drivers        Driver[]
+  refillOrders   RefillOrder[]
+  expenses       Expense[]
+  salaries       SalaryPayment[]
+  notifications  NotificationLog[]
+  vendors        Vendor[]
+  subscriptions  Subscription[]
+  promoCampaigns PromoCampaign[]
+  walletTopups   WalletTopup[]
 
   @@index([status])
   @@index([groupId])
@@ -114,22 +122,22 @@ model Tenant {
 // Platform admin renews / upgrades by inserting a new row.
 //
 model Subscription {
-  id          String             @id @default(cuid())
-  tenantId    String
-  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  plan        SubscriptionPlan
-  priceIqd    Int                // monthly fee captured at subscription time
-  status      SubscriptionStatus @default(ACTIVE)
+  plan     SubscriptionPlan
+  priceIqd Int // monthly fee captured at subscription time
+  status   SubscriptionStatus @default(ACTIVE)
 
   startsAt    DateTime
-  endsAt      DateTime           // next renewal deadline
+  endsAt      DateTime // next renewal deadline
   cancelledAt DateTime?
 
-  createdAt   DateTime           @default(now())
+  createdAt DateTime @default(now())
 
   @@index([tenantId, startsAt])
-  @@index([status, endsAt])      // for "expiring soon" queries
+  @@index([status, endsAt]) // for "expiring soon" queries
 }
 
 enum UserRole {
@@ -143,9 +151,9 @@ enum UserRole {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  tenantId    String?
-  tenant       Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String  @id @default(cuid())
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   phone        String    @unique
   passwordHash String?
@@ -156,12 +164,12 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  driver       Driver?
-  customer     Customer?
-  vendor       Vendor?
-  refreshTokens RefreshToken[]
+  driver              Driver?
+  customer            Customer?
+  vendor              Vendor?
+  refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
-  pushTokens   PushToken[]
+  pushTokens          PushToken[]
 
   @@index([tenantId, role])
 }
@@ -174,7 +182,7 @@ model PushToken {
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   token      String   @unique
-  platform   String   // "ios" | "android"
+  platform   String // "ios" | "android"
   lastSeenAt DateTime @default(now())
   createdAt  DateTime @default(now())
 
@@ -205,26 +213,26 @@ model SignupOtpToken {
 }
 
 model PasswordResetToken {
-  id         String    @id @default(cuid())
-  userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  otpHash    String
-  expiresAt  DateTime
-  usedAt     DateTime?
-  attempts   Int       @default(0)
-  createdAt  DateTime  @default(now())
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  otpHash   String
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now())
 
   @@index([userId, expiresAt])
 }
 
 model RefreshToken {
-  id         String   @id @default(cuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash  String   @unique
-  expiresAt  DateTime
-  revokedAt  DateTime?
-  createdAt  DateTime @default(now())
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
 
   @@index([userId])
 }
@@ -245,18 +253,18 @@ enum TankStatus {
 }
 
 enum TankReclaimReason {
-  NON_COMPLIANCE       // عدم التزام بتعليمات الشركة (no monthly refill etc.)
-  MAINTENANCE          // خزان للصيانة
-  CUSTOMER_MOVED       // الزبون انتقل لمنطقة معمل آخر
-  CUSTOMER_CANCELLED   // الزبون ألغى الاشتراك
-  TANK_DAMAGED         // خزان تالف
+  NON_COMPLIANCE // عدم التزام بتعليمات الشركة (no monthly refill etc.)
+  MAINTENANCE // خزان للصيانة
+  CUSTOMER_MOVED // الزبون انتقل لمنطقة معمل آخر
+  CUSTOMER_CANCELLED // الزبون ألغى الاشتراك
+  TANK_DAMAGED // خزان تالف
   OTHER
 }
 
 model Tank {
-  id           String       @id @default(cuid())
-  tenantId     String
-  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   serialNumber String
   // Per-tenant unique (NOT global): every plant uses its own numbering
@@ -267,8 +275,8 @@ model Tank {
   capacity     TankCapacity
   status       TankStatus   @default(IN_PLANT)
 
-  customerId   String?
-  customer     Customer?    @relation(fields: [customerId], references: [id])
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
 
   installedAt  DateTime?
   lastRefillAt DateTime?
@@ -276,14 +284,14 @@ model Tank {
 
   // Reclaim audit: when, why, and which driver brought it back. Lets the
   // plant owner answer "where did tank T-1024 go?" at a glance.
-  reclaimedAt        DateTime?
+  reclaimedAt         DateTime?
   reclaimedByDriverId String?
   reclaimReason       TankReclaimReason?
   reclaimNotes        String?
   reclaimPhotoUrl     String?
 
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   refillOrders RefillOrder[]
 
@@ -296,9 +304,9 @@ model Tank {
 // ─── Customers ────────────────────────────────────────────────────────────────
 
 enum CustomerStatus {
-  PENDING_APPROVAL    // registered by a driver in the field; plant owner
-                      // must approve before the account can request refills
-                      // and a tank is dispatched.
+  PENDING_APPROVAL // registered by a driver in the field; plant owner
+  // must approve before the account can request refills
+  // and a tank is dispatched.
   ACTIVE
   AT_RISK
   INACTIVE
@@ -306,35 +314,35 @@ enum CustomerStatus {
 }
 
 enum LocationSource {
-  DRIVER_AT_INSTALL   // most accurate — driver was physically at the door
-  CUSTOMER_PIN        // customer dropped a pin on the map
-  ADMIN_MANUAL        // plant typed an address, geocoded server-side
-  OFFLINE_SYNC        // captured offline, GPS at the moment of completion
+  DRIVER_AT_INSTALL // most accurate — driver was physically at the door
+  CUSTOMER_PIN // customer dropped a pin on the map
+  ADMIN_MANUAL // plant typed an address, geocoded server-side
+  OFFLINE_SYNC // captured offline, GPS at the moment of completion
 }
 
 model Customer {
-  id              String         @id @default(cuid())
-  tenantId        String
-  tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  userId          String?        @unique
-  user            User?          @relation(fields: [userId], references: [id])
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id])
 
-  fullName        String
-  phone           String
-  whatsapp        String?
-  district        String
-  addressLine     String
+  fullName           String
+  phone              String
+  whatsapp           String?
+  district           String
+  addressLine        String
   // PostGIS Point(longitude, latitude). Stored via raw SQL on insert.
   // Use ST_X / ST_Y to read.
   //
   // These coords always represent the *home* where the tank lives —
   // never the customer's current GPS at order time. Captured once at
   // tank install (preferred) or by the customer via pin-on-map.
-  locationLng     Float?
-  locationLat     Float?
-  locationCapturedAt  DateTime?
-  locationCapturedBy  LocationSource?
+  locationLng        Float?
+  locationLat        Float?
+  locationCapturedAt DateTime?
+  locationCapturedBy LocationSource?
 
   // When a customer moves house, the previous home is kept for a grace
   // period so deliveries to the old address still resolve. Geofence
@@ -343,16 +351,16 @@ model Customer {
   previousLocationLng Float?
   previousLocationLat Float?
 
-  status          CustomerStatus @default(ACTIVE)
+  status CustomerStatus @default(ACTIVE)
 
   // Customer onboarding lifecycle. Driver installs the app on the
   // customer's phone during tank delivery, walks them through terms,
   // and `acceptedTermsAt` is stamped when the customer taps "I agree".
   // Until then, the account is provisional — they can browse but not
   // request refills (since they don't fully own the tank yet).
-  acceptedTermsAt    DateTime?
-  onboardedByDriverId String?
-  onboardedAt        DateTime?
+  acceptedTermsAt      DateTime?
+  onboardedByDriverId  String?
+  onboardedAt          DateTime?
   // Stamped when plant admin first approves a driver-onboarded customer.
   // `registrationBonusIqd` snapshots Tenant.newCustomerBonusIqd at that
   // exact moment so the driver's monthly salary always credits the rate
@@ -362,15 +370,15 @@ model Customer {
   approvedAt           DateTime?
   registrationBonusIqd Int       @default(0)
 
-  balanceIqd      Int            @default(0)  // running balance in dinars
-  totalRefills    Int            @default(0)
-  lastRefillAt    DateTime?
-  registeredAt    DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  balanceIqd   Int       @default(0) // running balance in dinars
+  totalRefills Int       @default(0)
+  lastRefillAt DateTime?
+  registeredAt DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  tanks           Tank[]
-  refillOrders    RefillOrder[]
-  deliveryOrders  DeliveryOrder[]
+  tanks          Tank[]
+  refillOrders   RefillOrder[]
+  deliveryOrders DeliveryOrder[]
 
   @@unique([tenantId, phone])
   @@index([tenantId, status])
@@ -387,25 +395,25 @@ enum DriverStatus {
 }
 
 model Driver {
-  id                String         @id @default(cuid())
-  tenantId          String
-  tenant            Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  userId            String         @unique
-  user              User           @relation(fields: [userId], references: [id])
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
 
-  vehiclePlate      String?
-  baseSalaryIqd     Int            @default(0)
-  commissionPerRefillIqd Int       @default(0)
-  status            DriverStatus   @default(OFFLINE)
-  currentLng        Float?
-  currentLat        Float?
-  lastLocationAt    DateTime?
-  hiredAt           DateTime       @default(now())
+  vehiclePlate           String?
+  baseSalaryIqd          Int          @default(0)
+  commissionPerRefillIqd Int          @default(0)
+  status                 DriverStatus @default(OFFLINE)
+  currentLng             Float?
+  currentLat             Float?
+  lastLocationAt         DateTime?
+  hiredAt                DateTime     @default(now())
 
-  refillOrders      RefillOrder[]
-  locations         DriverLocation[]
-  salaries          SalaryPayment[]
+  refillOrders RefillOrder[]
+  locations    DriverLocation[]
+  salaries     SalaryPayment[]
 
   @@index([tenantId, status])
 }
@@ -413,11 +421,11 @@ model Driver {
 // Location pings stored for audit / replay. High write volume —
 // in production, partition by month or move to TimescaleDB.
 model DriverLocation {
-  id        BigInt   @id @default(autoincrement())
-  driverId  String
-  driver    Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  lng       Float
-  lat       Float
+  id         BigInt   @id @default(autoincrement())
+  driverId   String
+  driver     Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  lng        Float
+  lat        Float
   recordedAt DateTime @default(now())
 
   @@index([driverId, recordedAt])
@@ -435,12 +443,12 @@ enum RefillOrderStatus {
 }
 
 enum RefillOrderKind {
-  REFILL          // tank refill at customer site
-  TANK_DELIVERY   // first install — drop off the empty tank
-  TANK_RECLAIM    // pick the tank back up
-  WALKIN_SALE     // ad-hoc sale to a non-customer (e.g. the neighbour
-                  // who flagged the driver down). No tank assigned;
-                  // customer is optional. Tracked for accounting only.
+  REFILL // tank refill at customer site
+  TANK_DELIVERY // first install — drop off the empty tank
+  TANK_RECLAIM // pick the tank back up
+  WALKIN_SALE // ad-hoc sale to a non-customer (e.g. the neighbour
+  // who flagged the driver down). No tank assigned;
+  // customer is optional. Tracked for accounting only.
 }
 
 enum PaymentMethod {
@@ -451,14 +459,14 @@ enum PaymentMethod {
 }
 
 model RefillOrder {
-  id              String              @id @default(cuid())
-  tenantId        String
-  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // customerId is required for normal refills but null for WALKIN_SALE,
   // where the buyer is a one-time walk-up customer with no account.
-  customerId      String?
-  customer        Customer?           @relation(fields: [customerId], references: [id])
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
 
   // Free-text capture for walk-in buyers (the neighbour's name + phone)
   // so the plant has *some* trace even without a Customer row.
@@ -466,41 +474,41 @@ model RefillOrder {
   walkinBuyerPhone String?
   walkinLiters     Int?
 
-  tankId          String?
-  tank            Tank?               @relation(fields: [tankId], references: [id])
+  tankId String?
+  tank   Tank?   @relation(fields: [tankId], references: [id])
 
-  driverId        String?
-  driver          Driver?             @relation(fields: [driverId], references: [id])
+  driverId String?
+  driver   Driver? @relation(fields: [driverId], references: [id])
 
-  kind            RefillOrderKind     @default(REFILL)
-  status          RefillOrderStatus   @default(PENDING)
+  kind   RefillOrderKind   @default(REFILL)
+  status RefillOrderStatus @default(PENDING)
 
-  priceIqd        Int                 @default(1000)
-  paymentMethod   PaymentMethod?
-  paidAmountIqd   Int                 @default(0)
-  paidAt          DateTime?
+  priceIqd      Int            @default(1000)
+  paymentMethod PaymentMethod?
+  paidAmountIqd Int            @default(0)
+  paidAt        DateTime?
 
-  requestedAt     DateTime            @default(now())
-  scheduledFor    DateTime?
-  assignedAt      DateTime?
-  startedAt       DateTime?
-  completedAt     DateTime?
-  cancelReason    String?
+  requestedAt  DateTime  @default(now())
+  scheduledFor DateTime?
+  assignedAt   DateTime?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  cancelReason String?
 
-  proofPhotoUrl   String?
-  qrScanned       Boolean             @default(false)
+  proofPhotoUrl String?
+  qrScanned     Boolean @default(false)
 
   // Bonus snapshot at completion time. Stored on the order itself so
   // future bonus-rate changes don't retroactively alter past payouts.
-  bonusIqd        Int                 @default(0)
+  bonusIqd Int @default(0)
 
   // GPS verification: driver's coordinates at the moment of completion.
   // We compare these against the customer's registered location to flag
   // refills logged from the wrong address.
-  completionLng   Float?
-  completionLat   Float?
-  gpsDistanceM    Int?                // distance from customer in metres
-  gpsVerified     Boolean             @default(false)
+  completionLng Float?
+  completionLat Float?
+  gpsDistanceM  Int? // distance from customer in metres
+  gpsVerified   Boolean @default(false)
 
   // Customer-side confirmation. After completion, we WhatsApp the customer
   // a "did you receive this refill?" prompt. They confirm or dispute within
@@ -508,6 +516,13 @@ model RefillOrder {
   customerConfirmedAt DateTime?
   customerDisputedAt  DateTime?
   disputeReason       String?
+
+  // Set when the order was placed during an active PromoCampaign — the
+  // priceIqd above already reflects the discount snapshot. We record the
+  // campaign id so completion can deduct 1,000 IQD from the tenant wallet
+  // and increment the campaign's order counter atomically.
+  promoCampaignId String?
+  promoCampaign   PromoCampaign? @relation(fields: [promoCampaignId], references: [id])
 
   @@index([tenantId, status])
   @@index([customerId, requestedAt])
@@ -530,30 +545,30 @@ enum VehicleType {
 }
 
 model Vendor {
-  id                String          @id @default(cuid())
+  id       String  @id @default(cuid())
   // Vendors can be "platform-wide" (no tenant) or attached to a single plant.
-  tenantId          String?
-  tenant            Tenant?         @relation(fields: [tenantId], references: [id])
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
 
-  userId            String          @unique
-  user              User            @relation(fields: [userId], references: [id])
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
 
   vehicleType       VehicleType
   vehiclePlate      String?
-  maxCapacityLiters Int             @default(25)
-  status            VendorStatus    @default(PENDING_APPROVAL)
+  maxCapacityLiters Int          @default(25)
+  status            VendorStatus @default(PENDING_APPROVAL)
 
-  isAvailable       Boolean         @default(false)
-  currentLng        Float?
-  currentLat        Float?
-  lastLocationAt    DateTime?
+  isAvailable    Boolean   @default(false)
+  currentLng     Float?
+  currentLat     Float?
+  lastLocationAt DateTime?
 
-  walletBalanceIqd  Int             @default(0)
-  rating            Float           @default(5.0)
-  totalDeliveries   Int             @default(0)
+  walletBalanceIqd Int   @default(0)
+  rating           Float @default(5.0)
+  totalDeliveries  Int   @default(0)
 
-  deliveryOrders    DeliveryOrder[]
-  walletEntries     VendorWalletEntry[]
+  deliveryOrders DeliveryOrder[]
+  walletEntries  VendorWalletEntry[]
 }
 
 enum DeliveryOrderStatus {
@@ -566,30 +581,30 @@ enum DeliveryOrderStatus {
 }
 
 model DeliveryOrder {
-  id                String                 @id @default(cuid())
+  id String @id @default(cuid())
 
-  customerId        String
-  customer          Customer               @relation(fields: [customerId], references: [id])
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
 
-  vendorId          String?
-  vendor            Vendor?                @relation(fields: [vendorId], references: [id])
+  vendorId String?
+  vendor   Vendor? @relation(fields: [vendorId], references: [id])
 
-  liters            Int                    // 5–25
-  priceIqd          Int
-  commissionIqd     Int                    // platform cut (~7–10%)
-  status            DeliveryOrderStatus    @default(SEARCHING)
+  liters        Int // 5–25
+  priceIqd      Int
+  commissionIqd Int // platform cut (~7–10%)
+  status        DeliveryOrderStatus @default(SEARCHING)
 
-  pickupLng         Float?
-  pickupLat         Float?
-  dropLng           Float
-  dropLat           Float
-  dropAddress       String
+  pickupLng   Float?
+  pickupLat   Float?
+  dropLng     Float
+  dropLat     Float
+  dropAddress String
 
-  paymentMethod     PaymentMethod          @default(CASH)
-  requestedAt       DateTime               @default(now())
-  acceptedAt        DateTime?
-  deliveredAt       DateTime?
-  cancelReason      String?
+  paymentMethod PaymentMethod @default(CASH)
+  requestedAt   DateTime      @default(now())
+  acceptedAt    DateTime?
+  deliveredAt   DateTime?
+  cancelReason  String?
 
   @@index([status, requestedAt])
   @@index([vendorId, status])
@@ -603,14 +618,14 @@ enum WalletEntryKind {
 }
 
 model VendorWalletEntry {
-  id          String          @id @default(cuid())
-  vendorId    String
-  vendor      Vendor          @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  kind        WalletEntryKind
-  amountIqd   Int             // signed (+/-)
-  reference   String?         // delivery order id, withdrawal ref, etc.
-  note        String?
-  createdAt   DateTime        @default(now())
+  id        String          @id @default(cuid())
+  vendorId  String
+  vendor    Vendor          @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  kind      WalletEntryKind
+  amountIqd Int // signed (+/-)
+  reference String? // delivery order id, withdrawal ref, etc.
+  note      String?
+  createdAt DateTime        @default(now())
 
   @@index([vendorId, createdAt])
 }
@@ -627,40 +642,40 @@ enum ExpenseCategory {
 }
 
 model Expense {
-  id          String           @id @default(cuid())
-  tenantId    String
-  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   category    ExpenseCategory
   amountIqd   Int
   description String
   receiptUrl  String?
-  occurredAt  DateTime         @default(now())
+  occurredAt  DateTime        @default(now())
   createdById String?
-  createdAt   DateTime         @default(now())
+  createdAt   DateTime        @default(now())
 
   @@index([tenantId, occurredAt])
   @@index([tenantId, category])
 }
 
 model SalaryPayment {
-  id           String   @id @default(cuid())
-  tenantId     String
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  driverId     String
-  driver       Driver   @relation(fields: [driverId], references: [id])
+  driverId String
+  driver   Driver @relation(fields: [driverId], references: [id])
 
-  periodStart  DateTime
-  periodEnd    DateTime
-  baseIqd      Int
+  periodStart   DateTime
+  periodEnd     DateTime
+  baseIqd       Int
   commissionIqd Int
-  bonusIqd     Int      @default(0)
-  deductionIqd Int      @default(0)
-  netIqd       Int
-  paidAt       DateTime?
-  note         String?
-  createdAt    DateTime @default(now())
+  bonusIqd      Int       @default(0)
+  deductionIqd  Int       @default(0)
+  netIqd        Int
+  paidAt        DateTime?
+  note          String?
+  createdAt     DateTime  @default(now())
 
   @@index([tenantId, periodStart])
 }
@@ -694,19 +709,19 @@ enum NotificationStatus {
 }
 
 model NotificationLog {
-  id          String                @id @default(cuid())
-  tenantId    String
-  tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  channel     NotificationChannel
-  kind        NotificationKind
-  recipient   String                // phone number
-  body        String
-  status      NotificationStatus    @default(QUEUED)
-  providerId  String?               // upstream message id
-  errorMsg    String?
-  sentAt      DateTime?
-  createdAt   DateTime              @default(now())
+  channel    NotificationChannel
+  kind       NotificationKind
+  recipient  String // phone number
+  body       String
+  status     NotificationStatus  @default(QUEUED)
+  providerId String? // upstream message id
+  errorMsg   String?
+  sentAt     DateTime?
+  createdAt  DateTime            @default(now())
 
   @@index([tenantId, kind, createdAt])
   @@index([status])
@@ -715,10 +730,10 @@ model NotificationLog {
 // ─── Data monetization ────────────────────────────────────────────────────────
 
 enum DataReportCategory {
-  MARKET_ANNUAL       // "State of Water Distribution in Iraq YYYY"
-  OPPORTUNITY_ZONES   // underserved neighbourhoods
-  COMPETITOR_PRICING  // pricing intelligence
-  PLANT_PERFORMANCE   // self-report for the plant
+  MARKET_ANNUAL // "State of Water Distribution in Iraq YYYY"
+  OPPORTUNITY_ZONES // underserved neighbourhoods
+  COMPETITOR_PRICING // pricing intelligence
+  PLANT_PERFORMANCE // self-report for the plant
   CUSTOM
 }
 
@@ -728,16 +743,16 @@ enum DataReportCategory {
 // level rollups and benchmarks.
 //
 model DataReport {
-  id          String              @id @default(cuid())
+  id          String             @id @default(cuid())
   title       String
   description String
   category    DataReportCategory
   priceIqd    Int
-  fileUrl     String?             // generated PDF / Excel
+  fileUrl     String? // generated PDF / Excel
   publishedAt DateTime?
-  createdAt   DateTime            @default(now())
+  createdAt   DateTime           @default(now())
 
-  purchases   DataReportPurchase[]
+  purchases DataReportPurchase[]
 
   @@index([category])
 }
@@ -747,7 +762,7 @@ model DataReportPurchase {
   reportId   String
   report     DataReport @relation(fields: [reportId], references: [id])
   buyerName  String
-  buyerKind  String     // "tenant", "external_company", "individual"
+  buyerKind  String // "tenant", "external_company", "individual"
   buyerEmail String?
   amountIqd  Int
   paidAt     DateTime?
@@ -764,12 +779,12 @@ enum AdCampaignStatus {
 }
 
 enum AdCategory {
-  GAS                 // home gas delivery
-  CLEANING            // tank/home cleaning
-  FILTERS             // RO maintenance
-  TELECOM             // internet, mobile plans
-  GROCERY             // FMCG, supermarkets
-  FINANCE             // micro-loans, BNPL
+  GAS // home gas delivery
+  CLEANING // tank/home cleaning
+  FILTERS // RO maintenance
+  TELECOM // internet, mobile plans
+  GROCERY // FMCG, supermarkets
+  FINANCE // micro-loans, BNPL
   OTHER
 }
 
@@ -779,26 +794,26 @@ enum AdCategory {
 // platform earns the CPM/CPC directly.
 //
 model AdCampaign {
-  id           String           @id @default(cuid())
-  advertiser   String
-  category     AdCategory
-  title        String
-  body         String
-  ctaText      String           @default("اطلب الآن")
-  ctaUrl       String?
-  imageUrl     String?
+  id         String     @id @default(cuid())
+  advertiser String
+  category   AdCategory
+  title      String
+  body       String
+  ctaText    String     @default("اطلب الآن")
+  ctaUrl     String?
+  imageUrl   String?
 
-  status       AdCampaignStatus @default(DRAFT)
-  budgetIqd    Int
-  spentIqd     Int              @default(0)
-  cpcIqd       Int              @default(50)   // cost per click in IQD
+  status    AdCampaignStatus @default(DRAFT)
+  budgetIqd Int
+  spentIqd  Int              @default(0)
+  cpcIqd    Int              @default(50) // cost per click in IQD
 
   targetDistricts String[]
-  startAt      DateTime
-  endAt        DateTime
-  createdAt    DateTime         @default(now())
+  startAt         DateTime
+  endAt           DateTime
+  createdAt       DateTime @default(now())
 
-  impressions  AdImpression[]
+  impressions AdImpression[]
 
   @@index([status, startAt])
 }
@@ -807,7 +822,7 @@ model AdImpression {
   id         BigInt     @id @default(autoincrement())
   campaignId String
   campaign   AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  customerId String?    // anonymised after 30 days
+  customerId String? // anonymised after 30 days
   district   String?
   clicked    Boolean    @default(false)
   occurredAt DateTime   @default(now())
@@ -829,21 +844,21 @@ enum BulkDealStatus {
 // supplier discounts and take a commission.
 //
 model BulkDeal {
-  id            String         @id @default(cuid())
-  title         String         // "فلاتر RO Pentair × 100"
-  supplier      String
-  category      String         // filters, bottles, fuel, maintenance
-  unitPriceIqd  Int
-  retailPriceIqd Int           // shown as "compare at" price
-  minOrder      Int            @default(1)
-  commissionPct Float          @default(10)   // platform cut
+  id             String @id @default(cuid())
+  title          String // "فلاتر RO Pentair × 100"
+  supplier       String
+  category       String // filters, bottles, fuel, maintenance
+  unitPriceIqd   Int
+  retailPriceIqd Int // shown as "compare at" price
+  minOrder       Int    @default(1)
+  commissionPct  Float  @default(10) // platform cut
 
-  status        BulkDealStatus @default(OPEN)
-  openUntil     DateTime
-  fulfilledAt   DateTime?
-  createdAt     DateTime       @default(now())
+  status      BulkDealStatus @default(OPEN)
+  openUntil   DateTime
+  fulfilledAt DateTime?
+  createdAt   DateTime       @default(now())
 
-  participants  BulkDealParticipation[]
+  participants BulkDealParticipation[]
 
   @@index([status, openUntil])
 }
@@ -867,15 +882,15 @@ model BulkDealParticipation {
 // currentLiters back to a fresh value. lowThresholdLiters triggers a
 // dashboard banner so the plant doesn't accidentally run out mid-day.
 model WaterStock {
-  id                   String   @id @default(cuid())
-  tenantId             String   @unique
-  currentLiters        Int      @default(0)
-  capacityLiters       Int      @default(20000)
-  lowThresholdLiters   Int      @default(2000)
-  lastTopUpAt          DateTime?
-  lastTopUpLiters      Int?
-  updatedAt            DateTime @updatedAt
-  createdAt            DateTime @default(now())
+  id                 String    @id @default(cuid())
+  tenantId           String    @unique
+  currentLiters      Int       @default(0)
+  capacityLiters     Int       @default(20000)
+  lowThresholdLiters Int       @default(2000)
+  lastTopUpAt        DateTime?
+  lastTopUpLiters    Int?
+  updatedAt          DateTime  @updatedAt
+  createdAt          DateTime  @default(now())
 }
 
 // Append-only audit log of admin actions — who changed the price, who
@@ -886,10 +901,10 @@ model WaterStock {
 model AuditLog {
   id         String   @id @default(cuid())
   tenantId   String?
-  actorId    String   // User.id
+  actorId    String // User.id
   actorName  String
-  action     String   // "settings.update", "customer.approve", "tank.assign", etc.
-  entityType String?  // "Customer" | "Tank" | "Tenant" | ...
+  action     String // "settings.update", "customer.approve", "tank.assign", etc.
+  entityType String? // "Customer" | "Tank" | "Tenant" | ...
   entityId   String?
   before     Json?
   after      Json?
@@ -923,15 +938,114 @@ model PromoNotification {
   channel       PromoChannel
   title         String
   body          String
-  audienceCount Int          // number of customers targeted
+  audienceCount Int // number of customers targeted
   sentCount     Int          @default(0)
   failedCount   Int          @default(0)
-  priceIqd      Int          // what the plant was charged
+  priceIqd      Int // what the plant was charged
   status        PromoStatus  @default(QUEUED)
   scheduledFor  DateTime?
   sentAt        DateTime?
-  createdById   String       // User.id who composed it
+  createdById   String // User.id who composed it
   createdAt     DateTime     @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
+//
+// ─── Wallet + Promo system (added 2026-05-26) ──────────────────────
+//
+// Money flow:
+//   1. Plant owner messages Ahmed (PhiBit) requesting promo top-up
+//   2. Bank/cash transfer happens off-platform
+//   3. Ahmed opens platform-admin console + records the top-up
+//      → tenant.promoWalletIqd += amount, WalletTopup row inserted
+//   4. Plant owner creates a PromoCampaign (new price + duration up to 48h)
+//   5. Push notification reaches every active customer
+//   6. Each customer sees the refill CTA morph into "Order Now — 7,000 د.ع"
+//      with a countdown ending at PromoCampaign.endAt
+//   7. Order placed during the window → priceIqd snapshots the discounted
+//      price + promoCampaignId is set on the order
+//   8. Order completed → 1,000 IQD deducted from tenant wallet
+//   9. Campaign auto-expires when: (a) endAt elapses, (b) wallet < cost,
+//      or (c) owner manually pauses
+//
+
+enum PromoCampaignStatus {
+  ACTIVE
+  PAUSED_BY_OWNER
+  EXPIRED
+  OUT_OF_BUDGET
+}
+
+model PromoCampaign {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Snapshot of the plant's normal refill price at the moment the campaign
+  // was created. Stored so the customer-facing "X بدلاً من Y" stays honest
+  // even if the plant edits refillPriceIqd later.
+  originalPriceIqd Int
+  // The promoted price customers actually pay during the window.
+  promoPriceIqd    Int
+
+  // Wallet cost per completed order. Captured here so future repricing
+  // (Ahmed bumping from 1000→1500 next year) doesn't retroactively
+  // re-charge historical campaigns.
+  costPerOrderIqd Int @default(1000)
+
+  // The window — backend enforces (endAt - startAt) <= 48h on create.
+  startAt DateTime
+  endAt   DateTime
+
+  status         PromoCampaignStatus @default(ACTIVE)
+  pausedAt       DateTime?
+  pausedByUserId String?
+
+  // Snapshots + live counters (updated on order completion + send fanout)
+  walletBalanceAtStartIqd Int
+  pushSentCount           Int @default(0)
+  pushFailedCount         Int @default(0)
+  orderCount              Int @default(0)
+  totalDeductedIqd        Int @default(0)
+  totalRevenueIqd         Int @default(0)
+
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders RefillOrder[]
+
+  @@index([tenantId, status, startAt])
+  @@index([tenantId, endAt])
+}
+
+enum WalletTopupSource {
+  CASH
+  BANK_TRANSFER
+  ZAINCASH
+  ASIACELL
+  OTHER
+}
+
+model WalletTopup {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  amountIqd       Int
+  balanceAfterIqd Int // snapshot of wallet AFTER this topup
+
+  source    WalletTopupSource @default(CASH)
+  reference String? // bank ref / receipt #
+  note      String?
+
+  // The PhiBit staff member who recorded this top-up. Always a
+  // PLATFORM_ADMIN user (Ahmed for now). Not nullable — every top-up
+  // must be traceable to who recorded it.
+  recordedById String
+
+  createdAt DateTime @default(now())
 
   @@index([tenantId, createdAt])
 }

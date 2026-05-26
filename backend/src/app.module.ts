@@ -20,6 +20,7 @@ import { HealthModule } from './health/health.module';
 import { CacheModule } from './cache/cache.module';
 import { QueueModule } from './queue/queue.module';
 import { EmailModule } from './email/email.module';
+import { PlatformAdminModule } from './platform-admin/platform-admin.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { TenantGuard } from './common/guards/tenant.guard';
 import { CapabilitiesGuard } from './common/guards/capabilities.guard';
@@ -59,6 +60,7 @@ const optionalModules: DynamicModule['imports'] = vendorsEnabled ? [VendorsModul
     AccountingModule,
     NotificationsModule,
     PlantModule,
+    PlatformAdminModule,
     UploadsModule,
     HealthModule,
     ...optionalModules,

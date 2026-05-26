@@ -8,8 +8,40 @@ export const queryKeys = {
   me: ['me'] as const,
   myProfile: ['customer', 'me'] as const,
   myOrders: ['customer', 'orders'] as const,
+  activePromo: ['customer', 'active-promo'] as const,
   nearestPlant: (lng: number, lat: number) => ['plant', 'nearest', lng, lat] as const,
 };
+
+export interface ActivePromo {
+  id: string;
+  originalPriceIqd: number;
+  promoPriceIqd: number;
+  endAt: string;
+  secondsRemaining: number;
+}
+
+/**
+ * Active discount campaign for the current customer's plant.
+ *
+ * The plant admin can start/pause/end a promo at any time; we poll once a
+ * minute so the home-screen CTA flips back to the normal state within ~60s
+ * of the campaign ending. `staleTime` is half the interval so a screen focus
+ * inside the same minute doesn't trigger a redundant fetch.
+ *
+ * Backend snapshots the discounted price at order-creation time — the
+ * mobile side only uses this hook for presentation.
+ */
+export function useActivePromo() {
+  return useQuery({
+    queryKey: queryKeys.activePromo,
+    queryFn: async () => {
+      const { data } = await api.get<ActivePromo | null>('/customers/me/active-promo');
+      return data;
+    },
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+}
 
 export function useMyProfile() {
   const demo = useAuth((s) => s.demoMode);

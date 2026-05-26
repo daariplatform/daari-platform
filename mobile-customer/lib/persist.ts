@@ -30,10 +30,11 @@ export const persister = createAsyncStoragePersister({
  * Anything not listed is rebuilt from scratch on next launch.
  */
 const PERSIST_PREFIXES: string[][] = [
-  ['customer', 'me'],      // useMyProfile
-  ['customer', 'orders'],  // useMyOrders
-  ['notifications'],       // notifications inbox
-  ['order'],               // ['order', id] — single order detail
+  ['customer', 'me'],            // useMyProfile
+  ['customer', 'orders'],        // useMyOrders
+  ['customer', 'active-promo'],  // useActivePromo — discounted price visible on cold-start
+  ['notifications'],             // notifications inbox
+  ['order'],                     // ['order', id] — single order detail
 ];
 
 function keyMatchesPrefix(queryKey: readonly unknown[], prefix: string[]): boolean {
