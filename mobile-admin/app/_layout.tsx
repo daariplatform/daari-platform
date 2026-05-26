@@ -14,6 +14,7 @@ import { registerForPushNotifications, setupNotificationListener } from '@/lib/p
 import { persister, shouldPersistQuery, CACHE_MAX_AGE_MS } from '@/lib/persist';
 import { useOnboardingStatus } from '@/lib/queries';
 import { OfflineBanner } from '@/components/OfflineBanner';
+import { ToastProvider } from '@/components/ui';
 import {
   POSTHOG_API_KEY,
   POSTHOG_OPTIONS,
@@ -140,30 +141,32 @@ function RootLayoutInner() {
   }, [user, router]);
 
   return (
-    <View style={{ flex: 1 }}>
-      <StatusBar style="dark" />
-      <OfflineBanner />
-      <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-        <Stack.Screen name="order/[id]" options={{ presentation: 'card' }} />
-        <Stack.Screen name="customer/[id]" options={{ presentation: 'card' }} />
-        <Stack.Screen name="walkin" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="promos" options={{ presentation: 'card' }} />
-        <Stack.Screen name="promo-create" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="promo/[id]" options={{ presentation: 'card' }} />
-        <Stack.Screen name="tanks" options={{ presentation: 'card' }} />
-        <Stack.Screen name="drivers" options={{ presentation: 'card' }} />
-        <Stack.Screen name="drivers/[id]" options={{ presentation: 'card' }} />
-        <Stack.Screen name="drivers/live" options={{ presentation: 'card' }} />
-        <Stack.Screen name="notifications" options={{ presentation: 'card' }} />
-        <Stack.Screen name="audit-log" options={{ presentation: 'card' }} />
-        <Stack.Screen name="team" options={{ presentation: 'card' }} />
-        <Stack.Screen name="accounting" options={{ presentation: 'card' }} />
-        <Stack.Screen name="reports" options={{ presentation: 'card' }} />
-      </Stack>
-    </View>
+    <ToastProvider>
+      <View style={{ flex: 1 }}>
+        <StatusBar style="dark" />
+        <OfflineBanner />
+        <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+          <Stack.Screen name="order/[id]" options={{ presentation: 'card' }} />
+          <Stack.Screen name="customer/[id]" options={{ presentation: 'card' }} />
+          <Stack.Screen name="walkin" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="promos" options={{ presentation: 'card' }} />
+          <Stack.Screen name="promo-create" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="promo/[id]" options={{ presentation: 'card' }} />
+          <Stack.Screen name="tanks" options={{ presentation: 'card' }} />
+          <Stack.Screen name="drivers" options={{ presentation: 'card' }} />
+          <Stack.Screen name="drivers/[id]" options={{ presentation: 'card' }} />
+          <Stack.Screen name="drivers/live" options={{ presentation: 'card' }} />
+          <Stack.Screen name="notifications" options={{ presentation: 'card' }} />
+          <Stack.Screen name="audit-log" options={{ presentation: 'card' }} />
+          <Stack.Screen name="team" options={{ presentation: 'card' }} />
+          <Stack.Screen name="accounting" options={{ presentation: 'card' }} />
+          <Stack.Screen name="reports" options={{ presentation: 'card' }} />
+        </Stack>
+      </View>
+    </ToastProvider>
   );
 }
 
