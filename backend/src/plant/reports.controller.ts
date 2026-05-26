@@ -178,7 +178,10 @@ export class PlantReportsController {
     const tenantId = user.tenantId!;
     const monthStart = startOfMonth();
 
-    // Best driver this month (by completed-order count)
+    // Best driver this month (by completed-order count). Mirror the
+    // working `top-drivers` shape: count `driverId` (not `_all`) so the
+    // orderBy resolves correctly, then fall through to '—' for missing
+    // driver rows rather than null-ing the whole tile.
     const bestDriverGroup = await this.prisma.refillOrder.groupBy({
       by: ['driverId'],
       where: {
@@ -187,7 +190,7 @@ export class PlantReportsController {
         completedAt: { gte: monthStart },
         driverId: { not: null },
       },
-      _count: { _all: true },
+      _count: { driverId: true },
       orderBy: { _count: { driverId: 'desc' } },
       take: 1,
     });
@@ -197,13 +200,14 @@ export class PlantReportsController {
         where: { id: bestDriverGroup[0].driverId, tenantId },
         include: { user: { select: { fullName: true } } },
       });
-      if (d) {
-        bestDriver = {
-          id: d.id,
-          fullName: d.user.fullName,
-          completedOrders: bestDriverGroup[0]._count._all,
-        };
-      }
+      // Use the driver's record if we found it; otherwise still surface the
+      // count under a placeholder name so the tile shows the activity exists
+      // (a deleted driver shouldn't make the leaderboard look empty).
+      bestDriver = {
+        id: bestDriverGroup[0].driverId,
+        fullName: d?.user.fullName ?? '—',
+        completedOrders: bestDriverGroup[0]._count.driverId,
+      };
     }
 
     // Top customer this month (by total spend)

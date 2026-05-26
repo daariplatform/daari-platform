@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsDateString, IsEnum, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { PaymentMethod, RefillOrderKind, RefillOrderStatus, TankReclaimReason, UserRole } from '@prisma/client';
 import { OrdersService } from './orders.service';
 import { DriversService } from '../drivers/drivers.service';
@@ -97,6 +97,30 @@ class WalkinRefillDto {
   completionLat?: number;
 }
 
+/**
+ * Plant-admin walk-in sale — simpler shape than the driver's field DTO
+ * because the manager is at the plant: no GPS coordinates, no photo
+ * proof, no payment-method picker (defaults to CASH). All the manager
+ * supplies is the buyer name/phone (both optional, since a true walk-in
+ * may be anonymous) plus the liters/price/paid amounts.
+ */
+class WalkinAdminDto {
+  @IsOptional() @IsString() @MaxLength(80)
+  customerName?: string;
+
+  @IsOptional() @IsString() @MaxLength(20)
+  phone?: string;
+
+  @IsInt() @Min(1)
+  liters!: number;
+
+  @IsInt() @Min(0)
+  priceIqd!: number;
+
+  @IsOptional() @IsInt() @Min(0)
+  paidAmountIqd?: number;
+}
+
 @ApiBearerAuth()
 @ApiTags('orders')
 @UseGuards(RolesGuard)
@@ -191,6 +215,18 @@ export class OrdersController {
   async walkinRefill(@CurrentUser() user: AuthUser, @Body() dto: WalkinRefillDto) {
     const driver = await this.drivers.getMyDriverProfile(user.id);
     return this.orders.createWalkinRefill(user.tenantId!, driver.id, dto);
+  }
+
+  /**
+   * Plant-admin counter sale. Used when the manager records a walk-in
+   * customer at the plant itself (someone arrives with their own
+   * jerrycans, no driver, no field visit). Defaults to CASH and skips
+   * the GPS/photo-proof requirements that apply to driver field sales.
+   */
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT)
+  @Post('walkin-admin')
+  async walkinAdmin(@CurrentUser() user: AuthUser, @Body() dto: WalkinAdminDto) {
+    return this.orders.createAdminWalkinSale(user.tenantId!, user.id, dto);
   }
 
   @RequireCapability('driver')

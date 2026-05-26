@@ -150,7 +150,11 @@ export function useCreateWalkinOrder() {
       priceIqd: number;
       paidAmountIqd?: number;
     }) => {
-      const { data } = await api.post('/orders/walkin-refill', input);
+      // The plant-admin endpoint accepts our simple shape (no GPS / photo
+      // proof required — the manager is at the counter, not in the field)
+      // and is open to OWNER / MANAGER / ACCOUNTANT roles. The legacy
+      // `/orders/walkin-refill` is driver-only and would 403 from here.
+      const { data } = await api.post('/orders/walkin-admin', input);
       return data;
     },
     onSuccess: () => {

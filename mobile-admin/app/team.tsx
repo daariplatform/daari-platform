@@ -28,6 +28,7 @@ import {
   type TeamMember,
   type TeamRole,
 } from '@/lib/queries';
+import { useAuth } from '@/lib/auth-store';
 import { SkeletonCard } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
 
@@ -60,6 +61,14 @@ export default function TeamScreen() {
   const invite = useInviteTeamMember();
   const update = useUpdateTeamMember();
   const remove = useRemoveTeamMember();
+
+  // Backend gates all team write actions to OWNER only. Without this guard
+  // a logged-in MANAGER would see the "+ إضافة عضو" FAB and the per-row
+  // role / activate / remove buttons, tap one, and watch it dead-end with
+  // a confusing 403 alert. Hide the write affordances entirely for
+  // non-owners and surface a read-only banner instead.
+  const currentRole = useAuth((s) => s.user?.role);
+  const canManageTeam = currentRole === 'OWNER';
 
   const [showInactive, setShowInactive] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -203,6 +212,37 @@ export default function TeamScreen() {
 
         {teamQuery.data && (
           <>
+            {/* Read-only banner — only OWNER can add/edit/remove team
+                members. Surface that fact instead of silently dropping
+                action buttons. */}
+            {!canManageTeam && (
+              <View
+                style={{
+                  backgroundColor: '#fff7ed',
+                  borderColor: '#fed7aa',
+                  borderWidth: 1,
+                  borderRadius: 14,
+                  padding: 12,
+                  marginBottom: 12,
+                  flexDirection: 'row-reverse',
+                  alignItems: 'center',
+                  gap: 10,
+                }}
+              >
+                <MaterialIcons name="visibility" size={20} color="#c2410c" />
+                <Text
+                  style={{
+                    color: '#9a3412',
+                    fontSize: 12,
+                    fontWeight: '700',
+                    flex: 1,
+                    textAlign: 'right',
+                  }}
+                >
+                  إدارة الفريق متاحة لمالك المعمل فقط — أنت تعرض القراءة فقط.
+                </Text>
+              </View>
+            )}
             <SectionHeader title="الأعضاء النشطون" count={active.length} />
             {active.length === 0 ? (
               <EmptyState
@@ -216,7 +256,7 @@ export default function TeamScreen() {
                   key={m.id}
                   member={m}
                   onToggleActive={() => handleToggleActive(m)}
-                  onOpenActions={() => setActionTarget(m)}
+                  onOpenActions={canManageTeam ? () => setActionTarget(m) : undefined}
                   busy={update.isPending}
                 />
               ))
@@ -283,7 +323,7 @@ export default function TeamScreen() {
                     key={m.id}
                     member={m}
                     onToggleActive={() => handleToggleActive(m)}
-                    onOpenActions={() => setActionTarget(m)}
+                    onOpenActions={canManageTeam ? () => setActionTarget(m) : undefined}
                     busy={update.isPending}
                   />
                 ))
@@ -292,47 +332,49 @@ export default function TeamScreen() {
         )}
       </ScrollView>
 
-      {/* Floating add-member FAB */}
-      <View
-        style={{
-          position: 'absolute',
-          bottom: 24,
-          left: 18,
-          right: 18,
-        }}
-      >
-        <Pressable
-          onPress={() => setInviteOpen(true)}
-          style={({ pressed }) => ({
-            borderRadius: 18,
-            overflow: 'hidden',
-            opacity: pressed ? 0.9 : 1,
-            shadowColor: '#0e9384',
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.25,
-            shadowRadius: 12,
-            elevation: 6,
-          })}
+      {/* Floating add-member FAB — only the OWNER can invite. */}
+      {canManageTeam && (
+        <View
+          style={{
+            position: 'absolute',
+            bottom: 24,
+            left: 18,
+            right: 18,
+          }}
         >
-          <LinearGradient
-            colors={['#14b8a6', '#0e9384']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{
-              paddingVertical: 14,
-              flexDirection: 'row-reverse',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-            }}
+          <Pressable
+            onPress={() => setInviteOpen(true)}
+            style={({ pressed }) => ({
+              borderRadius: 18,
+              overflow: 'hidden',
+              opacity: pressed ? 0.9 : 1,
+              shadowColor: '#0e9384',
+              shadowOffset: { width: 0, height: 6 },
+              shadowOpacity: 0.25,
+              shadowRadius: 12,
+              elevation: 6,
+            })}
           >
-            <MaterialIcons name="person-add" size={20} color="#fff" />
-            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 14 }}>
-              إضافة عضو
-            </Text>
-          </LinearGradient>
-        </Pressable>
-      </View>
+            <LinearGradient
+              colors={['#14b8a6', '#0e9384']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                paddingVertical: 14,
+                flexDirection: 'row-reverse',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+            >
+              <MaterialIcons name="person-add" size={20} color="#fff" />
+              <Text style={{ color: '#fff', fontWeight: '900', fontSize: 14 }}>
+                إضافة عضو
+              </Text>
+            </LinearGradient>
+          </Pressable>
+        </View>
+      )}
 
       <ActionSheet
         member={actionTarget}
@@ -398,7 +440,9 @@ function MemberRow({
 }: {
   member: TeamMember;
   onToggleActive: () => void;
-  onOpenActions: () => void;
+  // Optional — when the current user can't manage the team, the parent
+  // omits this and the row turns into a read-only card.
+  onOpenActions?: () => void;
   busy: boolean;
 }) {
   const meta = ROLE_META[member.role];
@@ -409,7 +453,10 @@ function MemberRow({
         locale: arSA,
       })
     : 'لم يدخل بعد';
-  const locked = member.role === 'OWNER';
+  // The OWNER row is always read-only (you can't demote yourself). A
+  // missing `onOpenActions` also disables the row — that's how the
+  // non-OWNER read-only view gets locked.
+  const locked = member.role === 'OWNER' || !onOpenActions;
 
   return (
     <Pressable

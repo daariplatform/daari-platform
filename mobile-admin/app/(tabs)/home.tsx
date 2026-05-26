@@ -445,7 +445,7 @@ export default function PlantHome() {
                 label="السائقون النشطون"
                 value={n(kpis.activeDrivers)}
                 tint="#0e9384"
-                onPress={() => router.push('/(tabs)/orders')}
+                onPress={() => router.push('/drivers' as any)}
               />
             </View>
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
@@ -564,15 +564,11 @@ export default function PlantHome() {
                 gap: 8,
               }}
             >
+              {/* Row 1 — daily ops the manager touches most */}
               <AdminTool
                 icon="point-of-sale"
                 label="بيع نقدي"
                 onPress={() => router.push('/walkin' as any)}
-              />
-              <AdminTool
-                icon="campaign"
-                label="إنشاء عرض"
-                onPress={() => router.push('/promos' as any)}
               />
               <AdminTool
                 icon="people"
@@ -580,9 +576,53 @@ export default function PlantHome() {
                 onPress={() => router.push('/(tabs)/customers')}
               />
               <AdminTool
-                icon="local-shipping"
+                icon="directions-car"
                 label="السائقون"
-                onPress={() => router.push('/(tabs)/orders')}
+                onPress={() => router.push('/drivers' as any)}
+              />
+              <AdminTool
+                icon="inventory-2"
+                label="الخزّانات"
+                onPress={() => router.push('/tanks' as any)}
+              />
+
+              {/* Row 2 — analytics + finance */}
+              <AdminTool
+                icon="insights"
+                label="التقارير"
+                onPress={() => router.push('/reports' as any)}
+              />
+              <AdminTool
+                icon="account-balance"
+                label="المحاسبة"
+                onPress={() => router.push('/accounting' as any)}
+              />
+              <AdminTool
+                icon="campaign"
+                label="العروض"
+                onPress={() => router.push('/promos' as any)}
+              />
+              <AdminTool
+                icon="map"
+                label="الخريطة الحيّة"
+                onPress={() => router.push('/drivers/live' as any)}
+              />
+
+              {/* Row 3 — admin / governance */}
+              <AdminTool
+                icon="groups"
+                label="فريق العمل"
+                onPress={() => router.push('/team' as any)}
+              />
+              <AdminTool
+                icon="notifications"
+                label="التنبيهات"
+                onPress={() => router.push('/notifications' as any)}
+              />
+              <AdminTool
+                icon="history"
+                label="سجلّ التعديلات"
+                onPress={() => router.push('/audit-log' as any)}
               />
             </View>
           </>
@@ -702,21 +742,27 @@ function StatTile({
         flex: 1,
         backgroundColor: '#fff',
         borderRadius: 18,
-        padding: 12,
+        padding: 14,
+        // Tinted border so each tile feels intentionally placed instead of
+        // floating against the page. The very pale `tint + '33'` reads as
+        // ink, not chrome — keeps the dashboard quiet but legible.
         borderWidth: 1,
-        borderColor: '#e2e8f0',
+        borderColor: tint + '33',
         opacity: pressed ? 0.85 : 1,
         shadowColor: '#0f172a',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
-        elevation: 1,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 2,
+        // Minimum height locks the 2×2 grid to a square-ish rhythm even
+        // when one label wraps to a second line.
+        minHeight: 116,
       })}
     >
       <View
         style={{
-          width: 36,
-          height: 36,
+          width: 40,
+          height: 40,
           borderRadius: 12,
           backgroundColor: tint + '1A',
           alignItems: 'center',
@@ -724,12 +770,12 @@ function StatTile({
           alignSelf: 'flex-end',
         }}
       >
-        <MaterialIcons name={icon} size={20} color={tint} />
+        <MaterialIcons name={icon} size={22} color={tint} />
       </View>
       <Text
         style={{
-          marginTop: 10,
-          fontSize: 22,
+          marginTop: 12,
+          fontSize: 24,
           fontWeight: '900',
           color: '#0f172a',
           textAlign: 'right',
@@ -743,7 +789,9 @@ function StatTile({
           color: '#64748b',
           marginTop: 2,
           textAlign: 'right',
+          fontWeight: '600',
         }}
+        numberOfLines={2}
       >
         {label}
       </Text>
@@ -1189,12 +1237,20 @@ function InsightCard({
   return (
     <View
       style={{
-        width: 170,
+        width: 180,
         backgroundColor: '#fff',
-        borderRadius: 14,
+        // Match the 2x2 StatTile styling below (radius 18 + shadow) so the
+        // two rows feel like one unified dashboard surface instead of two
+        // mismatched widgets stacked on each other.
+        borderRadius: 18,
         borderWidth: 1,
         borderColor: '#e2e8f0',
         padding: 12,
+        shadowColor: '#0f172a',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
+        elevation: 1,
       }}
     >
       <View
@@ -1206,7 +1262,7 @@ function InsightCard({
       >
         <Text
           style={{
-            fontSize: 10,
+            fontSize: 11,
             color: '#94a3b8',
             fontWeight: '700',
             flex: 1,
@@ -1218,21 +1274,24 @@ function InsightCard({
         </Text>
         <View
           style={{
-            width: 28,
-            height: 28,
-            borderRadius: 8,
+            width: 36,
+            height: 36,
+            borderRadius: 12,
             backgroundColor: tint + '1A',
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <MaterialIcons name={icon} size={16} color={tint} />
+          <MaterialIcons name={icon} size={20} color={tint} />
         </View>
       </View>
       <Text
         style={{
-          marginTop: 8,
-          fontSize: 14,
+          marginTop: 10,
+          // Bigger primary so the insight tile reads at the same rhythm
+          // as the 2x2 stat tiles below (which use 22pt). 18pt keeps two
+          // tiles per row comfortable on a narrow phone.
+          fontSize: 18,
           fontWeight: '900',
           color: highlight ?? '#0f172a',
           textAlign: 'right',
@@ -1244,7 +1303,7 @@ function InsightCard({
       <Text
         style={{
           marginTop: 2,
-          fontSize: 10,
+          fontSize: 11,
           color: '#64748b',
           textAlign: 'right',
         }}

@@ -776,6 +776,47 @@ export class OrdersService {
    * (or a registered customer paying for a one-off out-of-cycle refill).
    * Creates a WALKIN_SALE order pre-completed in one step.
    */
+  /**
+   * Counter-sale recorded by a plant admin (manager/owner) at the plant
+   * itself. Distinct from `createWalkinRefill` (driver in the field) and
+   * `recordWalkinSale` (driver with GPS + photo): no driver is involved,
+   * no GPS / photo proof is required, payment defaults to CASH. The
+   * `userId` argument is captured into `walkinRecordedByUserId` so the
+   * audit log can answer "who at the counter rang this up?"
+   */
+  async createAdminWalkinSale(
+    tenantId: string,
+    userId: string,
+    input: {
+      customerName?: string;
+      phone?: string;
+      liters: number;
+      priceIqd: number;
+      paidAmountIqd?: number;
+    },
+  ) {
+    const paid = input.paidAmountIqd ?? input.priceIqd;
+    return this.prisma.refillOrder.create({
+      data: {
+        tenantId,
+        // No driverId — counter sales aren't dispatched. Manager is the
+        // operator of record (preserved in walkinBuyerName for now;
+        // an explicit recordedBy column is a follow-up).
+        kind: RefillOrderKind.WALKIN_SALE,
+        status: RefillOrderStatus.COMPLETED,
+        priceIqd: input.priceIqd,
+        paidAmountIqd: paid,
+        paymentMethod: 'CASH',
+        paidAt: new Date(),
+        walkinBuyerName: input.customerName,
+        walkinBuyerPhone: input.phone,
+        walkinLiters: input.liters,
+        requestedAt: new Date(),
+        completedAt: new Date(),
+      },
+    });
+  }
+
   async createWalkinRefill(
     tenantId: string,
     driverId: string,
