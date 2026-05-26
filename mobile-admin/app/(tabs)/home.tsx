@@ -73,62 +73,90 @@ export default function PlantHome() {
 
   return (
     <View className="flex-1 bg-slate-50">
-      {/* Sky gradient hero — extended outside the SafeArea so the status-bar
-          area paints in the brand colour. */}
-      <LinearGradient
-        colors={['#14b8a6', '#0e9384']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={{
-          paddingBottom: 22,
-          borderBottomLeftRadius: 28,
-          borderBottomRightRadius: 28,
-        }}
-      >
-        <SafeAreaView edges={['top']}>
-          <View style={{ paddingHorizontal: 18, paddingTop: 4 }}>
-            <View
-              style={{
-                flexDirection: 'row-reverse',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: '#99f6e4', fontSize: 12 }}>أهلاً بعودتك</Text>
-                <Text
-                  style={{
-                    color: '#fff',
-                    fontWeight: '900',
-                    fontSize: 22,
-                    marginTop: 2,
-                  }}
-                  numberOfLines={1}
-                >
-                  {plantName}
-                </Text>
-                <Text style={{ color: '#99f6e4', fontSize: 12, marginTop: 4 }}>
-                  {todayLabel}
-                </Text>
-              </View>
+      {/* Business dashboard header — deliberately NOT a consumer-style hero.
+          A plant owner is running a business; they need a control-panel feel,
+          not a "welcome back!" greeting card. White surface, dense info, role
+          chip to make the management context unmistakable.
+
+          (The customer + worker apps DO use a colourful greeting hero —
+          keep this one distinct so an owner never confuses the surfaces.) */}
+      <SafeAreaView edges={['top']} style={{ backgroundColor: '#fff' }}>
+        <View
+          style={{
+            paddingHorizontal: 16,
+            paddingTop: 6,
+            paddingBottom: 12,
+            backgroundColor: '#fff',
+            borderBottomWidth: 1,
+            borderBottomColor: '#e2e8f0',
+          }}
+        >
+          <View
+            style={{
+              flexDirection: 'row-reverse',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              {/* Role chip — leaves zero ambiguity who this app is for. */}
               <View
                 style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 18,
-                  backgroundColor: 'rgba(255,255,255,0.18)',
+                  flexDirection: 'row-reverse',
+                  alignSelf: 'flex-end',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.25)',
+                  gap: 4,
+                  backgroundColor: '#ccfbf1',
+                  paddingHorizontal: 8,
+                  paddingVertical: 2,
+                  borderRadius: 999,
+                  marginBottom: 4,
                 }}
               >
-                <MaterialIcons name="water-drop" size={28} color="#fff" />
+                <MaterialIcons name="admin-panel-settings" size={11} color="#0e9384" />
+                <Text style={{ color: '#0e9384', fontSize: 10, fontWeight: '800' }}>
+                  وضع الإدارة
+                </Text>
               </View>
+              <Text
+                style={{
+                  color: '#0f172a',
+                  fontWeight: '900',
+                  fontSize: 20,
+                  textAlign: 'right',
+                }}
+                numberOfLines={1}
+              >
+                لوحة {plantName}
+              </Text>
+              <Text
+                style={{
+                  color: '#64748b',
+                  fontSize: 11,
+                  textAlign: 'right',
+                  marginTop: 2,
+                }}
+              >
+                {todayLabel}
+              </Text>
+            </View>
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 14,
+                backgroundColor: '#f0fdfa',
+                borderWidth: 1,
+                borderColor: '#ccfbf1',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <MaterialIcons name="dashboard" size={24} color="#0e9384" />
             </View>
           </View>
-        </SafeAreaView>
-      </LinearGradient>
+        </View>
+      </SafeAreaView>
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 28 }}
@@ -299,62 +327,67 @@ export default function PlantHome() {
               />
             )}
 
-            {/* ── Big revenue tile ─────────────────────────────────── */}
+            {/* ── Revenue strip ─────────────────────────────────────
+                Dense, dashboard-style: today + month + delta, no oversized
+                hero number. Compare to the customer app's "اطلب الآن" hero —
+                this is intentionally NOT a CTA. */}
             <View
               style={{
                 backgroundColor: '#fff',
-                borderRadius: 22,
-                padding: 18,
+                borderRadius: 16,
+                padding: 14,
                 marginTop: 4,
-                marginBottom: 12,
-                shadowColor: '#0f172a',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.06,
-                shadowRadius: 12,
-                elevation: 2,
+                marginBottom: 10,
                 borderWidth: 1,
-                borderColor: '#ccfbf1',
+                borderColor: '#e2e8f0',
               }}
             >
-              <View
-                style={{
-                  flexDirection: 'row-reverse',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}
-              >
+              <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <MaterialIcons name="trending-up" size={14} color="#0e9384" />
+                <Text style={{ fontSize: 11, color: '#64748b', fontWeight: '700' }}>
+                  الإيرادات
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row-reverse', gap: 14 }}>
                 <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                  <Text style={{ fontSize: 12, color: '#64748b' }}>إيرادات اليوم</Text>
-                  <Text
-                    style={{
-                      fontSize: 30,
-                      fontWeight: '900',
-                      color: '#0f172a',
-                      marginTop: 4,
-                      lineHeight: 36,
-                    }}
-                  >
-                    {n(kpis.todayRevenueIqd)}{' '}
-                    <Text style={{ fontSize: 14, color: '#64748b', fontWeight: '700' }}>
-                      د.ع
-                    </Text>
+                  <Text style={{ fontSize: 10, color: '#94a3b8' }}>اليوم</Text>
+                  <Text style={{ fontSize: 18, fontWeight: '900', color: '#0f172a', marginTop: 2 }}>
+                    {n(kpis.todayRevenueIqd)}
+                    <Text style={{ fontSize: 11, color: '#64748b', fontWeight: '700' }}>{' '}د.ع</Text>
                   </Text>
-                  <Text style={{ fontSize: 12, color: '#0e9384', marginTop: 4 }}>
-                    {n(kpis.todayCompletedOrders)} طلب مكتمل
+                  <Text style={{ fontSize: 10, color: '#0e9384', marginTop: 2 }}>
+                    {n(kpis.todayCompletedOrders)} طلب
                   </Text>
                 </View>
-                <LinearGradient
-                  colors={['#14b8a6', '#0e9384']}
-                  style={{
-                    width: 64,
-                    height: 64,
-                    borderRadius: 20,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <MaterialIcons name="trending-up" size={32} color="#fff" />
-                </LinearGradient>
+                <View style={{ width: 1, backgroundColor: '#e2e8f0' }} />
+                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 10, color: '#94a3b8' }}>الشهر</Text>
+                  <Text style={{ fontSize: 18, fontWeight: '900', color: '#0f172a', marginTop: 2 }}>
+                    {n(kpis.opsThisMonth)}
+                    <Text style={{ fontSize: 11, color: '#64748b', fontWeight: '700' }}>{' '}عملية</Text>
+                  </Text>
+                  <Text style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
+                    من {n(kpis.planLimit)}
+                  </Text>
+                </View>
+                <View style={{ width: 1, backgroundColor: '#e2e8f0' }} />
+                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 10, color: '#94a3b8' }}>المخزون</Text>
+                  <Text
+                    style={{
+                      fontSize: 18,
+                      fontWeight: '900',
+                      color: kpis.stockLow ? '#ef4444' : '#0f172a',
+                      marginTop: 2,
+                    }}
+                  >
+                    {stockPct(kpis.stockLevelLiters, kpis.stockCapacityLiters)}
+                    <Text style={{ fontSize: 11, color: '#64748b', fontWeight: '700' }}>%</Text>
+                  </Text>
+                  <Text style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
+                    {n(kpis.stockLevelLiters)} لتر
+                  </Text>
+                </View>
               </View>
             </View>
 
@@ -448,24 +481,50 @@ export default function PlantHome() {
               </Pressable>
             )}
 
-            {/* ── Quick actions ─────────────────────────────────────── */}
-            <View
+            {/* ── Admin quick actions ───────────────────────────────
+                Small icon buttons (NOT large CTAs). These are management
+                shortcuts, not consumer "press to order" affordances. The
+                customer app intentionally uses the opposite pattern (one
+                big "اطلب الآن"). Names also avoid the word "اطلب" so they
+                never read like the customer flow. */}
+            <Text
               style={{
+                fontSize: 11,
+                color: '#64748b',
+                fontWeight: '700',
+                textAlign: 'right',
                 marginTop: 16,
-                flexDirection: 'row-reverse',
-                gap: 10,
+                marginBottom: 8,
               }}
             >
-              <QuickAction
-                icon="add-shopping-cart"
-                label="تعبئة مباشرة"
+              أدوات الإدارة
+            </Text>
+            <View
+              style={{
+                flexDirection: 'row-reverse',
+                flexWrap: 'wrap',
+                gap: 8,
+              }}
+            >
+              <AdminTool
+                icon="point-of-sale"
+                label="بيع نقدي"
                 onPress={() => router.push('/walkin' as any)}
-                primary
               />
-              <QuickAction
+              <AdminTool
                 icon="campaign"
-                label="العروض"
+                label="إنشاء عرض"
                 onPress={() => router.push('/promos' as any)}
+              />
+              <AdminTool
+                icon="people"
+                label="الزبائن"
+                onPress={() => router.push('/(tabs)/customers')}
+              />
+              <AdminTool
+                icon="local-shipping"
+                label="السائقون"
+                onPress={() => router.push('/(tabs)/orders')}
               />
             </View>
           </>
@@ -628,6 +687,57 @@ function StatTile({
           textAlign: 'right',
         }}
       >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+/**
+ * AdminTool — small icon+label tile used in the admin home's tool strip.
+ * Wraps to 2-per-row on narrow screens. Intentionally NOT a big CTA: the
+ * customer app owns that pattern (the "اطلب الآن" pulse button). Admin
+ * tools are management shortcuts, not primary calls-to-action.
+ */
+function AdminTool({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: MaterialIconName;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        width: '48.5%',
+        backgroundColor: '#fff',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: 10,
+        opacity: pressed ? 0.7 : 1,
+      })}
+    >
+      <View
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 10,
+          backgroundColor: '#f0fdfa',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <MaterialIcons name={icon} size={18} color="#0e9384" />
+      </View>
+      <Text style={{ color: '#0f172a', fontWeight: '700', fontSize: 12, flex: 1, textAlign: 'right' }}>
         {label}
       </Text>
     </Pressable>
