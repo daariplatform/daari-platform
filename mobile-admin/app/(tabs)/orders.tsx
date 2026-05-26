@@ -117,7 +117,11 @@ export default function OrdersScreen() {
         />
       )}
 
-      {!query.isLoading && items.length === 0 && (
+      {/* Empty state is mutually exclusive with the error state. If the
+          query errored, query.data is undefined → items === [] → this
+          would also evaluate true, rendering BOTH the error AND empty
+          cards on the same screen. Gate on !isError so only one shows. */}
+      {!query.isLoading && !query.isError && items.length === 0 && (
         <EmptyState
           icon="receipt-long"
           title="لا توجد طلبات"

@@ -340,7 +340,7 @@ export default function AccountingScreen() {
           </View>
         )}
 
-        {!txQuery.isLoading && items.length === 0 && (
+        {!txQuery.isLoading && !txQuery.isError && items.length === 0 && (
           <EmptyState
             icon="receipt"
             title="لا توجد معاملات"

@@ -127,7 +127,21 @@ export class DriversService {
       }),
       this.prisma.driver.count({ where }),
     ]);
-    return paginated(items, total, { page, pageSize });
+    // Flatten the response — mobile-admin's DriverRow expects fullName/phone
+    // at the top level + a derived isOnline (true when the driver app pinged
+    // GPS in the last 30 min). Without this flatten, the admin driver list
+    // renders "?" avatars because driver.fullName is undefined at the top
+    // level (it lives under driver.user.fullName).
+    const activeSince = Date.now() - 30 * 60 * 1000;
+    const flattened = items.map((d: any) => ({
+      ...d,
+      fullName: d.user?.fullName ?? '',
+      phone: d.user?.phone ?? '',
+      isOnline: d.lastLocationAt
+        ? new Date(d.lastLocationAt).getTime() >= activeSince
+        : false,
+    }));
+    return paginated(flattened, total, { page, pageSize });
   }
 
   /**

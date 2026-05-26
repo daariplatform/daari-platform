@@ -302,7 +302,7 @@ export default function AuditLogScreen() {
         />
       )}
 
-      {!logQuery.isLoading && items.length === 0 && (
+      {!logQuery.isLoading && !logQuery.isError && items.length === 0 && (
         <EmptyState
           icon="history"
           title="لا توجد تعديلات"

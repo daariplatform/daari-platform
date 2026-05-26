@@ -213,7 +213,11 @@ export default function NotificationsScreen() {
         />
       )}
 
-      {!inboxQuery.isLoading && items.length === 0 && (
+      {/* Empty state is mutually exclusive with the error state — if the
+          query errored, query.data is undefined and items === [], which
+          would otherwise trigger BOTH the error card AND the empty card
+          at once. Gate on !isError so only the error renders. */}
+      {!inboxQuery.isLoading && !inboxQuery.isError && items.length === 0 && (
         <EmptyState
           icon="notifications-none"
           title={unreadOnly ? 'لا توجد تنبيهات غير مقروءة' : 'لا توجد تنبيهات'}
