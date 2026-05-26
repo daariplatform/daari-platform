@@ -1,0 +1,57 @@
+{
+  "name": "داري — لوحة تحكّم المعمل",
+  "short_name": "داري للمعمل",
+  "description": "إدارة معمل مياه الشرب: الطلبات، الزبائن، السائقون، الخزّانات، المحاسبة، التقارير.",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#0e9384",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "بيع نقدي",
+      "short_name": "بيع نقدي",
+      "description": "تسجيل بيع مباشر بدون طلب",
+      "url": "/dashboard/orders?walkin=1",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "الطلبات",
+      "short_name": "الطلبات",
+      "description": "آخر الطلبات وحالاتها",
+      "url": "/dashboard/orders",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "التقارير",
+      "short_name": "التقارير",
+      "description": "تقارير الإيرادات وأفضل السائقين والزبائن",
+      "url": "/dashboard/reports",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
