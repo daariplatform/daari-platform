@@ -31,6 +31,7 @@ import {
 import { useAuth } from '@/lib/auth-store';
 import { SkeletonCard } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
+import { safeBack } from '@/lib/nav';
 
 const ROLE_META: Record<
   TeamRole,

@@ -25,6 +25,7 @@ import {
 } from '@/lib/queries';
 import { Skeleton } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
+import { safeBack } from '@/lib/nav';
 
 type MaterialIconName = React.ComponentProps<typeof MaterialIcons>['name'];
 type Period = 'week' | 'month';

@@ -23,6 +23,7 @@ import {
 } from '@/lib/queries';
 import { SkeletonCard } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
+import { safeBack } from '@/lib/nav';
 
 type MaterialIconName = React.ComponentProps<typeof MaterialIcons>['name'];
 

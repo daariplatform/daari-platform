@@ -42,6 +42,7 @@ import { Skeleton } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
 import { Sparkline } from '@/components/charts/Sparkline';
 import { Bar } from '@/components/charts/Bar';
+import { safeBack } from '@/lib/nav';
 
 type MaterialIconName = React.ComponentProps<typeof MaterialIcons>['name'];
 
