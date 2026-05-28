@@ -61,7 +61,11 @@ class CompleteOrderDto {
 }
 
 class CancelOrderDto {
-  @IsString() reason!: string;
+  // Customers can now cancel their own PENDING orders, so the reason
+  // becomes optional — defaults to "ألغاه الزبون" if omitted. Drivers
+  // and plant admins still expected to provide a real reason.
+  @IsOptional() @IsString() @MaxLength(500)
+  reason?: string;
 }
 
 class DisputeDto {
@@ -247,10 +251,24 @@ export class OrdersController {
     return this.orders.complete(id, driver.id, dto);
   }
 
-  @RequireCapability('plant_admin', 'driver')
+  /**
+   * Cancel an order. Allowed for:
+   *   - plant_admin  → cancels any order in the tenant
+   *   - driver       → cancels their own assigned order ("no-customer at door")
+   *   - customer     → cancels their own pending order (before driver assigned)
+   *
+   * The service-layer guards the customer/driver path by verifying
+   * ownership AND that the order is still in a cancellable state
+   * (PENDING/ASSIGNED, not COMPLETED/CANCELLED already).
+   */
+  @RequireCapability('plant_admin', 'driver', 'customer')
   @Post(':id/cancel')
-  cancel(@Param('id') id: string, @Body() dto: CancelOrderDto) {
-    return this.orders.cancel(id, dto.reason);
+  cancel(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: CancelOrderDto,
+  ) {
+    return this.orders.cancel(id, dto.reason, user);
   }
 
   @RequireCapability('customer')

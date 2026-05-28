@@ -137,7 +137,12 @@ export default function Home() {
                 <Text className="text-cyan-100 text-xs">مرحباً</Text>
                 <Text className="text-white font-bold text-xl">{profile.fullName}</Text>
               </View>
+              {/* Bell — opens the customer inbox. Previously had NO
+                  onPress at all, so push notifications had no in-app
+                  destination. Now wired to /notifications. */}
               <Pressable
+                onPress={() => router.push('/notifications')}
+                hitSlop={8}
                 style={{
                   width: 44,
                   height: 44,

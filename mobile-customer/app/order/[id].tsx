@@ -42,13 +42,65 @@ export default function OrderDetail() {
   });
 
   const cancelMutation = useMutation({
-    mutationFn: async () => (await api.post(`/orders/${id}/cancel`)).data,
+    // The backend now scopes cancel by ownership + status; sending an
+    // empty body is OK (reason becomes "ألغاه الزبون" by default), but
+    // we pass an explicit Arabic reason so the manager-side audit log
+    // reads clearly.
+    mutationFn: async () =>
+      (await api.post(`/orders/${id}/cancel`, { reason: 'إلغاء من الزبون' })).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['order', id] });
       qc.invalidateQueries({ queryKey: ['customer', 'orders'] });
       Alert.alert('تم الإلغاء', 'تم إلغاء طلبك بنجاح');
     },
-    onError: () => Alert.alert('خطأ', 'فشل إلغاء الطلب — حاول مرة ثانية'),
+    onError: (err: any) => {
+      // Backend returns 400/403 with an Arabic message for the cases
+      // we deliberately block (already-assigned, not yours, etc.) —
+      // surface that instead of a generic "try again".
+      const msg =
+        err?.response?.data?.message ?? 'فشل إلغاء الطلب — حاول مرة ثانية';
+      Alert.alert('خطأ', msg);
+    },
+  });
+
+  // Customer-side confirmation: after a refill is marked COMPLETED by
+  // the driver, the customer taps to acknowledge they received it. The
+  // plant dashboard watches this signal to chase un-confirmed refills
+  // (which often indicate a delivery dispute).
+  const confirmMutation = useMutation({
+    mutationFn: async () => (await api.post(`/orders/${id}/confirm`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['order', id] });
+      Alert.alert('شكراً', 'تأكّد استلامك بنجاح. نسعد بخدمتك دائماً 💧');
+    },
+    onError: (err: any) => {
+      Alert.alert(
+        'خطأ',
+        err?.response?.data?.message ?? 'تعذّر تأكيد التسليم. حاول لاحقاً.',
+      );
+    },
+  });
+
+  // Dispute: customer says "I didn't get this refill" / "tank was
+  // wrong" / "driver overcharged". Opens an Alert.prompt — RN's
+  // built-in prompt is iOS-only, but we use a simple multi-line
+  // confirmation since most disputes need a written reason anyway.
+  const disputeMutation = useMutation({
+    mutationFn: async (reason: string) =>
+      (await api.post(`/orders/${id}/dispute`, { reason })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['order', id] });
+      Alert.alert(
+        'تم إرسال الشكوى',
+        'سيتواصل معك المعمل خلال أربع وعشرين ساعة لحلّ المشكلة.',
+      );
+    },
+    onError: (err: any) => {
+      Alert.alert(
+        'خطأ',
+        err?.response?.data?.message ?? 'تعذّر إرسال الشكوى. حاول لاحقاً.',
+      );
+    },
   });
 
   if (isLoading || !order) {
@@ -254,7 +306,7 @@ export default function OrderDetail() {
             {order.notes && <Row label="ملاحظات" value={order.notes} />}
           </MotiView>
 
-          {/* Cancel button */}
+          {/* Cancel button — only while order is still PENDING */}
           {isCancellable && (
             <Pressable
               onPress={() =>
@@ -278,6 +330,111 @@ export default function OrderDetail() {
                 {cancelMutation.isPending ? 'جارٍ الإلغاء...' : 'إلغاء الطلب'}
               </Text>
             </Pressable>
+          )}
+
+          {/* Confirm + Dispute — only after refill is COMPLETED but the
+              customer hasn't acknowledged yet. `customerConfirmedAt` is
+              the backend's signal that this loop is closed. */}
+          {order.status === 'COMPLETED' && !order.customerConfirmedAt && (
+            <View style={{ marginTop: 16, gap: 10 }}>
+              <Pressable
+                onPress={() => confirmMutation.mutate()}
+                disabled={confirmMutation.isPending}
+                style={{
+                  paddingVertical: 14,
+                  borderRadius: 14,
+                  backgroundColor: '#0e9384',
+                  alignItems: 'center',
+                  flexDirection: 'row-reverse',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
+                <Ionicons name="checkmark-circle" size={20} color="white" />
+                <Text style={{ color: 'white', fontWeight: '800', fontSize: 15 }}>
+                  {confirmMutation.isPending ? 'جارٍ التأكيد...' : 'أكّد استلام التعبئة'}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  // Cross-platform compatible: native prompt only works
+                  // on iOS, so on Android we fall back to a fixed
+                  // generic reason. The manager-side dashboard surfaces
+                  // the dispute row regardless, and the manager calls
+                  // the customer for details.
+                  if (typeof Alert.prompt === 'function') {
+                    Alert.prompt(
+                      'إبلاغ عن مشكلة',
+                      'صف المشكلة باختصار:',
+                      [
+                        { text: 'إلغاء', style: 'cancel' },
+                        {
+                          text: 'إرسال',
+                          onPress: (val) =>
+                            disputeMutation.mutate(
+                              (val ?? '').trim() || 'مشكلة في الطلب',
+                            ),
+                        },
+                      ],
+                      'plain-text',
+                    );
+                  } else {
+                    Alert.alert(
+                      'إبلاغ عن مشكلة',
+                      'سيتواصل المعمل معك خلال ٢٤ ساعة. هل تريد المتابعة؟',
+                      [
+                        { text: 'إلغاء', style: 'cancel' },
+                        {
+                          text: 'متابعة',
+                          style: 'destructive',
+                          onPress: () =>
+                            disputeMutation.mutate('مشكلة في الطلب'),
+                        },
+                      ],
+                    );
+                  }
+                }}
+                disabled={disputeMutation.isPending}
+                style={{
+                  paddingVertical: 14,
+                  borderRadius: 14,
+                  borderWidth: 1.5,
+                  borderColor: '#f59e0b',
+                  backgroundColor: 'white',
+                  alignItems: 'center',
+                  flexDirection: 'row-reverse',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
+                <Ionicons name="alert-circle" size={20} color="#d97706" />
+                <Text style={{ color: '#b45309', fontWeight: '700' }}>
+                  {disputeMutation.isPending ? 'جارٍ الإرسال...' : 'أبلغ عن مشكلة'}
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
+          {order.status === 'COMPLETED' && order.customerConfirmedAt && (
+            <View
+              style={{
+                marginTop: 16,
+                paddingVertical: 12,
+                borderRadius: 14,
+                backgroundColor: '#ecfdf5',
+                borderWidth: 1,
+                borderColor: '#a7f3d0',
+                alignItems: 'center',
+                flexDirection: 'row-reverse',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+            >
+              <Ionicons name="checkmark-done" size={18} color="#047857" />
+              <Text style={{ color: '#047857', fontWeight: '700' }}>
+                تأكّد استلام التعبئة. شكراً!
+              </Text>
+            </View>
           )}
         </View>
       </ScrollView>

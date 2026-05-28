@@ -141,6 +141,92 @@ export class NotificationsService {
     return { ok: true, updated: res.count };
   }
 
+  // ─── Customer inbox ─────────────────────────────────────────────────
+  //
+  // Customer-scoped variant of the inbox. Filters NotificationLog by the
+  // `recipient` column matching the user's phone number (NotificationLog
+  // is shared infrastructure that captures any WhatsApp/SMS/push message
+  // sent to a phone, regardless of which app surface displays it later).
+  // We deliberately don't scope by tenantId here because a single
+  // customer can in theory subscribe to multiple plants — the recipient
+  // phone is the identity key.
+
+  /**
+   * Look up the caller's phone via User → then return paginated inbox of
+   * messages addressed to that phone. Same shape as the plant inbox so
+   * the mobile client can share rendering logic with the admin app.
+   */
+  async inboxForCustomer(
+    userId: string,
+    page = 1,
+    pageSize = 50,
+    unreadOnly = false,
+  ): Promise<PaginatedResult<unknown> & { unreadCount: number }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { phone: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const where = {
+      recipient: user.phone,
+      ...(unreadOnly && { readAt: null }),
+    };
+    const skip = (page - 1) * pageSize;
+    const [items, total, unreadCount] = await this.prisma.$transaction([
+      this.prisma.notificationLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.notificationLog.count({ where }),
+      this.prisma.notificationLog.count({
+        where: { recipient: user.phone, readAt: null },
+      }),
+    ]);
+    return {
+      ...paginated(items, total, { page, pageSize }),
+      unreadCount,
+    } as PaginatedResult<unknown> & { unreadCount: number };
+  }
+
+  /**
+   * Mark one inbox row as read FOR THE CALLING CUSTOMER. We verify that
+   * the row's `recipient` matches the user's phone — otherwise customer
+   * A could mark customer B's notifications as read.
+   */
+  async markReadForCustomer(userId: string, notificationId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { phone: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    const row = await this.prisma.notificationLog.findFirst({
+      where: { id: notificationId, recipient: user.phone },
+    });
+    if (!row) throw new NotFoundException('الإشعار غير موجود');
+    if (row.readAt) return row;
+    return this.prisma.notificationLog.update({
+      where: { id: notificationId },
+      data: { readAt: new Date() },
+    });
+  }
+
+  /** Customer counterpart of markAllRead — scoped by phone, not tenant. */
+  async markAllReadForCustomer(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { phone: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    const res = await this.prisma.notificationLog.updateMany({
+      where: { recipient: user.phone, readAt: null },
+      data: { readAt: new Date() },
+    });
+    return { ok: true, updated: res.count };
+  }
+
   /**
    * Insert a "system message" into the tenant inbox without sending an
    * external WhatsApp/SMS. Other modules call this to surface things like

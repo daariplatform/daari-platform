@@ -93,4 +93,41 @@ export class NotificationsController {
   markAllRead(@CurrentUser() user: AuthUser) {
     return this.notifications.markAllRead(user.tenantId!);
   }
+
+  // ─── Customer-scoped endpoints ─────────────────────────────────────
+  //
+  // The mobile-customer app needs its own notification feed (the inbox
+  // on the home-screen bell). Previously the app pointed at /me, /:id/
+  // read, /read-all — all 404. These three routes plug that gap. The
+  // service-layer reads NotificationLog filtered by `recipient` matching
+  // the user's phone so we don't leak other customers' messages.
+
+  @Roles(UserRole.CUSTOMER)
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiQuery({ name: 'unreadOnly', required: false, type: Boolean })
+  @Get('me')
+  myInbox(
+    @CurrentUser() user: AuthUser,
+    @Query() q: InboxQueryDto,
+  ) {
+    return this.notifications.inboxForCustomer(
+      user.id,
+      q.page,
+      q.pageSize,
+      q.unreadOnly === 'true' || q.unreadOnly === '1',
+    );
+  }
+
+  @Roles(UserRole.CUSTOMER)
+  @Post('me/:id/mark-read')
+  myMarkRead(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.notifications.markReadForCustomer(user.id, id);
+  }
+
+  @Roles(UserRole.CUSTOMER)
+  @Post('me/mark-all-read')
+  myMarkAllRead(@CurrentUser() user: AuthUser) {
+    return this.notifications.markAllReadForCustomer(user.id);
+  }
 }

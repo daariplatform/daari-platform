@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -624,12 +625,75 @@ export class OrdersService {
     return result;
   }
 
-  async cancel(orderId: string, reason: string) {
+  /**
+   * Cancel an order. The route accepts plant_admin OR driver OR customer
+   * — but the rules differ per role. This service enforces them:
+   *
+   *   - plant_admin: can cancel any order in their tenant, any status
+   *     except COMPLETED (revert COMPLETE through a different flow).
+   *   - driver: only their own assigned order, and only while it's
+   *     ASSIGNED or EN_ROUTE (= "no customer at door / can't deliver").
+   *   - customer: only their own order, and only while it's PENDING
+   *     (= "changed my mind before driver picked up"). Once ASSIGNED,
+   *     the customer must call the plant.
+   */
+  async cancel(
+    orderId: string,
+    reason: string | undefined,
+    user: { id: string; role: string; tenantId?: string | null },
+  ) {
+    const order = await this.prisma.refillOrder.findUnique({
+      where: { id: orderId },
+      include: {
+        customer: { select: { userId: true } },
+        driver: { select: { userId: true } },
+      },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.status === RefillOrderStatus.COMPLETED) {
+      throw new BadRequestException('لا يمكن إلغاء طلب مكتمل');
+    }
+    if (order.status === RefillOrderStatus.CANCELLED) {
+      // Idempotent — return the existing row so a double-tap from
+      // flaky UI doesn't throw.
+      return order;
+    }
+
+    const role = user.role;
+    if (role === 'OWNER' || role === 'MANAGER' || role === 'PLATFORM_ADMIN') {
+      if (order.tenantId !== user.tenantId) {
+        throw new ForbiddenException('Order is in a different tenant');
+      }
+    } else if (role === 'DRIVER') {
+      if (order.driver?.userId !== user.id) {
+        throw new ForbiddenException('Order is not assigned to you');
+      }
+      if (
+        order.status !== RefillOrderStatus.ASSIGNED &&
+        order.status !== RefillOrderStatus.EN_ROUTE
+      ) {
+        throw new BadRequestException(
+          'يمكن إلغاء الطلب فقط إذا كان قيد التنفيذ',
+        );
+      }
+    } else if (role === 'CUSTOMER') {
+      if (order.customer?.userId !== user.id) {
+        throw new ForbiddenException('Order does not belong to you');
+      }
+      if (order.status !== RefillOrderStatus.PENDING) {
+        throw new BadRequestException(
+          'لا يمكن إلغاء الطلب بعد تعيين السائق. اتصل بالمعمل.',
+        );
+      }
+    } else {
+      throw new ForbiddenException('Unauthorised role for cancel');
+    }
+
     return this.prisma.refillOrder.update({
       where: { id: orderId },
       data: {
         status: RefillOrderStatus.CANCELLED,
-        cancelReason: reason,
+        cancelReason: reason ?? (role === 'CUSTOMER' ? 'ألغاه الزبون' : 'بدون سبب'),
       },
     });
   }

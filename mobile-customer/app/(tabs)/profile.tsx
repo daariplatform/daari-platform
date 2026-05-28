@@ -165,11 +165,55 @@ export default function Profile() {
           </View>
         )}
 
-        {/* Action: I moved */}
+        {/* Action: I moved — now genuinely wired to the backend's
+            POST /customers/:id/move endpoint. Requests fresh GPS at
+            the new address, then PATCHes the customer's location.
+            Before this fix the button only showed an Alert. */}
         <Pressable
-          onPress={() =>
-            Alert.alert('انتقلت لبيت جديد؟', 'فعّل GPS عند البيت الجديد وسنحدّث عنوانك تلقائياً')
-          }
+          onPress={() => {
+            Alert.alert(
+              'انتقلت لبيت جديد؟',
+              'سنطلب موقعك الحالي عبر GPS لتحديث عنوانك. تأكّد أنك في البيت الجديد.',
+              [
+                { text: 'إلغاء', style: 'cancel' },
+                {
+                  text: 'تحديث الآن',
+                  onPress: async () => {
+                    try {
+                      // Lazy-import expo-location so the bundle doesn't
+                      // pay for it unless the user actually moves.
+                      const Location = await import('expo-location');
+                      const perm = await Location.requestForegroundPermissionsAsync();
+                      if (perm.status !== 'granted') {
+                        Alert.alert(
+                          'تعذّر تحديد الموقع',
+                          'السماح بالوصول للموقع مطلوب. فعّله من الإعدادات وحاول مرة ثانية.',
+                        );
+                        return;
+                      }
+                      const loc = await Location.getCurrentPositionAsync({
+                        accuracy: Location.Accuracy.Balanced,
+                      });
+                      await api.post(`/customers/${profile.id}/move`, {
+                        newLng: loc.coords.longitude,
+                        newLat: loc.coords.latitude,
+                      });
+                      Alert.alert(
+                        'تم التحديث',
+                        'حُدّث عنوانك بنجاح. سيصلك السائق إلى الموقع الجديد في الطلبات القادمة.',
+                      );
+                    } catch (err: any) {
+                      Alert.alert(
+                        'خطأ',
+                        err?.response?.data?.message ??
+                          'تعذّر تحديث العنوان. حاول لاحقاً.',
+                      );
+                    }
+                  },
+                },
+              ],
+            );
+          }}
           style={{
             backgroundColor: '#fff',
             borderRadius: 14,

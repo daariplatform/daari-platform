@@ -40,18 +40,32 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const qc = useQueryClient();
 
+  // Backend response is `{ items, total, page, pageSize, totalPages,
+  // unreadCount }` (PaginatedResult); we extract `items` here so the
+  // existing rendering code (which expects an array) keeps working.
   const { data, isLoading, refetch, isRefetching } = useQuery<Notif[]>({
     queryKey: ['notifications'],
-    queryFn: async () => (await api.get('/notifications/me')).data,
+    queryFn: async () => {
+      const res = await api.get<{ items: Notif[]; unreadCount: number }>(
+        '/notifications/me',
+        { params: { pageSize: 100 } },
+      );
+      return res.data.items;
+    },
   });
 
+  // Routes use the customer-scoped `/notifications/me/...` paths added
+  // in the backend (the original `/notifications/:id/read` and
+  // `/notifications/read-all` were 404 — wrong paths and
+  // OWNER/MANAGER-gated besides).
   const markRead = useMutation({
-    mutationFn: async (id: string) => (await api.post(`/notifications/${id}/read`)).data,
+    mutationFn: async (id: string) =>
+      (await api.post(`/notifications/me/${id}/mark-read`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 
   const markAllRead = useMutation({
-    mutationFn: async () => (await api.post('/notifications/read-all')).data,
+    mutationFn: async () => (await api.post('/notifications/me/mark-all-read')).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 
