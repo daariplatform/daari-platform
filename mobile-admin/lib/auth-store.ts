@@ -108,6 +108,12 @@ export const useAuth = create<AuthState>((set) => ({
 
   async logout() {
     await clearTokens();
+    // Drop the biometric-enabled flag too — otherwise the next person
+    // to pick up this device would land on the password screen and be
+    // offered a Face ID prompt that bypasses their own login. The
+    // active user must explicitly re-enable after logging in again.
+    const { disableBiometricUnlock } = await import('./biometric');
+    await disableBiometricUnlock();
     set({ user: null, capabilities: [], demoMode: false });
   },
 }));

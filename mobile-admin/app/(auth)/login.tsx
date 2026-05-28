@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   Pressable,
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -14,6 +15,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth, WrongRoleError } from '@/lib/auth-store';
+import {
+  enableBiometricUnlock,
+  getBiometricLabel,
+  isBiometricAvailable,
+  isBiometricUnlockEnabled,
+  tryBiometricUnlock,
+} from '@/lib/biometric';
+import { getRefreshToken } from '@/lib/tokens';
 
 /**
  * Plant-admin login. Same backend endpoint as the customer + driver apps —
@@ -23,11 +32,71 @@ import { useAuth, WrongRoleError } from '@/lib/auth-store';
  */
 export default function AdminLogin() {
   const router = useRouter();
-  const { loginWithPassword, loginAsDemo, loading } = useAuth();
+  const { loginWithPassword, loginAsDemo, loading, hydrate } = useAuth();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Biometric tracks: do we offer a "use Face ID" button at the top of
+  // the screen on cold-start? (Yes if the user opted in last session.)
+  const [biometricLabel, setBiometricLabel] = useState<string | null>(null);
+
+  // Cold-start biometric attempt — if the user previously enabled it,
+  // run the prompt automatically. Success = re-hydrate the session
+  // from the SecureStore tokens and let the root layout route us into
+  // (tabs)/home, no password needed.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const enabled = await isBiometricUnlockEnabled();
+      const hasToken = !!(await getRefreshToken());
+      const available = await isBiometricAvailable();
+      if (!enabled || !hasToken || !available) return;
+      const label = await getBiometricLabel();
+      if (cancelled) return;
+      setBiometricLabel(label);
+      // Auto-prompt on cold open. If the user cancels, they can still
+      // hit the explicit button — `setBiometricLabel` keeps the UI.
+      const ok = await tryBiometricUnlock();
+      if (ok && !cancelled) {
+        await hydrate();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // hydrate is stable; we only want this on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function reAttemptBiometric() {
+    const ok = await tryBiometricUnlock();
+    if (ok) await hydrate();
+  }
+
+  async function offerBiometricEnrolment(name: string) {
+    const available = await isBiometricAvailable();
+    if (!available) return;
+    const label = await getBiometricLabel();
+    Alert.alert(
+      `تفعيل ${label}؟`,
+      `بعد التفعيل، تقدر تدخل ${name} بدون كلمة المرور في المرة الجاية.`,
+      [
+        { text: 'لاحقاً', style: 'cancel' },
+        {
+          text: 'تفعيل',
+          onPress: async () => {
+            // Confirm by asking for one biometric scan now — this
+            // ensures the device's biometric is working AND the user
+            // is the one enabling it.
+            const { promptBiometric } = await import('@/lib/biometric');
+            const ok = await promptBiometric('أكّد بصمتك لتفعيل الدخول السريع');
+            if (ok) await enableBiometricUnlock();
+          },
+        },
+      ],
+    );
+  }
 
   async function onSubmit() {
     setError(null);
@@ -43,6 +112,14 @@ export default function AdminLogin() {
       await loginWithPassword(phone, password);
       // Routing back to (tabs)/home is handled by the root layout effect
       // once `user` changes, so no manual router.push here.
+
+      // First-time enrolment — offer biometric only if NOT already
+      // enabled and the device supports it. The prompt won't show on
+      // every login, just the first.
+      const alreadyEnabled = await isBiometricUnlockEnabled();
+      if (!alreadyEnabled) {
+        offerBiometricEnrolment('داري للمعمل').catch(() => {});
+      }
     } catch (err: any) {
       if (err instanceof WrongRoleError) {
         setError(
@@ -218,6 +295,32 @@ export default function AdminLogin() {
                     {error}
                   </Text>
                 </View>
+              )}
+
+              {/* Biometric quick-unlock — only renders when the user
+                  opted in last session AND the device supports it. */}
+              {biometricLabel && (
+                <Pressable
+                  onPress={reAttemptBiometric}
+                  style={({ pressed }) => ({
+                    marginBottom: 12,
+                    borderRadius: 14,
+                    backgroundColor: 'rgba(255,255,255,0.12)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.4)',
+                    paddingVertical: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row-reverse',
+                    gap: 8,
+                    opacity: pressed ? 0.85 : 1,
+                  })}
+                >
+                  <MaterialIcons name="fingerprint" size={22} color="#fff" />
+                  <Text className="text-white text-base font-bold">
+                    {`الدخول بـ ${biometricLabel}`}
+                  </Text>
+                </Pressable>
               )}
 
               {/* Submit */}
