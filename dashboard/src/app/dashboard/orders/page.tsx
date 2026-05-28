@@ -14,9 +14,24 @@ interface Order {
   paidAmountIqd: number;
   requestedAt: string;
   completedAt: string | null;
-  customer: { id: string; fullName: string; phone: string; district: string };
+  // Walk-in counter sales have customer=null + walkinBuyerName instead.
+  // The previous type pretended customer was always present which crashed
+  // the page in production the moment a walk-in landed in the list.
+  customer: { id: string; fullName: string; phone: string; district: string } | null;
+  walkinBuyerName?: string | null;
+  walkinBuyerPhone?: string | null;
   driver: { id: string; user: { fullName: string } } | null;
   tank: { qrCode: string; capacity: string } | null;
+}
+
+/** Display name for an order's buyer — works for both registered customers
+ *  and anonymous walk-ins. Always returns a non-empty string. */
+function buyerName(o: Order): string {
+  return o.customer?.fullName ?? o.walkinBuyerName ?? 'زبون عابر';
+}
+
+function buyerDistrict(o: Order): string {
+  return o.customer?.district ?? '—';
 }
 
 interface Driver {
@@ -175,14 +190,15 @@ function OrderCard({ order, onAssign }: { order: Order; onAssign: () => void }) 
   return (
     <div className="bg-white rounded-xl p-3 shadow-sm border border-slate-100">
       <div className="flex items-start justify-between mb-2">
-        <p className="font-bold text-sm">{order.customer.fullName}</p>
+        <p className="font-bold text-sm">{buyerName(order)}</p>
         <p className="text-sm font-bold text-aqua-700">{iqd(order.priceIqd)}</p>
       </div>
       <div className="flex items-center gap-1 text-xs text-slate-500 mb-1">
-        <MapPin size={11} /> {order.customer.district}
+        <MapPin size={11} /> {buyerDistrict(order)}
       </div>
       <div className="flex items-center gap-1 text-xs text-slate-500 mb-2">
-        <Phone size={11} /> <span dir="ltr">{order.customer.phone}</span>
+        <Phone size={11} />{' '}
+        <span dir="ltr">{order.customer?.phone ?? order.walkinBuyerPhone ?? '—'}</span>
       </div>
       <div className="flex items-center gap-1 text-xs text-slate-400 mb-3">
         <Clock size={11} /> {fmtDate(order.requestedAt)}
@@ -222,8 +238,8 @@ function OrdersTable({ orders, onAssign }: { orders?: Order[]; onAssign: (o: Ord
         <tbody>
           {orders?.map((o) => (
             <tr key={o.id} className="border-t hover:bg-slate-50">
-              <td className="px-4 py-3 font-medium">{o.customer.fullName}</td>
-              <td className="px-4 py-3">{o.customer.district}</td>
+              <td className="px-4 py-3 font-medium">{buyerName(o)}</td>
+              <td className="px-4 py-3">{buyerDistrict(o)}</td>
               <td className="px-4 py-3 text-slate-600">
                 {o.driver?.user.fullName ?? <span className="text-slate-400">—</span>}
               </td>
@@ -291,7 +307,7 @@ function AssignDriverModal({ order, onClose }: { order: Order; onClose: () => vo
           <div>
             <h3 className="text-lg font-bold">تعيين سائق</h3>
             <p className="text-xs text-slate-500 mt-1">
-              للطلب من {order.customer.fullName} • {order.customer.district}
+              للطلب من {buyerName(order)} • {buyerDistrict(order)}
             </p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
