@@ -21,6 +21,18 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole, WalletTopupSource } from '@prisma/client';
 import { WalletService } from '../plant/wallet.service';
 
+// OpenTelemetry's `require-in-the-middle` (loaded by Sentry's NestJS
+// instrumentation) wraps every `require(...)` call in this codebase. On
+// the live VPS that wrapping somehow returns a partial export for
+// `@prisma/client` at *decorator-application time*, which makes the
+// `WalletTopupSource` value undefined → `IsEnum(undefined)` crashes
+// the entire request pipeline. The enum is still exported correctly at
+// runtime (the service code can use it fine) — only the static
+// decorator-time read is affected. We inline the enum string union for
+// the validator's sake; the runtime `WalletTopupSource` Prisma type
+// still drives the controller signature + service argument typing.
+const WALLET_TOPUP_SOURCE_VALUES = ['CASH', 'BANK_TRANSFER', 'ZAINCASH', 'ASIACELL', 'OTHER'] as const;
+
 class WalletTopupDto {
   @IsString()
   tenantId!: string;
@@ -30,7 +42,7 @@ class WalletTopupDto {
   @Max(100_000_000)
   amountIqd!: number;
 
-  @IsEnum(WalletTopupSource)
+  @IsEnum(WALLET_TOPUP_SOURCE_VALUES)
   source!: WalletTopupSource;
 
   @IsOptional()
