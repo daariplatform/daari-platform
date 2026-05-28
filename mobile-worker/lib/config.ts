@@ -1,11 +1,26 @@
 import Constants from 'expo-constants';
 
 /**
- * The single source of truth for the backend URL. In dev (Expo Go) we
- * pick up `apiBaseUrl` from app.json's `extra`. For local testing you
- * can override via the EXPO_PUBLIC_API_URL env var when running `expo start`.
+ * The single source of truth for the backend URL. Resolution order:
+ *   1. `EXPO_PUBLIC_API_URL` env var (set when running `expo start`).
+ *   2. `app.json`'s `extra.apiBaseUrl` (baked into production EAS builds).
+ *
+ * Production safety: throws when neither is set in a release build —
+ * silently falling back to localhost would point real driver phones at
+ * their own loopback, a network black hole almost impossible to debug
+ * from a crash report.
  */
-export const API_BASE_URL: string =
-  process.env.EXPO_PUBLIC_API_URL ||
-  (Constants.expoConfig?.extra as any)?.apiBaseUrl ||
-  'http://localhost:3000/api/v1';
+const ENV_URL = process.env.EXPO_PUBLIC_API_URL;
+const APP_URL = (Constants.expoConfig?.extra as { apiBaseUrl?: string } | undefined)
+  ?.apiBaseUrl;
+
+function resolveApiBaseUrl(): string {
+  if (ENV_URL) return ENV_URL;
+  if (APP_URL) return APP_URL;
+  if (__DEV__) return 'http://localhost:3000/api/v1';
+  throw new Error(
+    '[config] EXPO_PUBLIC_API_URL or extra.apiBaseUrl must be set in production builds.',
+  );
+}
+
+export const API_BASE_URL: string = resolveApiBaseUrl();
