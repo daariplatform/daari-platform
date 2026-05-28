@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as argon2 from 'argon2';
 import { SubscriptionPlan, SubscriptionStatus, TenantStatus, UserRole } from '@prisma/client';
@@ -194,12 +194,74 @@ export class TenantsService {
     };
   }
 
-  async updateSettings(tenantId: string, input: Record<string, unknown>) {
+  /**
+   * Pricing fields are locked AFTER the plant completes onboarding.
+   * Business rule: if the plant can edit their own prices any time, the
+   * paid Promo feature (1,000 IQD per discounted order goes to PhiBit)
+   * has no value — they'd just lower their refill price and skip us.
+   * So once the plant is past onboarding, the only way to give a
+   * discount is to create a Promo campaign, which charges per order.
+   *
+   * The PLATFORM_ADMIN role (Ahmed at PhiBit) bypasses this — useful for
+   * support / corrections, and so we can run mass-rate changes if we
+   * ever migrate plans.
+   */
+  private static readonly PRICING_FIELDS = [
+    'refillPriceIqd',
+    'deliveryFeeIqd',
+    'freeDeliveryThresholdIqd',
+  ] as const;
+
+  async updateSettings(
+    tenantId: string,
+    input: Record<string, unknown>,
+    userRole?: string,
+  ) {
+    // Decide whether THIS request is allowed to touch the pricing
+    // fields. PLATFORM_ADMIN always can. Otherwise we have to look at
+    // onboarding state — during the wizard, the plant must be able to
+    // set its initial price, but the moment they finish (or skip), the
+    // lock kicks in.
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        onboardingSkippedAt: true,
+        refillPriceIqd: true,
+        workingHoursStart: true,
+        workingHoursEnd: true,
+      },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    // Mirror the heuristic in `plant/onboarding.controller.ts:82` so the
+    // two endpoints agree on "is onboarding still in progress".
+    const inOnboarding =
+      !tenant.onboardingSkippedAt &&
+      !(tenant.refillPriceIqd > 0 &&
+        tenant.workingHoursStart?.trim() &&
+        tenant.workingHoursEnd?.trim());
+
+    const canEditPricing = userRole === 'PLATFORM_ADMIN' || inOnboarding;
+
+    // If the caller tried to change a locked pricing field, refuse the
+    // whole request with a clear Arabic message so the UI can surface
+    // it. Silent dropping would leave the manager wondering why their
+    // edit didn't take.
+    const attemptedPricingFields = TenantsService.PRICING_FIELDS.filter(
+      (f) => input[f] !== undefined,
+    );
+    if (!canEditPricing && attemptedPricingFields.length > 0) {
+      throw new ForbiddenException(
+        'تعديل الأسعار غير متاح من إعدادات المعمل بعد اكتمال التسجيل. ' +
+          'لتطبيق سعر مخفّض مؤقّت، أنشئ "عرضاً" من قائمة العروض.',
+      );
+    }
+
     // Whitelist الحقول القابلة للتعديل من Settings page
     const allowed: Record<string, unknown> = {};
     const intFields = [
       'coverageKm',
-      'refillPriceIqd', 'deliveryFeeIqd', 'freeDeliveryThresholdIqd',
+      ...TenantsService.PRICING_FIELDS,
       'refillBonusIqd', 'newCustomerBonusIqd',
     ];
     const stringFields = [

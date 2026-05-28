@@ -72,26 +72,39 @@ export default function SettingsPage() {
         <Field label="المدينة" value={form.city ?? ''} onChange={(v) => setForm({ ...form, city: v })} />
       </Section>
 
-      {/* الأسعار */}
+      {/* الأسعار — مقفلة بعد التسجيل، تعديلها يكون عبر العروض المؤقّتة */}
       <Section title="الأسعار" icon={Tag}>
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 flex items-start gap-2">
+          <span className="text-amber-600 text-base leading-none mt-0.5">🔒</span>
+          <div className="text-xs text-amber-800 leading-relaxed flex-1">
+            <p className="font-semibold mb-1">الأسعار مقفلة بعد اكتمال التسجيل</p>
+            <p>
+              لتطبيق سعر مخفّض مؤقّت على فترة محدّدة (حتى ٤٨ ساعة)، أنشئ <strong>عرضاً</strong> من قائمة العروض —
+              هذي الطريقة المعتمدة لتشغيل خصومات على معملك. لتعديل دائم اتصل بدعم داري.
+            </p>
+          </div>
+        </div>
         <Field
           label="سعر التعبئة (د.ع)"
           type="number"
           value={String(form.refillPriceIqd)}
-          onChange={(v) => setForm({ ...form, refillPriceIqd: Number(v) || 0 })}
+          onChange={() => {}}
+          readOnly
         />
         <Field
           label="رسوم التوصيل (د.ع)"
           type="number"
           value={String(form.deliveryFeeIqd)}
-          onChange={(v) => setForm({ ...form, deliveryFeeIqd: Number(v) || 0 })}
+          onChange={() => {}}
+          readOnly
         />
         <Field
           label="حد التوصيل المجاني (د.ع)"
           type="number"
           value={String(form.freeDeliveryThresholdIqd ?? 0)}
-          onChange={(v) => setForm({ ...form, freeDeliveryThresholdIqd: Number(v) || undefined })}
-          hint="إذا كان الطلب أعلى من هذا، التوصيل مجاناً. اتركه 0 لإلغاء"
+          onChange={() => {}}
+          readOnly
+          hint="مقفل — تعديله عبر دعم داري"
         />
       </Section>
 
@@ -142,7 +155,19 @@ export default function SettingsPage() {
 
       <div className="sticky bottom-4 z-10">
         <button
-          onClick={() => saveMutation.mutate(form)}
+          onClick={() => {
+            // Strip the locked pricing fields BEFORE sending — the
+            // backend would 403 if we included them. The fields are
+            // already readonly in the UI, but the save payload still
+            // carries them from `form` state, so we filter here.
+            const {
+              refillPriceIqd: _p1,
+              deliveryFeeIqd: _p2,
+              freeDeliveryThresholdIqd: _p3,
+              ...editable
+            } = form;
+            saveMutation.mutate(editable as PlantSettings);
+          }}
           disabled={saveMutation.isPending}
           className="w-full px-6 py-4 bg-aqua-600 hover:bg-aqua-700 text-white rounded-xl font-bold shadow-lg shadow-aqua-200 flex items-center justify-center gap-2 disabled:opacity-50"
         >
@@ -169,7 +194,7 @@ function Section({
 }
 
 function Field({
-  label, value, onChange, type = 'text', hint, ltr = false,
+  label, value, onChange, type = 'text', hint, ltr = false, readOnly = false,
 }: {
   label: string;
   value: string;
@@ -177,6 +202,9 @@ function Field({
   type?: string;
   hint?: string;
   ltr?: boolean;
+  /** Read-only fields render greyed out + locked. Used for price fields
+   *  which are deliberately not editable from the plant dashboard. */
+  readOnly?: boolean;
 }) {
   return (
     <div>
@@ -184,9 +212,14 @@ function Field({
       <input
         type={type}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => !readOnly && onChange(e.target.value)}
+        readOnly={readOnly}
         dir={ltr ? 'ltr' : undefined}
-        className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-aqua-600/30 focus:border-aqua-600"
+        className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none ${
+          readOnly
+            ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed'
+            : 'border-slate-200 focus:ring-2 focus:ring-aqua-600/30 focus:border-aqua-600'
+        }`}
       />
       {hint && <p className="text-[10px] text-slate-400 mt-1">{hint}</p>}
     </div>

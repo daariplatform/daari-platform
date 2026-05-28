@@ -73,7 +73,10 @@ export class TenantsController {
   @RequireCapability('plant_admin')
   @Patch('me/settings')
   updateMySettings(@CurrentUser() user: AuthUser, @Body() dto: Record<string, unknown>) {
-    return this.tenants.updateSettings(user.tenantId!, dto);
+    // Pass the role so the service can enforce the "pricing is locked
+    // for plant admins after onboarding completes" policy — see the
+    // service for the full reasoning. Platform admins bypass this.
+    return this.tenants.updateSettings(user.tenantId!, dto, user.role);
   }
 
   /** Reports — analytics بفترة (week/month/year) */
