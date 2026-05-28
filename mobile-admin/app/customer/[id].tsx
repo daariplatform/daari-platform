@@ -227,6 +227,41 @@ export default function CustomerDetailScreen() {
             </View>
           </View>
 
+          {/* Quick-action row — three big buttons for the manager's most
+              common follow-ups: call, WhatsApp, send a promo. WhatsApp
+              is the dominant channel in Iraq; we open wa.me with a
+              prefilled "كيف الخدمة؟" template the manager can edit. */}
+          <View
+            style={{
+              flexDirection: 'row-reverse',
+              gap: 10,
+              marginBottom: 14,
+            }}
+          >
+            <QuickAction
+              icon="call"
+              label="اتصل"
+              tone="#0e9384"
+              onPress={() => Linking.openURL(`tel:${customer.phone}`).catch(() => {})}
+            />
+            <QuickAction
+              icon="chat"
+              label="واتساب"
+              tone="#10b981"
+              onPress={() => {
+                const intl = customer.phone.replace(/^0/, '964');
+                const msg = encodeURIComponent(`أهلاً ${customer.fullName} 💧\nكيف الخدمة معنا؟ نحن دائماً جاهزون لتوصيل المياه عند احتياجك.`);
+                Linking.openURL(`https://wa.me/${intl}?text=${msg}`).catch(() => {});
+              }}
+            />
+            <QuickAction
+              icon="campaign"
+              label="عرض"
+              tone="#f59e0b"
+              onPress={() => router.push('/promo-create' as any)}
+            />
+          </View>
+
           {/* Tanks */}
           <SectionCard icon="water-drop" title="الخزّانات">
             {customer.tanks.length === 0 ? (
@@ -306,6 +341,60 @@ export default function CustomerDetailScreen() {
         </ScrollView>
       )}
     </View>
+  );
+}
+
+/**
+ * QuickAction — the three large buttons that sit under the customer
+ * header (call / WhatsApp / send promo). Same dimensions for each so the
+ * row reads as one cohesive action panel.
+ */
+function QuickAction({
+  icon,
+  label,
+  tone,
+  onPress,
+}: {
+  icon: MaterialIconName;
+  label: string;
+  tone: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flex: 1,
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#cbd5e1',
+        paddingVertical: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        opacity: pressed ? 0.85 : 1,
+        shadowColor: '#0f172a',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
+        elevation: 1,
+      })}
+    >
+      <View
+        style={{
+          width: 38,
+          height: 38,
+          borderRadius: 12,
+          backgroundColor: tone + '1A',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <MaterialIcons name={icon} size={20} color={tone} />
+      </View>
+      <Text style={{ fontSize: 12, fontWeight: '700', color: '#0f172a' }}>{label}</Text>
+    </Pressable>
   );
 }
 
