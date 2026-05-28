@@ -9,6 +9,7 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -61,11 +62,43 @@ export default function WalkinScreen() {
         priceIqd: priceNum,
         paidAmountIqd: paidNum,
       });
-      // Lightweight feedback — Alert is acceptable here because the modal
-      // closes immediately after and the orders list refresh proves it
-      // landed. A toast would be nicer but adds a dep we don't need yet.
-      Alert.alert('تم', 'سُجّل الطلب');
-      safeBack(router);
+
+      // Offer to send a WhatsApp receipt if the buyer left a phone — most
+      // walk-in buyers in Iraq use WhatsApp, and "ضع رقمك نرسلك إيصال"
+      // is a friendly closer that doubles as a future-customer hook.
+      const phoneTrim = phone.trim();
+      if (phoneTrim) {
+        Alert.alert(
+          'تم تسجيل الطلب',
+          `${litersNum.toLocaleString('en-US')} لتر بـ ${paidNum.toLocaleString('en-US')} د.ع. هل تريد إرسال الإيصال بواتساب؟`,
+          [
+            { text: 'لا، شكراً', style: 'cancel', onPress: () => safeBack(router) },
+            {
+              text: 'إرسال إيصال',
+              onPress: () => {
+                const intlPhone = phoneTrim.replace(/^0/, '964');
+                // Receipt text is plain Arabic so any WhatsApp version
+                // renders it correctly without rich formatting issues.
+                const msg = encodeURIComponent(
+                  `إيصال داري\n` +
+                    `الزبون: ${customerName.trim() || '—'}\n` +
+                    `الكمية: ${litersNum.toLocaleString('en-US')} لتر\n` +
+                    `السعر: ${priceNum.toLocaleString('en-US')} د.ع\n` +
+                    `المدفوع: ${paidNum.toLocaleString('en-US')} د.ع\n` +
+                    `التاريخ: ${new Date().toLocaleDateString('ar-IQ')}\n` +
+                    `\nشكراً لاختياركم داري 💧`,
+                );
+                Linking.openURL(`https://wa.me/${intlPhone}?text=${msg}`).catch(() => {});
+                safeBack(router);
+              },
+            },
+          ],
+        );
+      } else {
+        // No phone → quiet confirmation, no WhatsApp prompt.
+        Alert.alert('تم', 'سُجّل الطلب');
+        safeBack(router);
+      }
     } catch (err: any) {
       Alert.alert('خطأ', err?.response?.data?.message ?? 'تعذّر إنشاء الطلب');
     }
