@@ -1,7 +1,8 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { RolesGuard } from '../common/guards/roles.guard';
 import { UserRole } from '@prisma/client';
 import { PromoService } from './promo.service';
 
@@ -13,6 +14,9 @@ import { PromoService } from './promo.service';
  */
 @ApiTags('customer-promo')
 @ApiBearerAuth()
+// CRITICAL: enforce the @Roles(CUSTOMER) guard — otherwise the role
+// decorator is inert. Same audit finding C2 pattern.
+@UseGuards(RolesGuard)
 @Controller('customers/me')
 export class CustomerPromoController {
   constructor(private promo: PromoService) {}

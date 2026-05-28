@@ -118,6 +118,11 @@ model Tenant {
   subscriptions  Subscription[]
   promoCampaigns PromoCampaign[]
   walletTopups   WalletTopup[]
+  // Free-text accounting category rows (richer than the legacy enum), plus
+  // recurring-expense schedules and customer invoices. Added 2026-05-28.
+  expenseCategoryItems ExpenseCategoryItem[]
+  recurringExpenses    RecurringExpense[]
+  invoices             Invoice[]
 
   @@index([status])
   @@index([groupId])
@@ -385,6 +390,7 @@ model Customer {
   tanks          Tank[]
   refillOrders   RefillOrder[]
   deliveryOrders DeliveryOrder[]
+  invoices       Invoice[]
 
   @@unique([tenantId, phone])
   @@index([tenantId, status])
@@ -660,8 +666,83 @@ model Expense {
   createdById String?
   createdAt   DateTime        @default(now())
 
+  // Optional richer category (user-defined named row) — supplements the
+  // legacy `category` enum. Most existing rows keep this NULL and rely on
+  // the enum; new entries can attach a custom category like "إيجار" with
+  // a tint colour + icon for nicer UI.
+  categoryItemId String?
+  categoryItem   ExpenseCategoryItem? @relation(fields: [categoryItemId], references: [id])
+
   @@index([tenantId, occurredAt])
   @@index([tenantId, category])
+  @@index([tenantId, categoryItemId])
+}
+
+// User-defined expense categories (richer companion to the legacy
+// `ExpenseCategory` enum). Plant admins create categories like "إيجار",
+// "كهرباء", "صيانة" with optional icon + tint colour so the dashboard
+// renders them with personality. The legacy enum stays as a fallback for
+// quick-entry flows and historical rows; this model is what the new UI uses.
+//
+// Named ExpenseCategoryItem (not ExpenseCategory) because the existing enum
+// already owns the ExpenseCategory identifier in the Prisma namespace.
+model ExpenseCategoryItem {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  icon      String?  // material-icon name (e.g. "bolt", "build", "home")
+  color     String?  // tint hex like "#3b82f6"
+  createdAt DateTime @default(now())
+  expenses  Expense[]
+  recurring RecurringExpense[]
+
+  @@unique([tenantId, name])
+}
+
+// A scheduled recurring expense. The accounting scheduler runs daily and
+// converts any RecurringExpense whose `nextDueAt` has elapsed into an
+// actual Expense row, then advances `nextDueAt` by `cadence`. Owners can
+// pause one without deleting it by flipping `isActive`.
+model RecurringExpense {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categoryId  String?
+  category    ExpenseCategoryItem? @relation(fields: [categoryId], references: [id])
+  amountIqd   Int
+  description String
+  cadence     String   // "WEEKLY" | "MONTHLY" | "YEARLY"
+  nextDueAt   DateTime
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, nextDueAt])
+}
+
+// Customer-facing invoice. Issued by the plant for B2B accounts or bulk
+// pre-paid refill blocks. `items` is a free-form JSON array — keeps the
+// schema flexible without a full line-item table. `invoiceNumber` is
+// sequential per tenant (INV-YYYY-NNNN), enforced by @@unique.
+model Invoice {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId    String?
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  invoiceNumber String
+  issuedAt      DateTime @default(now())
+  dueAt         DateTime?
+  status        String   @default("DRAFT") // DRAFT | SENT | PAID | OVERDUE | VOID
+  subtotalIqd   Int
+  taxIqd        Int      @default(0)
+  totalIqd      Int
+  paidAmountIqd Int      @default(0)
+  notes         String?
+  items         Json     // [{ description, liters, unitPrice, subtotal }]
+
+  @@unique([tenantId, invoiceNumber])
+  @@index([tenantId, status])
 }
 
 model SalaryPayment {

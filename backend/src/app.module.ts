@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { LoggerModule } from 'nestjs-pino';
 
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
@@ -21,6 +22,7 @@ import { CacheModule } from './cache/cache.module';
 import { QueueModule } from './queue/queue.module';
 import { EmailModule } from './email/email.module';
 import { PlatformAdminModule } from './platform-admin/platform-admin.module';
+import { AiModule } from './ai/ai.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { TenantGuard } from './common/guards/tenant.guard';
 import { CapabilitiesGuard } from './common/guards/capabilities.guard';
@@ -31,6 +33,43 @@ const optionalModules: DynamicModule['imports'] = vendorsEnabled ? [VendorsModul
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    /**
+     * Structured JSON logging via pino. In production the output is a
+     * single JSON line per log entry, which journalctl + log-shippers can
+     * parse without regex gymnastics:
+     *   journalctl -u daari-water-api -o json --since "1 hour ago"
+     *
+     * In dev (NODE_ENV=development) we pretty-print to stdout for humans.
+     * Authorization headers + cookies are redacted at the logger level so
+     * tokens never reach disk.
+     */
+    LoggerModule.forRoot({
+      pinoHttp: {
+        level: process.env.LOG_LEVEL ?? 'info',
+        redact: {
+          paths: [
+            'req.headers.authorization',
+            'req.headers.cookie',
+            'req.headers["x-api-key"]',
+            'res.headers["set-cookie"]',
+          ],
+          censor: '[REDACTED]',
+        },
+        // Pretty-print only when explicitly in dev. In prod we want raw
+        // JSON so journald and any future log-shipper get structured data.
+        transport:
+          process.env.NODE_ENV === 'development'
+            ? { target: 'pino-pretty', options: { singleLine: true } }
+            : undefined,
+        // Suppress the noisy req/res payloads for the health checks —
+        // UptimeRobot hits these every 5 minutes per probe and they would
+        // otherwise dominate the log volume.
+        autoLogging: {
+          ignore: (req: any) =>
+            req.url === '/api/v1/health' || req.url === '/api/v1/ready',
+        },
+      },
+    }),
     ScheduleModule.forRoot(),
     /**
      * Throttling tiers (apply to EVERY route via global ThrottlerGuard):
@@ -61,6 +100,7 @@ const optionalModules: DynamicModule['imports'] = vendorsEnabled ? [VendorsModul
     NotificationsModule,
     PlantModule,
     PlatformAdminModule,
+    AiModule,
     UploadsModule,
     HealthModule,
     ...optionalModules,

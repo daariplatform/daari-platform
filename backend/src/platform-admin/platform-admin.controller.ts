@@ -5,8 +5,10 @@ import {
   Param,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { RolesGuard } from '../common/guards/roles.guard';
 import {
   IsEnum,
   IsInt,
@@ -66,6 +68,11 @@ class WalletTopupDto {
  */
 @ApiTags('platform-admin')
 @ApiBearerAuth()
+// RolesGuard is NOT registered globally — the audit caught that `@Roles()`
+// on individual handlers was inert here. Without this @UseGuards line, any
+// authenticated user (even a CUSTOMER) could call /platform/wallets/topup
+// and arbitrarily credit a tenant's promo wallet. CRITICAL fix.
+@UseGuards(RolesGuard)
 @Controller('platform')
 export class PlatformAdminController {
   constructor(private wallet: WalletService) {}

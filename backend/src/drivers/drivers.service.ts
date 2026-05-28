@@ -4,6 +4,7 @@ import { DriverStatus, RefillOrderStatus, UserRole } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { randomBytes } from 'crypto';
 import { paginated, type PaginatedResult } from '../common/dto/pagination.dto';
+import { hashPassword } from '../common/crypto';
 
 interface CreateDriverInput {
   fullName: string;
@@ -52,7 +53,7 @@ export class DriversService {
     }
 
     const plainPassword = input.password ?? generatePassword();
-    const passwordHash = await argon2.hash(plainPassword);
+    const passwordHash = await hashPassword(plainPassword);
 
     const driver = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -94,7 +95,7 @@ export class DriversService {
     if (!driver) throw new NotFoundException('Driver not found');
 
     const plainPassword = newPassword ?? generatePassword();
-    const passwordHash = await argon2.hash(plainPassword);
+    const passwordHash = await hashPassword(plainPassword);
 
     await this.prisma.$transaction([
       this.prisma.user.update({

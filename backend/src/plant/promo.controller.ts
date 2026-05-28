@@ -10,6 +10,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { IsInt, Min, Max } from 'class-validator';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { RolesGuard } from '../common/guards/roles.guard';
 import { UserRole } from '@prisma/client';
 import { PromoService } from './promo.service';
 import { WalletService } from './wallet.service';
@@ -31,6 +32,11 @@ class CreatePromoDto {
  */
 @ApiTags('plant-promos')
 @ApiBearerAuth()
+// CRITICAL: without this, `@Roles(OWNER, MANAGER)` is inert and any
+// authenticated user (incl. CUSTOMER role) could create / pause promo
+// campaigns for their tenant — draining the plant's promo wallet. Audit
+// finding C2.
+@UseGuards(RolesGuard)
 @Controller('plant/promos')
 export class PromoCampaignController {
   constructor(

@@ -16,6 +16,7 @@ import * as argon2 from 'argon2';
 import { randomBytes } from 'crypto';
 import type { ImportRow } from './bulk-import.service';
 import { paginated, type PaginatedResult } from '../common/dto/pagination.dto';
+import { hashPassword } from '../common/crypto';
 
 interface CreateCustomerInput {
   fullName: string;
@@ -110,7 +111,7 @@ export class CustomersService {
     }
 
     const plainPassword = input.password ?? generatePassword();
-    const passwordHash = await argon2.hash(plainPassword);
+    const passwordHash = await hashPassword(plainPassword);
 
     const { password: _ignore, ...customerInput } = input;
 
@@ -286,7 +287,7 @@ export class CustomersService {
     }
 
     const plainPassword = generatePassword();
-    const passwordHash = await argon2.hash(plainPassword);
+    const passwordHash = await hashPassword(plainPassword);
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -329,7 +330,7 @@ export class CustomersService {
     if (!customer) throw new NotFoundException('Customer not found');
 
     const plainPassword = newPassword ?? generatePassword();
-    const passwordHash = await argon2.hash(plainPassword);
+    const passwordHash = await hashPassword(plainPassword);
 
     // إذا الزبون لم يُربط بحساب user بعد (مثل الـ seed customers):
     //  - لو في user بنفس الـ phone أصلاً → أربطه + حدّث الـ password
@@ -504,7 +505,7 @@ export class CustomersService {
         const idx = next++;
         if (idx >= count) return;
         const plain = generatePassword();
-        const hash = await argon2.hash(plain);
+        const hash = await hashPassword(plain);
         results[idx] = { plain, hash };
       }
     };

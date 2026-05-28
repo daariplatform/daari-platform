@@ -1,0 +1,28 @@
+# /etc/logrotate.d/daari-water
+# Logrotate config for the Daari Water API systemd unit's StandardOutput +
+# StandardError log files. Without this, /var/log/daari-water/api.log and
+# api.err.log grow unbounded — observed at ~840K+527K after only 2 weeks
+# of QA traffic, so production volume would fill the partition in months.
+#
+# copytruncate is critical here: the systemd unit uses
+#   StandardOutput=append:/var/log/daari-water/api.log
+# which opens a file handle on boot and keeps writing to that inode. A
+# rename-based rotation would leave the daemon writing to the rotated
+# file forever. copytruncate copies then truncates in place, so the
+# inode survives and the daemon keeps writing — no service restart needed.
+
+/var/log/daari-water/api.log
+/var/log/daari-water/api.err.log
+/var/log/daari-water/dashboard.log
+/var/log/daari-water/dashboard.err.log
+{
+    daily
+    rotate 14
+    delaycompress
+    compress
+    missingok
+    notifempty
+    copytruncate
+    create 0644 daari-water daari-water
+    su daari-water daari-water
+}

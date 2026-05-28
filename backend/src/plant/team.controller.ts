@@ -30,6 +30,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { hashPassword } from '../common/crypto';
 
 class InviteTeamMemberDto {
   @Matches(/^07\d{9}$/) phone!: string;
@@ -122,7 +123,7 @@ export class TeamController {
     }
 
     const plainPassword = generatePassword();
-    const passwordHash = await argon2.hash(plainPassword);
+    const passwordHash = await hashPassword(plainPassword);
 
     const created = await this.prisma.user.create({
       data: {

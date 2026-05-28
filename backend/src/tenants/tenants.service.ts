@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { PrismaService } from '../prisma/prisma.service';
 import * as argon2 from 'argon2';
 import { SubscriptionPlan, SubscriptionStatus, TenantStatus, UserRole } from '@prisma/client';
+import { hashPassword } from '../common/crypto';
 
 interface RegisterTenantInput {
   plantName: string;
@@ -32,7 +33,7 @@ export class TenantsService {
   constructor(private prisma: PrismaService) {}
 
   async register(input: RegisterTenantInput) {
-    const passwordHash = await argon2.hash(input.ownerPassword);
+    const passwordHash = await hashPassword(input.ownerPassword);
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + 30);
 
