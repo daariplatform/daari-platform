@@ -1261,3 +1261,130 @@ export function useCreateCustomer() {
     },
   });
 }
+
+// ────────────────────────────────────────────────────────────────────
+// AI — predictive tiles for the home dashboard + standalone screens.
+//
+// Each of these endpoints does pure statistics on the tenant's own data
+// (no external ML service), so latency is consistent and we cache the
+// result for 60 s on the backend. The mobile hook duplicates that
+// staleTime so we don't refetch on every screen mount.
+// ────────────────────────────────────────────────────────────────────
+
+export interface PeakWindow {
+  dayOfWeek: number;       // 0=Sunday
+  hourStart: number;
+  hourEnd: number;
+  expectedOrders: number;
+  recommendedDrivers: number;
+  label: string;           // "السبت ٧-٩م"
+}
+
+export interface DemandForecast {
+  matrix: number[][];      // 7 days × 24 hours, predicted orders
+  peakWindows: PeakWindow[];
+  trendFactor: number;
+  sampleSize: number;
+}
+
+export function useDemandForecast() {
+  return useQuery({
+    queryKey: ['plant', 'ai', 'demand-forecast'],
+    queryFn: async () => {
+      const { data } = await api.get<DemandForecast>('/plant/ai/demand-forecast');
+      return data;
+    },
+    staleTime: 60_000,
+  });
+}
+
+export interface ChurnRiskItem {
+  customerId: string;
+  fullName: string;
+  phone: string;
+  district: string;
+  typicalCadenceDays: number;
+  daysSinceLastOrder: number;
+  risk: 'HIGH' | 'MEDIUM' | 'LOW';
+  lastOrderAt: string;
+  totalSpendIqd: number;
+}
+
+export interface ChurnRiskResult {
+  items: ChurnRiskItem[];
+  totalAtRisk: number;
+  estimatedRevenueAtRiskIqd: number;
+}
+
+export function useChurnRisk() {
+  return useQuery({
+    queryKey: ['plant', 'ai', 'churn-risk'],
+    queryFn: async () => {
+      const { data } = await api.get<ChurnRiskResult>('/plant/ai/churn-risk');
+      return data;
+    },
+    staleTime: 60_000,
+  });
+}
+
+export interface OrderCluster {
+  id: string;
+  district: string;
+  centerLng: number | null;
+  centerLat: number | null;
+  orderIds: string[];
+  orderCount: number;
+  totalLitersDelivered: number;
+  avgDistanceKm: number;
+  recommendedDriverId: string | null;
+}
+
+export interface OrderClusterResult {
+  clusters: OrderCluster[];
+  totalPendingOrders: number;
+  clusteredOrders: number;
+  unclusterableOrders: number;
+}
+
+export function useOrderClusters() {
+  return useQuery({
+    queryKey: ['plant', 'ai', 'order-clusters'],
+    queryFn: async () => {
+      const { data } = await api.get<OrderClusterResult>('/plant/ai/order-clusters');
+      return data;
+    },
+    staleTime: 60_000,
+  });
+}
+
+export interface DriverScorecardItem {
+  driverId: string;
+  fullName: string;
+  phone: string;
+  score: number;
+  breakdown: {
+    completionRate: number;
+    avgMinutesPerOrder: number;
+    gpsVerifiedRate: number;
+    bonusRate: number;
+    disputeRate: number;
+    completedOrders: number;
+  };
+  rank: 'top' | 'good' | 'average' | 'poor';
+}
+
+export interface DriverScorecardResult {
+  items: DriverScorecardItem[];
+  tenantAverageMinutesPerOrder: number;
+}
+
+export function useDriverScorecard() {
+  return useQuery({
+    queryKey: ['plant', 'ai', 'driver-scorecard'],
+    queryFn: async () => {
+      const { data } = await api.get<DriverScorecardResult>('/plant/ai/driver-scorecard');
+      return data;
+    },
+    staleTime: 60_000,
+  });
+}

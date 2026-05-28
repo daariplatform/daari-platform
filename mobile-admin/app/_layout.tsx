@@ -164,6 +164,7 @@ function RootLayoutInner() {
           <Stack.Screen name="team" options={{ presentation: 'card' }} />
           <Stack.Screen name="accounting" options={{ presentation: 'card' }} />
           <Stack.Screen name="reports" options={{ presentation: 'card' }} />
+          <Stack.Screen name="ai-insights" options={{ presentation: 'card' }} />
         </Stack>
       </View>
     </ToastProvider>

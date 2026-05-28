@@ -5,7 +5,6 @@ import {
   Text,
   Pressable,
   RefreshControl,
-  type GestureResponderEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -26,6 +25,16 @@ import { useAuth } from '@/lib/auth-store';
 import { Skeleton, SkeletonCard } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
 import { Sparkline } from '@/components/charts/Sparkline';
+import {
+  AdminTool,
+  AlertBanner,
+  Card,
+  IconBadge,
+  SectionHeader,
+  StatTile,
+  type IconBadgeTone,
+} from '@/components/ui';
+import { theme } from '@/lib/theme';
 
 type MaterialIconName = React.ComponentProps<typeof MaterialIcons>['name'];
 
@@ -33,7 +42,7 @@ type MaterialIconName = React.ComponentProps<typeof MaterialIcons>['name'];
  * Plant-owner home — KPIs + alerts + quick actions.
  *
  * تصميم: hero بـ sky gradient، تنبيهات عاجلة (تجاوز الخطة، اقتراب الحدّ، مخزون
- * منخفض)، tile كبير لإيرادات اليوم، شبكة 2×2 للإحصائيات، CTA للزبائن المعلّقين،
+ * منخفض)، tile كبير لإيرادات اليوم، شبكة 2×2 للإحصائيات، CTA للزبائن المعلّقين,
  * وأكشن سريع لإضافة طلب walk-in.
  */
 export default function PlantHome() {
@@ -93,7 +102,7 @@ export default function PlantHome() {
   }
 
   return (
-    <View className="flex-1 bg-slate-50">
+    <View style={{ flex: 1, backgroundColor: theme.color.surface.page }}>
       {/* Business dashboard header — deliberately NOT a consumer-style hero.
           A plant owner is running a business; they need a control-panel feel,
           not a "welcome back!" greeting card. White surface, dense info, role
@@ -101,15 +110,15 @@ export default function PlantHome() {
 
           (The customer + worker apps DO use a colourful greeting hero —
           keep this one distinct so an owner never confuses the surfaces.) */}
-      <SafeAreaView edges={['top']} style={{ backgroundColor: '#fff' }}>
+      <SafeAreaView edges={['top']} style={{ backgroundColor: theme.color.surface.card }}>
         <View
           style={{
-            paddingHorizontal: 16,
-            paddingTop: 6,
-            paddingBottom: 12,
-            backgroundColor: '#fff',
+            paddingHorizontal: theme.space.lg,
+            paddingTop: theme.space.xs + 2,
+            paddingBottom: theme.space.md,
+            backgroundColor: theme.color.surface.card,
             borderBottomWidth: 1,
-            borderBottomColor: '#e2e8f0',
+            borderBottomColor: theme.color.border.subtle,
           }}
         >
           <View
@@ -126,24 +135,33 @@ export default function PlantHome() {
                   flexDirection: 'row-reverse',
                   alignSelf: 'flex-end',
                   alignItems: 'center',
-                  gap: 4,
-                  backgroundColor: '#ccfbf1',
-                  paddingHorizontal: 8,
-                  paddingVertical: 2,
-                  borderRadius: 999,
-                  marginBottom: 4,
+                  gap: theme.space.xs,
+                  backgroundColor: theme.color.accent.tint,
+                  paddingHorizontal: theme.space.sm,
+                  paddingVertical: theme.space.xxs,
+                  borderRadius: theme.radius.pill,
+                  marginBottom: theme.space.xs,
                 }}
               >
-                <MaterialIcons name="admin-panel-settings" size={11} color="#0e9384" />
-                <Text style={{ color: '#0e9384', fontSize: 10, fontWeight: '800' }}>
+                <MaterialIcons
+                  name="admin-panel-settings"
+                  size={11}
+                  color={theme.color.accent.primary}
+                />
+                <Text
+                  style={{
+                    ...theme.font.labelSm,
+                    color: theme.color.accent.primary,
+                  }}
+                >
                   وضع الإدارة
                 </Text>
               </View>
               <Text
                 style={{
-                  color: '#0f172a',
-                  fontWeight: '900',
+                  ...theme.font.displaySm,
                   fontSize: 20,
+                  color: theme.color.text.primary,
                   textAlign: 'right',
                 }}
                 numberOfLines={1}
@@ -152,8 +170,8 @@ export default function PlantHome() {
               </Text>
               <Text
                 style={{
-                  color: '#64748b',
-                  fontSize: 11,
+                  ...theme.font.bodySm,
+                  color: theme.color.text.secondary,
                   textAlign: 'right',
                   marginTop: 2,
                 }}
@@ -165,37 +183,41 @@ export default function PlantHome() {
               style={{
                 width: 44,
                 height: 44,
-                borderRadius: 14,
-                backgroundColor: '#f0fdfa',
+                borderRadius: theme.radius.lg - 2,
+                backgroundColor: theme.color.raw.teal[50],
                 borderWidth: 1,
-                borderColor: '#ccfbf1',
+                borderColor: theme.color.accent.tint,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <MaterialIcons name="dashboard" size={24} color="#0e9384" />
+              <MaterialIcons name="dashboard" size={24} color={theme.color.accent.primary} />
             </View>
           </View>
         </View>
       </SafeAreaView>
 
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 28 }}
+        contentContainerStyle={{
+          paddingHorizontal: theme.space.md + 2,
+          paddingTop: theme.space.md + 2,
+          paddingBottom: theme.space['2xl'] + theme.space.xs,
+        }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {/* Loading skeletons */}
         {kpisQuery.isLoading && !kpis && (
           <View>
-            <Skeleton height={56} borderRadius={16} style={{ marginBottom: 10 }} />
-            <Skeleton height={120} borderRadius={22} style={{ marginBottom: 12 }} />
+            <Skeleton height={56} borderRadius={theme.radius.lg} style={{ marginBottom: 10 }} />
+            <Skeleton height={120} borderRadius={theme.radius.xl} style={{ marginBottom: theme.space.md }} />
             <View style={{ flexDirection: 'row', gap: 10 }}>
-              <Skeleton height={84} borderRadius={18} style={{ flex: 1 }} />
-              <Skeleton height={84} borderRadius={18} style={{ flex: 1 }} />
+              <Skeleton height={84} borderRadius={theme.radius.lg} style={{ flex: 1 }} />
+              <Skeleton height={84} borderRadius={theme.radius.lg} style={{ flex: 1 }} />
             </View>
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-              <Skeleton height={84} borderRadius={18} style={{ flex: 1 }} />
-              <Skeleton height={84} borderRadius={18} style={{ flex: 1 }} />
+              <Skeleton height={84} borderRadius={theme.radius.lg} style={{ flex: 1 }} />
+              <Skeleton height={84} borderRadius={theme.radius.lg} style={{ flex: 1 }} />
             </View>
             <SkeletonCard height={70} />
           </View>
@@ -214,40 +236,30 @@ export default function PlantHome() {
 
         {/* Fresh plant — welcome state instead of a wall of zeros. */}
         {kpis && isFreshPlant && (
-          <View
-            style={{
-              backgroundColor: '#fff',
-              borderRadius: 22,
-              padding: 22,
-              marginTop: 4,
-              shadowColor: '#0f172a',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.06,
-              shadowRadius: 12,
-              elevation: 2,
-              borderWidth: 1,
-              borderColor: '#ccfbf1',
-            }}
+          <Card
+            variant="raised"
+            padding="lg"
+            style={{ marginTop: theme.space.xs, borderColor: theme.color.accent.tint }}
           >
             <LinearGradient
-              colors={['#14b8a6', '#0e9384']}
+              colors={[theme.color.raw.teal[500], theme.color.accent.primary]}
               style={{
                 width: 72,
                 height: 72,
-                borderRadius: 24,
+                borderRadius: theme.radius['2xl'],
                 alignItems: 'center',
                 justifyContent: 'center',
                 alignSelf: 'center',
-                marginBottom: 14,
+                marginBottom: theme.space.md + 2,
               }}
             >
-              <MaterialIcons name="celebration" size={36} color="#fff" />
+              <MaterialIcons name="celebration" size={36} color={theme.color.text.onAccent} />
             </LinearGradient>
             <Text
               style={{
-                color: '#0f172a',
-                fontWeight: '900',
+                ...theme.font.headingLg,
                 fontSize: 18,
+                color: theme.color.text.primary,
                 textAlign: 'center',
               }}
             >
@@ -255,27 +267,28 @@ export default function PlantHome() {
             </Text>
             <Text
               style={{
-                color: '#64748b',
+                ...theme.font.bodyMd,
                 fontSize: 13,
+                color: theme.color.text.secondary,
                 textAlign: 'center',
-                marginTop: 6,
+                marginTop: theme.space.xs + 2,
                 lineHeight: 20,
               }}
             >
               لم تبدأ أي عمليات بعد. ابدأ بإضافة زبائنك وفعّل سائقاً واحداً
               لتشاهد إحصاءاتك اليوميّة هنا.
             </Text>
-            <View style={{ marginTop: 16, gap: 10 }}>
+            <View style={{ marginTop: theme.space.lg, gap: 10 }}>
               <Pressable
                 onPress={() => router.push('/(tabs)/customers')}
                 style={({ pressed }) => ({
-                  borderRadius: 14,
+                  borderRadius: theme.radius.lg - 2,
                   overflow: 'hidden',
                   opacity: pressed ? 0.9 : 1,
                 })}
               >
                 <LinearGradient
-                  colors={['#14b8a6', '#0e9384']}
+                  colors={[theme.color.raw.teal[500], theme.color.accent.primary]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={{
@@ -283,11 +296,17 @@ export default function PlantHome() {
                     flexDirection: 'row-reverse',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 8,
+                    gap: theme.space.sm,
                   }}
                 >
-                  <MaterialIcons name="person-add" size={20} color="#fff" />
-                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>
+                  <MaterialIcons name="person-add" size={20} color={theme.color.text.onAccent} />
+                  <Text
+                    style={{
+                      color: theme.color.text.onAccent,
+                      fontWeight: '800',
+                      fontSize: 14,
+                    }}
+                  >
                     أضف أول زبون
                   </Text>
                 </LinearGradient>
@@ -295,25 +314,35 @@ export default function PlantHome() {
               <Pressable
                 onPress={() => router.push('/walkin' as any)}
                 style={({ pressed }) => ({
-                  borderRadius: 14,
-                  padding: 12,
+                  borderRadius: theme.radius.lg - 2,
+                  padding: theme.space.md,
                   flexDirection: 'row-reverse',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 8,
+                  gap: theme.space.sm,
                   borderWidth: 1.5,
-                  borderColor: '#0e9384',
-                  backgroundColor: '#f0fdfa',
+                  borderColor: theme.color.accent.primary,
+                  backgroundColor: theme.color.raw.teal[50],
                   opacity: pressed ? 0.85 : 1,
                 })}
               >
-                <MaterialIcons name="add-shopping-cart" size={18} color="#0e9384" />
-                <Text style={{ color: '#0e9384', fontWeight: '700', fontSize: 13 }}>
+                <MaterialIcons
+                  name="add-shopping-cart"
+                  size={18}
+                  color={theme.color.accent.primary}
+                />
+                <Text
+                  style={{
+                    color: theme.color.accent.primary,
+                    fontWeight: '700',
+                    fontSize: 13,
+                  }}
+                >
                   أو سجّل تعبئة مباشرة
                 </Text>
               </Pressable>
             </View>
-          </View>
+          </Card>
         )}
 
         {/* Regular dashboard view — only when the plant has any signal. */}
@@ -322,7 +351,7 @@ export default function PlantHome() {
             {/* ── Alert banners (conditional) ───────────────────────── */}
             {kpis.overLimit && (
               <AlertBanner
-                tone="red"
+                tone="danger"
                 icon="error"
                 title="تجاوزت حدّ خطّتك الشهرية"
                 subtitle={`${n(kpis.opsThisMonth)} من ${n(kpis.planLimit)} عملية`}
@@ -331,7 +360,7 @@ export default function PlantHome() {
             )}
             {!kpis.overLimit && kpis.nearLimit && (
               <AlertBanner
-                tone="amber"
+                tone="warning"
                 icon="warning"
                 title="اقتربت من حدّ الخطة"
                 subtitle={`${n(kpis.opsThisMonth)} من ${n(kpis.planLimit)} عملية`}
@@ -340,7 +369,7 @@ export default function PlantHome() {
             )}
             {kpis.stockLow && (
               <AlertBanner
-                tone="orange"
+                tone="warning"
                 icon="water-drop"
                 title="المخزون منخفض"
                 subtitle={`${n(kpis.stockLevelLiters)} لتر متبقّي`}
@@ -352,65 +381,156 @@ export default function PlantHome() {
                 Dense, dashboard-style: today + month + delta, no oversized
                 hero number. Compare to the customer app's "اطلب الآن" hero —
                 this is intentionally NOT a CTA. */}
-            <View
-              style={{
-                backgroundColor: '#fff',
-                borderRadius: 16,
-                padding: 14,
-                marginTop: 4,
-                marginBottom: 10,
-                borderWidth: 1,
-                borderColor: '#e2e8f0',
-              }}
+            <Card
+              variant="flat"
+              padding="sm"
+              style={{ marginTop: theme.space.xs, marginBottom: 10 }}
             >
-              <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                <MaterialIcons name="trending-up" size={14} color="#0e9384" />
-                <Text style={{ fontSize: 11, color: '#64748b', fontWeight: '700' }}>
+              <View
+                style={{
+                  flexDirection: 'row-reverse',
+                  alignItems: 'center',
+                  gap: 6,
+                  marginBottom: theme.space.sm,
+                }}
+              >
+                <MaterialIcons name="trending-up" size={14} color={theme.color.accent.primary} />
+                <Text
+                  style={{
+                    ...theme.font.labelLg,
+                    fontSize: 11,
+                    color: theme.color.text.secondary,
+                  }}
+                >
                   الإيرادات
                 </Text>
               </View>
-              <View style={{ flexDirection: 'row-reverse', gap: 14 }}>
+              <View style={{ flexDirection: 'row-reverse', gap: theme.space.md + 2 }}>
                 <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                  <Text style={{ fontSize: 10, color: '#94a3b8' }}>اليوم</Text>
-                  <Text style={{ fontSize: 18, fontWeight: '900', color: '#0f172a', marginTop: 2 }}>
-                    {n(kpis.todayRevenueIqd)}
-                    <Text style={{ fontSize: 11, color: '#64748b', fontWeight: '700' }}>{' '}د.ع</Text>
+                  <Text
+                    style={{
+                      ...theme.font.labelSm,
+                      fontWeight: '500',
+                      color: theme.color.text.disabled,
+                    }}
+                  >
+                    اليوم
                   </Text>
-                  <Text style={{ fontSize: 10, color: '#0e9384', marginTop: 2 }}>
-                    {n(kpis.todayCompletedOrders)} طلب
-                  </Text>
-                </View>
-                <View style={{ width: 1, backgroundColor: '#e2e8f0' }} />
-                <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                  <Text style={{ fontSize: 10, color: '#94a3b8' }}>الشهر</Text>
-                  <Text style={{ fontSize: 18, fontWeight: '900', color: '#0f172a', marginTop: 2 }}>
-                    {n(kpis.opsThisMonth)}
-                    <Text style={{ fontSize: 11, color: '#64748b', fontWeight: '700' }}>{' '}عملية</Text>
-                  </Text>
-                  <Text style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
-                    من {n(kpis.planLimit)}
-                  </Text>
-                </View>
-                <View style={{ width: 1, backgroundColor: '#e2e8f0' }} />
-                <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                  <Text style={{ fontSize: 10, color: '#94a3b8' }}>المخزون</Text>
                   <Text
                     style={{
                       fontSize: 18,
                       fontWeight: '900',
-                      color: kpis.stockLow ? '#ef4444' : '#0f172a',
+                      color: theme.color.text.primary,
+                      marginTop: 2,
+                    }}
+                  >
+                    {n(kpis.todayRevenueIqd)}
+                    <Text
+                      style={{
+                        ...theme.font.labelLg,
+                        color: theme.color.text.secondary,
+                      }}
+                    >
+                      {' '}
+                      د.ع
+                    </Text>
+                  </Text>
+                  <Text
+                    style={{
+                      ...theme.font.labelSm,
+                      fontWeight: '500',
+                      color: theme.color.accent.primary,
+                      marginTop: 2,
+                    }}
+                  >
+                    {n(kpis.todayCompletedOrders)} طلب
+                  </Text>
+                </View>
+                <View style={{ width: 1, backgroundColor: theme.color.border.subtle }} />
+                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                  <Text
+                    style={{
+                      ...theme.font.labelSm,
+                      fontWeight: '500',
+                      color: theme.color.text.disabled,
+                    }}
+                  >
+                    الشهر
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 18,
+                      fontWeight: '900',
+                      color: theme.color.text.primary,
+                      marginTop: 2,
+                    }}
+                  >
+                    {n(kpis.opsThisMonth)}
+                    <Text
+                      style={{
+                        ...theme.font.labelLg,
+                        color: theme.color.text.secondary,
+                      }}
+                    >
+                      {' '}
+                      عملية
+                    </Text>
+                  </Text>
+                  <Text
+                    style={{
+                      ...theme.font.labelSm,
+                      fontWeight: '500',
+                      color: theme.color.text.secondary,
+                      marginTop: 2,
+                    }}
+                  >
+                    من {n(kpis.planLimit)}
+                  </Text>
+                </View>
+                <View style={{ width: 1, backgroundColor: theme.color.border.subtle }} />
+                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                  <Text
+                    style={{
+                      ...theme.font.labelSm,
+                      fontWeight: '500',
+                      color: theme.color.text.disabled,
+                    }}
+                  >
+                    المخزون
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 18,
+                      fontWeight: '900',
+                      color: kpis.stockLow
+                        ? theme.color.state.danger.solid
+                        : theme.color.text.primary,
                       marginTop: 2,
                     }}
                   >
                     {stockPct(kpis.stockLevelLiters, kpis.stockCapacityLiters)}
-                    <Text style={{ fontSize: 11, color: '#64748b', fontWeight: '700' }}>%</Text>
+                    <Text
+                      style={{
+                        ...theme.font.labelLg,
+                        color: theme.color.text.secondary,
+                      }}
+                    >
+                      %
+                    </Text>
                   </Text>
-                  <Text style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
+                  <Text
+                    style={{
+                      ...theme.font.labelSm,
+                      fontWeight: '500',
+                      color: theme.color.text.secondary,
+                      marginTop: 2,
+                    }}
+                  >
                     {n(kpis.stockLevelLiters)} لتر
                   </Text>
                 </View>
               </View>
-            </View>
+            </Card>
 
             {/* ── Revenue sparkline (7-day trend) ───────────────────
                 Sits between the revenue strip and the 2×2 grid: gives a
@@ -437,14 +557,14 @@ export default function PlantHome() {
                 icon="schedule"
                 label="طلبات قيد الانتظار"
                 value={n(kpis.todayPendingOrders)}
-                tint="#f59e0b"
+                tone="amber"
                 onPress={() => router.push('/(tabs)/orders')}
               />
               <StatTile
                 icon="local-shipping"
                 label="السائقون النشطون"
                 value={n(kpis.activeDrivers)}
-                tint="#0e9384"
+                tone="teal"
                 onPress={() => router.push('/drivers' as any)}
               />
             </View>
@@ -453,14 +573,14 @@ export default function PlantHome() {
                 icon="person-add"
                 label="زبائن بانتظار الموافقة"
                 value={n(kpis.pendingLeadsCount)}
-                tint="#10b981"
+                tone="emerald"
                 onPress={() => router.push('/(tabs)/customers')}
               />
               <StatTile
                 icon="water-drop"
                 label="نسبة المخزون"
                 value={`${stockPct(kpis.stockLevelLiters, kpis.stockCapacityLiters)}%`}
-                tint={kpis.stockLow ? '#ef4444' : '#0891b2'}
+                tone={kpis.stockLow ? 'rose' : 'sky'}
                 onPress={() => router.push('/(tabs)/stock')}
               />
             </View>
@@ -470,37 +590,41 @@ export default function PlantHome() {
               <Pressable
                 onPress={() => router.push('/(tabs)/customers')}
                 style={({ pressed }) => ({
-                  marginTop: 14,
-                  borderRadius: 18,
+                  marginTop: theme.space.md + 2,
+                  borderRadius: theme.radius.xl - 2,
                   overflow: 'hidden',
                   opacity: pressed ? 0.9 : 1,
                 })}
               >
                 <LinearGradient
-                  colors={['#fef3c7', '#fde68a']}
+                  colors={[theme.color.raw.amber[100], '#fde68a']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={{
-                    padding: 14,
+                    padding: theme.space.md + 2,
                     flexDirection: 'row-reverse',
                     alignItems: 'center',
-                    gap: 12,
+                    gap: theme.space.md,
                     borderWidth: 1,
                     borderColor: '#fcd34d',
-                    borderRadius: 18,
+                    borderRadius: theme.radius.xl - 2,
                   }}
                 >
                   <View
                     style={{
                       width: 44,
                       height: 44,
-                      borderRadius: 14,
-                      backgroundColor: '#f59e0b',
+                      borderRadius: theme.radius.lg - 2,
+                      backgroundColor: theme.color.raw.amber[500],
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}
                   >
-                    <MaterialIcons name="person-add" size={24} color="#fff" />
+                    <MaterialIcons
+                      name="person-add"
+                      size={24}
+                      color={theme.color.text.onAccent}
+                    />
                   </View>
                   <View style={{ flex: 1, alignItems: 'flex-end' }}>
                     <Text
@@ -512,11 +636,11 @@ export default function PlantHome() {
                     >
                       {n(kpis.pendingLeadsCount)} زبون بانتظار موافقتك
                     </Text>
-                    <Text style={{ color: '#92400e', fontSize: 11, marginTop: 2 }}>
+                    <Text style={{ color: theme.color.raw.amber[700], fontSize: 11, marginTop: 2 }}>
                       اضغط لمراجعة الطلبات الجديدة
                     </Text>
                   </View>
-                  <MaterialIcons name="chevron-left" size={24} color="#92400e" />
+                  <MaterialIcons name="chevron-left" size={24} color={theme.color.raw.amber[700]} />
                 </LinearGradient>
               </Pressable>
             )}
@@ -545,23 +669,12 @@ export default function PlantHome() {
                 customer app intentionally uses the opposite pattern (one
                 big "اطلب الآن"). Names also avoid the word "اطلب" so they
                 never read like the customer flow. */}
-            <Text
-              style={{
-                fontSize: 11,
-                color: '#64748b',
-                fontWeight: '700',
-                textAlign: 'right',
-                marginTop: 16,
-                marginBottom: 8,
-              }}
-            >
-              أدوات الإدارة
-            </Text>
+            <SectionHeader title="أدوات الإدارة" />
             <View
               style={{
                 flexDirection: 'row-reverse',
                 flexWrap: 'wrap',
-                gap: 8,
+                gap: theme.space.sm,
               }}
             >
               {/* Row 1 — daily ops the manager touches most */}
@@ -638,290 +751,9 @@ function stockPct(current: number, capacity: number): string {
   return pct.toLocaleString('en-US');
 }
 
-// ────────────────────────────────────────────────────────────────────────
-// Sub-components
-// ────────────────────────────────────────────────────────────────────────
-
-function AlertBanner({
-  tone,
-  icon,
-  title,
-  subtitle,
-  onPress,
-}: {
-  tone: 'red' | 'amber' | 'orange';
-  icon: MaterialIconName;
-  title: string;
-  subtitle?: string;
-  onPress?: (e: GestureResponderEvent) => void;
-}) {
-  // tone → bg / border / icon-bg / fg colour map. Kept inline so a designer
-  // editing one tone doesn't have to chase a shared palette file.
-  const palette = {
-    red: {
-      bg: '#fef2f2',
-      border: '#fecaca',
-      iconBg: '#ef4444',
-      title: '#991b1b',
-      subtitle: '#b91c1c',
-    },
-    amber: {
-      bg: '#fffbeb',
-      border: '#fde68a',
-      iconBg: '#f59e0b',
-      title: '#92400e',
-      subtitle: '#b45309',
-    },
-    orange: {
-      bg: '#fff7ed',
-      border: '#fed7aa',
-      iconBg: '#fb923c',
-      title: '#9a3412',
-      subtitle: '#c2410c',
-    },
-  }[tone];
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => ({
-        backgroundColor: palette.bg,
-        borderColor: palette.border,
-        borderWidth: 1,
-        borderRadius: 16,
-        padding: 12,
-        marginBottom: 10,
-        flexDirection: 'row-reverse',
-        alignItems: 'center',
-        gap: 12,
-        opacity: pressed ? 0.85 : 1,
-      })}
-    >
-      <View
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: 12,
-          backgroundColor: palette.iconBg,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <MaterialIcons name={icon} size={22} color="#fff" />
-      </View>
-      <View style={{ flex: 1, alignItems: 'flex-end' }}>
-        <Text style={{ color: palette.title, fontWeight: '800', fontSize: 13 }}>{title}</Text>
-        {subtitle && (
-          <Text style={{ color: palette.subtitle, fontSize: 11, marginTop: 2 }}>
-            {subtitle}
-          </Text>
-        )}
-      </View>
-      {onPress && <MaterialIcons name="chevron-left" size={22} color={palette.subtitle} />}
-    </Pressable>
-  );
-}
-
-function StatTile({
-  icon,
-  label,
-  value,
-  tint,
-  onPress,
-}: {
-  icon: MaterialIconName;
-  label: string;
-  value: string;
-  tint: string;
-  onPress?: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => ({
-        flex: 1,
-        // Plain white card with a clearly visible slate border + drop
-        // shadow — earlier iterations used a hairline border at #e2e8f0
-        // which disappeared against the page background, making the
-        // tiles look like floating icons. Locking the border to a
-        // stronger slate (and bumping the shadow) gives each tile a
-        // proper container without going noisy.
-        backgroundColor: '#fff',
-        borderRadius: 18,
-        padding: 14,
-        borderWidth: 1,
-        borderColor: '#cbd5e1',
-        opacity: pressed ? 0.85 : 1,
-        shadowColor: '#0f172a',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 10,
-        elevation: 3,
-        // Minimum height locks the 2×2 grid to a square-ish rhythm even
-        // when one label wraps to a second line.
-        minHeight: 116,
-      })}
-    >
-      <View
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: 12,
-          backgroundColor: tint + '1A',
-          alignItems: 'center',
-          justifyContent: 'center',
-          alignSelf: 'flex-end',
-        }}
-      >
-        <MaterialIcons name={icon} size={22} color={tint} />
-      </View>
-      <Text
-        style={{
-          marginTop: 12,
-          fontSize: 24,
-          fontWeight: '900',
-          color: '#0f172a',
-          textAlign: 'right',
-        }}
-      >
-        {value}
-      </Text>
-      <Text
-        style={{
-          fontSize: 11,
-          color: '#64748b',
-          marginTop: 2,
-          textAlign: 'right',
-          fontWeight: '600',
-        }}
-        numberOfLines={2}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-/**
- * AdminTool — small icon+label tile used in the admin home's tool strip.
- * Wraps to 2-per-row on narrow screens. Intentionally NOT a big CTA: the
- * customer app owns that pattern (the "اطلب الآن" pulse button). Admin
- * tools are management shortcuts, not primary calls-to-action.
- */
-function AdminTool({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: MaterialIconName;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => ({
-        width: '48.5%',
-        backgroundColor: '#fff',
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: '#e2e8f0',
-        paddingVertical: 12,
-        paddingHorizontal: 12,
-        flexDirection: 'row-reverse',
-        alignItems: 'center',
-        gap: 10,
-        opacity: pressed ? 0.7 : 1,
-      })}
-    >
-      <View
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 10,
-          backgroundColor: '#f0fdfa',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <MaterialIcons name={icon} size={18} color="#0e9384" />
-      </View>
-      <Text style={{ color: '#0f172a', fontWeight: '700', fontSize: 12, flex: 1, textAlign: 'right' }}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function QuickAction({
-  icon,
-  label,
-  onPress,
-  primary,
-}: {
-  icon: MaterialIconName;
-  label: string;
-  onPress: () => void;
-  primary?: boolean;
-}) {
-  if (primary) {
-    return (
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => ({
-          flex: 1,
-          borderRadius: 18,
-          overflow: 'hidden',
-          opacity: pressed ? 0.92 : 1,
-        })}
-      >
-        <LinearGradient
-          colors={['#14b8a6', '#0e9384']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{
-            paddingVertical: 14,
-            paddingHorizontal: 14,
-            flexDirection: 'row-reverse',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-          }}
-        >
-          <MaterialIcons name={icon} size={20} color="#fff" />
-          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>{label}</Text>
-        </LinearGradient>
-      </Pressable>
-    );
-  }
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => ({
-        flex: 1,
-        backgroundColor: '#fff',
-        borderRadius: 18,
-        borderWidth: 1,
-        borderColor: '#99f6e4',
-        paddingVertical: 14,
-        paddingHorizontal: 14,
-        flexDirection: 'row-reverse',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        opacity: pressed ? 0.85 : 1,
-      })}
-    >
-      <MaterialIcons name={icon} size={20} color="#0e9384" />
-      <Text style={{ color: '#0c7a6e', fontWeight: '700', fontSize: 13 }}>{label}</Text>
-    </Pressable>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────
 // Trend + insights + activity feed sub-components
-// ────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────
 
 /** Short Arabic weekday name (أحد، اثنين، ...) from a YYYY-MM-DD date. */
 const AR_WEEKDAY_SHORT = ['أحد', 'اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
@@ -988,16 +820,7 @@ function RevenueTrendCard({
   const peak = values.length ? Math.max(...values) : 0;
 
   return (
-    <View
-      style={{
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 14,
-        marginBottom: 10,
-        borderWidth: 1,
-        borderColor: '#e2e8f0',
-      }}
-    >
+    <Card variant="flat" padding="sm" style={{ marginBottom: 10 }}>
       <View
         style={{
           flexDirection: 'row-reverse',
@@ -1006,11 +829,23 @@ function RevenueTrendCard({
           marginBottom: 10,
         }}
       >
-        <MaterialIcons name="show-chart" size={14} color="#0e9384" />
-        <Text style={{ fontSize: 12, color: '#0f172a', fontWeight: '800' }}>
+        <MaterialIcons name="show-chart" size={14} color={theme.color.accent.primary} />
+        <Text
+          style={{
+            ...theme.font.headingMd,
+            fontSize: 12,
+            color: theme.color.text.primary,
+          }}
+        >
           اتجاه الإيرادات
         </Text>
-        <Text style={{ fontSize: 10, color: '#64748b', fontWeight: '600' }}>
+        <Text
+          style={{
+            ...theme.font.labelSm,
+            fontWeight: '600',
+            color: theme.color.text.secondary,
+          }}
+        >
           (آخر 7 أيام)
         </Text>
       </View>
@@ -1023,24 +858,29 @@ function RevenueTrendCard({
             flexDirection: 'row-reverse',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 8,
+            gap: theme.space.sm,
             paddingVertical: 18,
           }}
         >
-          <MaterialIcons name="bar-chart" size={18} color="#94a3b8" />
-          <Text style={{ color: '#64748b', fontSize: 12 }}>
+          <MaterialIcons name="bar-chart" size={18} color={theme.color.text.disabled} />
+          <Text
+            style={{
+              ...theme.font.bodyMd,
+              color: theme.color.text.secondary,
+            }}
+          >
             لا توجد بيانات لعرض الاتجاه بعد
           </Text>
         </View>
       ) : (
-        <View style={{ flexDirection: 'row-reverse', gap: 12 }}>
+        <View style={{ flexDirection: 'row-reverse', gap: theme.space.md }}>
           {/* Chart + day-label row */}
           <View style={{ flex: 1 }}>
             <Sparkline
               data={values}
               height={60}
-              color="#0e9384"
-              fillColor="#ccfbf1"
+              color={theme.color.accent.primary}
+              fillColor={theme.color.accent.tint}
             />
             {/* Day labels — RTL row so the rightmost label is the oldest day. */}
             <View
@@ -1055,7 +895,7 @@ function RevenueTrendCard({
                   key={d.date}
                   style={{
                     fontSize: 9,
-                    color: '#94a3b8',
+                    color: theme.color.text.disabled,
                     fontWeight: '600',
                     width: 32,
                     textAlign: 'center',
@@ -1073,19 +913,19 @@ function RevenueTrendCard({
             style={{
               width: 64,
               borderLeftWidth: 1,
-              borderLeftColor: '#e2e8f0',
+              borderLeftColor: theme.color.border.subtle,
               paddingLeft: 10,
-              gap: 8,
+              gap: theme.space.sm,
               alignItems: 'flex-end',
             }}
           >
-            <SideStat label="الإجمالي" value={iqdCompact(total)} tone="#0f172a" />
-            <SideStat label="المعدل" value={iqdCompact(avg)} tone="#0e9384" />
-            <SideStat label="الذروة" value={iqdCompact(peak)} tone="#f59e0b" />
+            <SideStat label="الإجمالي" value={iqdCompact(total)} tone={theme.color.text.primary} />
+            <SideStat label="المعدل" value={iqdCompact(avg)} tone={theme.color.accent.primary} />
+            <SideStat label="الذروة" value={iqdCompact(peak)} tone={theme.color.raw.amber[500]} />
           </View>
         </View>
       )}
-    </View>
+    </Card>
   );
 }
 
@@ -1100,7 +940,9 @@ function SideStat({
 }) {
   return (
     <View style={{ alignItems: 'flex-end' }}>
-      <Text style={{ fontSize: 9, color: '#94a3b8', fontWeight: '600' }}>{label}</Text>
+      <Text style={{ fontSize: 9, color: theme.color.text.disabled, fontWeight: '600' }}>
+        {label}
+      </Text>
       <Text style={{ fontSize: 13, color: tone, fontWeight: '900', marginTop: 1 }}>
         {value}
       </Text>
@@ -1126,22 +968,12 @@ function InsightsRow({
 }) {
   if (isLoading) {
     return (
-      <View style={{ marginTop: 12 }}>
-        <Text
-          style={{
-            fontSize: 11,
-            color: '#64748b',
-            fontWeight: '700',
-            textAlign: 'right',
-            marginBottom: 8,
-          }}
-        >
-          نظرة سريعة
-        </Text>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Skeleton height={84} borderRadius={14} style={{ flex: 1 }} />
-          <Skeleton height={84} borderRadius={14} style={{ flex: 1 }} />
-          <Skeleton height={84} borderRadius={14} style={{ flex: 1 }} />
+      <View style={{ marginTop: theme.space.md }}>
+        <SectionHeader title="نظرة سريعة" />
+        <View style={{ flexDirection: 'row', gap: theme.space.sm }}>
+          <Skeleton height={84} borderRadius={theme.radius.lg - 2} style={{ flex: 1 }} />
+          <Skeleton height={84} borderRadius={theme.radius.lg - 2} style={{ flex: 1 }} />
+          <Skeleton height={84} borderRadius={theme.radius.lg - 2} style={{ flex: 1 }} />
         </View>
       </View>
     );
@@ -1152,35 +984,32 @@ function InsightsRow({
   const growthAbs = Math.abs(growth).toLocaleString('en-US', {
     maximumFractionDigits: 1,
   });
-  const growthTint = growth > 0 ? '#10b981' : growth < 0 ? '#ef4444' : '#64748b';
+  const growthTone: IconBadgeTone =
+    growth > 0 ? 'emerald' : growth < 0 ? 'rose' : 'teal';
+  const growthHighlight =
+    growth > 0
+      ? theme.color.state.success.solid
+      : growth < 0
+        ? theme.color.state.danger.solid
+        : theme.color.text.secondary;
   const growthIcon: MaterialIconName =
     growth > 0 ? 'trending-up' : growth < 0 ? 'trending-down' : 'trending-flat';
 
   return (
-    <View style={{ marginTop: 12 }}>
-      <Text
-        style={{
-          fontSize: 11,
-          color: '#64748b',
-          fontWeight: '700',
-          textAlign: 'right',
-          marginBottom: 8,
-        }}
-      >
-        نظرة سريعة
-      </Text>
+    <View>
+      <SectionHeader title="نظرة سريعة" />
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{
-          gap: 8,
+          gap: theme.space.sm,
           flexDirection: 'row-reverse',
           paddingHorizontal: 2,
         }}
       >
         <InsightCard
           icon="emoji-events"
-          tint="#0e9384"
+          tone="teal"
           label="أفضل سائق"
           primary={data?.bestDriver?.fullName ?? '—'}
           secondary={
@@ -1191,7 +1020,7 @@ function InsightsRow({
         />
         <InsightCard
           icon="person"
-          tint="#0891b2"
+          tone="sky"
           label="أعلى زبون"
           primary={data?.topCustomer?.fullName ?? '—'}
           secondary={
@@ -1202,19 +1031,17 @@ function InsightsRow({
         />
         <InsightCard
           icon={growthIcon}
-          tint={growthTint}
+          tone={growthTone}
           label="النمو هذا الأسبوع"
           primary={data ? `${growthSign}${growthAbs}%` : '—'}
           secondary={
             data
               ? growth === 0
                 ? 'بدون تغيير'
-                : growth > 0
-                ? 'مقارنة بالأسبوع الماضي'
                 : 'مقارنة بالأسبوع الماضي'
               : 'لا توجد بيانات'
           }
-          highlight={growthTint}
+          highlight={growthHighlight}
         />
       </ScrollView>
     </View>
@@ -1223,14 +1050,14 @@ function InsightsRow({
 
 function InsightCard({
   icon,
-  tint,
+  tone,
   label,
   primary,
   secondary,
   highlight,
 }: {
   icon: MaterialIconName;
-  tint: string;
+  tone: IconBadgeTone;
   label: string;
   primary: string;
   secondary: string;
@@ -1238,24 +1065,7 @@ function InsightCard({
   highlight?: string;
 }) {
   return (
-    <View
-      style={{
-        width: 180,
-        backgroundColor: '#fff',
-        // Match StatTile rhythm exactly — same border colour + shadow
-        // depth so the two card rows (insight + 2×2 stats) feel like
-        // one unified dashboard surface.
-        borderRadius: 18,
-        borderWidth: 1,
-        borderColor: '#cbd5e1',
-        padding: 14,
-        shadowColor: '#0f172a',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 10,
-        elevation: 3,
-      }}
-    >
+    <Card variant="raised" padding="sm" style={{ width: 180 }}>
       <View
         style={{
           flexDirection: 'row-reverse',
@@ -1265,9 +1075,9 @@ function InsightCard({
       >
         <Text
           style={{
+            ...theme.font.labelLg,
             fontSize: 11,
-            color: '#94a3b8',
-            fontWeight: '700',
+            color: theme.color.text.disabled,
             flex: 1,
             textAlign: 'right',
             paddingRight: 6,
@@ -1275,18 +1085,7 @@ function InsightCard({
         >
           {label}
         </Text>
-        <View
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 12,
-            backgroundColor: tint + '1A',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <MaterialIcons name={icon} size={20} color={tint} />
-        </View>
+        <IconBadge icon={icon} tone={tone} size="sm" />
       </View>
       <Text
         style={{
@@ -1296,7 +1095,7 @@ function InsightCard({
           // tiles per row comfortable on a narrow phone.
           fontSize: 18,
           fontWeight: '900',
-          color: highlight ?? '#0f172a',
+          color: highlight ?? theme.color.text.primary,
           textAlign: 'right',
         }}
         numberOfLines={1}
@@ -1305,16 +1104,18 @@ function InsightCard({
       </Text>
       <Text
         style={{
-          marginTop: 2,
+          ...theme.font.labelLg,
           fontSize: 11,
-          color: '#64748b',
+          fontWeight: '500',
+          marginTop: 2,
+          color: theme.color.text.secondary,
           textAlign: 'right',
         }}
         numberOfLines={1}
       >
         {secondary}
       </Text>
-    </View>
+    </Card>
   );
 }
 
@@ -1337,18 +1138,8 @@ function ActivityFeedSection({
 }) {
   if (isLoading) {
     return (
-      <View style={{ marginTop: 16 }}>
-        <Text
-          style={{
-            fontSize: 11,
-            color: '#64748b',
-            fontWeight: '700',
-            textAlign: 'right',
-            marginBottom: 8,
-          }}
-        >
-          آخر النشاط
-        </Text>
+      <View>
+        <SectionHeader title="آخر النشاط" />
         <SkeletonCard height={64} />
         <SkeletonCard height={64} />
       </View>
@@ -1356,45 +1147,17 @@ function ActivityFeedSection({
   }
 
   return (
-    <View style={{ marginTop: 16 }}>
-      <Text
-        style={{
-          fontSize: 11,
-          color: '#64748b',
-          fontWeight: '700',
-          textAlign: 'right',
-          marginBottom: 8,
-        }}
-      >
-        آخر النشاط
-      </Text>
+    <View>
+      <SectionHeader title="آخر النشاط" />
       {data.length === 0 ? (
-        <View
-          style={{
-            backgroundColor: '#fff',
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: '#e2e8f0',
-            paddingVertical: 18,
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          <MaterialIcons name="history" size={22} color="#94a3b8" />
-          <Text style={{ color: '#64748b', fontSize: 12 }}>
+        <Card variant="flat" padding="md" style={{ alignItems: 'center', gap: 6 }}>
+          <MaterialIcons name="history" size={22} color={theme.color.text.disabled} />
+          <Text style={{ ...theme.font.bodyMd, color: theme.color.text.secondary }}>
             لا يوجد نشاط حديث
           </Text>
-        </View>
+        </Card>
       ) : (
-        <View
-          style={{
-            backgroundColor: '#fff',
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: '#e2e8f0',
-            overflow: 'hidden',
-          }}
-        >
+        <Card variant="flat" padding="none" style={{ overflow: 'hidden' }}>
           {data.map((ev, i) => (
             <ActivityRow
               key={ev.id}
@@ -1403,7 +1166,7 @@ function ActivityFeedSection({
               onPress={() => onTap(ev)}
             />
           ))}
-        </View>
+        </Card>
       )}
     </View>
   );
@@ -1429,28 +1192,17 @@ function ActivityRow({
         alignItems: 'center',
         gap: 10,
         paddingVertical: 10,
-        paddingHorizontal: 12,
+        paddingHorizontal: theme.space.md,
         borderBottomWidth: showDivider ? 1 : 0,
-        borderBottomColor: '#f1f5f9',
+        borderBottomColor: theme.color.raw.slate[100],
         opacity: pressed && tappable ? 0.75 : 1,
       })}
     >
-      <View
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 10,
-          backgroundColor: meta.tint + '1A',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <MaterialIcons name={meta.icon} size={16} color={meta.tint} />
-      </View>
+      <IconBadge icon={meta.icon} tone={meta.tone} size="sm" />
       <View style={{ flex: 1, alignItems: 'flex-end' }}>
         <Text
           style={{
-            color: '#0f172a',
+            color: theme.color.text.primary,
             fontWeight: '700',
             fontSize: 12,
             textAlign: 'right',
@@ -1461,7 +1213,7 @@ function ActivityRow({
         </Text>
         <Text
           style={{
-            color: '#64748b',
+            color: theme.color.text.secondary,
             fontSize: 10,
             marginTop: 2,
             textAlign: 'right',
@@ -1473,7 +1225,7 @@ function ActivityRow({
       </View>
       <Text
         style={{
-          color: '#94a3b8',
+          color: theme.color.text.disabled,
           fontSize: 9,
           fontWeight: '600',
           marginLeft: 4,
@@ -1482,7 +1234,7 @@ function ActivityRow({
         {relativeTimeAr(event.createdAt)}
       </Text>
       {tappable && (
-        <MaterialIcons name="chevron-left" size={18} color="#94a3b8" />
+        <MaterialIcons name="chevron-left" size={18} color={theme.color.text.disabled} />
       )}
     </Pressable>
   );
@@ -1490,10 +1242,10 @@ function ActivityRow({
 
 const ACTIVITY_KIND_META: Record<
   ActivityEvent['kind'],
-  { icon: MaterialIconName; tint: string }
+  { icon: MaterialIconName; tone: IconBadgeTone }
 > = {
-  order: { icon: 'receipt-long', tint: '#0e9384' },
-  lead: { icon: 'person-add', tint: '#f59e0b' },
-  stock: { icon: 'water-drop', tint: '#0891b2' },
-  driver: { icon: 'local-shipping', tint: '#7c3aed' },
+  order: { icon: 'receipt-long', tone: 'teal' },
+  lead: { icon: 'person-add', tone: 'amber' },
+  stock: { icon: 'water-drop', tone: 'sky' },
+  driver: { icon: 'local-shipping', tone: 'violet' },
 };

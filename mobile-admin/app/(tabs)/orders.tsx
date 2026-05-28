@@ -17,8 +17,10 @@ import { arSA } from 'date-fns/locale';
 
 import { useOrdersList } from '@/lib/queries';
 import type { RefillOrder, RefillOrderStatus } from '@/lib/types';
-import { Skeleton, SkeletonCard } from '@/components/Skeleton';
+import { SkeletonCard } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
+import { Card, StatusChip, type ChipTone } from '@/components/ui';
+import { theme } from '@/lib/theme';
 
 type StatusFilter = RefillOrderStatus | 'ALL';
 
@@ -30,18 +32,19 @@ const FILTERS: { key: StatusFilter; label: string }[] = [
   { key: 'COMPLETED', label: 'مكتمل' },
 ];
 
-// Status → display colour / Arabic label. Mirrors dashboard/orders STATUS map
-// but with admin-mobile tone (vivid for in-flight, calm green for done).
+// Status → semantic tone (mapped to StatusChip) + Arabic label.
+// PENDING (new) reads as a warning, ASSIGNED+EN_ROUTE as info,
+// COMPLETED as success, anything terminal-bad as danger.
 const STATUS_META: Record<
   RefillOrderStatus,
-  { label: string; bg: string; fg: string }
+  { label: string; tone: ChipTone }
 > = {
-  PENDING: { label: 'جديد', bg: '#fef3c7', fg: '#92400e' },
-  ASSIGNED: { label: 'مكلّف', bg: '#dbeafe', fg: '#1e40af' },
-  EN_ROUTE: { label: 'في الطريق', bg: '#ffedd5', fg: '#9a3412' },
-  COMPLETED: { label: 'مكتمل', bg: '#d1fae5', fg: '#065f46' },
-  CANCELLED: { label: 'ملغى', bg: '#fee2e2', fg: '#991b1b' },
-  FAILED: { label: 'فشل', bg: '#fee2e2', fg: '#991b1b' },
+  PENDING: { label: 'جديد', tone: 'warning' },
+  ASSIGNED: { label: 'مكلّف', tone: 'info' },
+  EN_ROUTE: { label: 'في الطريق', tone: 'warning' },
+  COMPLETED: { label: 'مكتمل', tone: 'success' },
+  CANCELLED: { label: 'ملغى', tone: 'danger' },
+  FAILED: { label: 'فشل', tone: 'danger' },
 };
 
 /**
@@ -74,21 +77,20 @@ export default function OrdersScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f8fafc' }}>
-      <SafeAreaView edges={['top']} style={{ backgroundColor: '#fff' }}>
+    <View style={{ flex: 1, backgroundColor: theme.color.surface.page }}>
+      <SafeAreaView edges={['top']} style={{ backgroundColor: theme.color.surface.card }}>
         <View
           style={{
-            paddingHorizontal: 16,
-            paddingTop: 10,
-            paddingBottom: 4,
-            backgroundColor: '#fff',
+            paddingHorizontal: theme.space.lg,
+            paddingTop: theme.space.sm + 2,
+            paddingBottom: theme.space.xs,
+            backgroundColor: theme.color.surface.card,
           }}
         >
           <Text
             style={{
-              fontSize: 22,
-              fontWeight: '900',
-              color: '#0f172a',
+              ...theme.font.displaySm,
+              color: theme.color.text.primary,
               textAlign: 'right',
             }}
           >
@@ -99,7 +101,7 @@ export default function OrdersScreen() {
       </SafeAreaView>
 
       {query.isLoading && (
-        <View style={{ paddingHorizontal: 14, paddingTop: 14 }}>
+        <View style={{ paddingHorizontal: theme.space.md + 2, paddingTop: theme.space.md + 2 }}>
           <SkeletonCard height={86} />
           <SkeletonCard height={86} />
           <SkeletonCard height={86} />
@@ -138,7 +140,10 @@ export default function OrdersScreen() {
           data={items}
           keyExtractor={(o) => o.id}
           renderItem={renderItem}
-          contentContainerStyle={{ padding: 14, paddingBottom: 100 }}
+          contentContainerStyle={{
+            padding: theme.space.md + 2,
+            paddingBottom: 100,
+          }}
           refreshControl={
             <RefreshControl
               refreshing={query.isFetching && !query.isLoading}
@@ -158,19 +163,19 @@ export default function OrdersScreen() {
         />
       )}
 
-      {/* Walk-in FAB — sky gradient water-drop, bottom-right (visual right in
+      {/* Walk-in FAB — teal gradient water-drop, bottom-right (visual right in
           LTR but feels natural on mobile regardless of script direction). */}
       <Pressable
         onPress={() => router.push('/walkin' as any)}
         style={({ pressed }) => ({
           position: 'absolute',
-          bottom: 20,
-          right: 20,
+          bottom: theme.space.xl,
+          right: theme.space.xl,
           opacity: pressed ? 0.92 : 1,
         })}
       >
         <LinearGradient
-          colors={['#14b8a6', '#0e9384']}
+          colors={[theme.color.raw.teal[500], theme.color.accent.primary]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{
@@ -179,14 +184,11 @@ export default function OrdersScreen() {
             borderRadius: 30,
             alignItems: 'center',
             justifyContent: 'center',
-            shadowColor: '#0e9384',
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.4,
-            shadowRadius: 12,
-            elevation: 8,
+            ...theme.shadow.lg,
+            shadowColor: theme.color.accent.primary,
           }}
         >
-          <MaterialIcons name="water-drop" size={28} color="#fff" />
+          <MaterialIcons name="water-drop" size={28} color={theme.color.text.onAccent} />
         </LinearGradient>
       </Pressable>
     </View>
@@ -205,12 +207,16 @@ function FilterBar({
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={{
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        gap: 8,
+        paddingHorizontal: theme.space.md,
+        paddingVertical: theme.space.sm + 2,
+        gap: theme.space.sm,
         flexDirection: 'row-reverse',
       }}
-      style={{ backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }}
+      style={{
+        backgroundColor: theme.color.surface.card,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.color.border.subtle,
+      }}
     >
       {FILTERS.map((f) => {
         const active = f.key === value;
@@ -219,18 +225,22 @@ function FilterBar({
             key={f.key}
             onPress={() => onChange(f.key)}
             style={({ pressed }) => ({
-              paddingHorizontal: 14,
-              paddingVertical: 8,
-              borderRadius: 999,
-              backgroundColor: active ? '#0e9384' : '#f1f5f9',
+              paddingHorizontal: theme.space.md + 2,
+              paddingVertical: theme.space.sm,
+              borderRadius: theme.radius.pill,
+              backgroundColor: active
+                ? theme.color.accent.primary
+                : theme.color.raw.slate[100],
               borderWidth: 1,
-              borderColor: active ? '#0e9384' : '#e2e8f0',
+              borderColor: active
+                ? theme.color.accent.primary
+                : theme.color.border.subtle,
               opacity: pressed ? 0.8 : 1,
             })}
           >
             <Text
               style={{
-                color: active ? '#fff' : '#475569',
+                color: active ? theme.color.text.onAccent : theme.color.raw.slate[600],
                 fontWeight: active ? '800' : '600',
                 fontSize: 12,
               }}
@@ -268,42 +278,22 @@ function OrderRow({ order, onPress }: { order: RefillOrder; onPress: () => void 
   });
 
   return (
-    <Pressable
+    <Card
+      variant="flat"
+      padding="sm"
       onPress={onPress}
-      style={({ pressed }) => ({
-        backgroundColor: '#fff',
-        borderRadius: 18,
-        padding: 14,
-        marginBottom: 10,
-        borderWidth: 1,
-        borderColor: '#e2e8f0',
-        opacity: pressed ? 0.9 : 1,
-        shadowColor: '#0f172a',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
-        elevation: 1,
-      })}
+      style={{ marginBottom: 10 }}
     >
       <View
         style={{
           flexDirection: 'row-reverse',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: 8,
+          marginBottom: theme.space.sm,
         }}
       >
-        <View
-          style={{
-            backgroundColor: meta.bg,
-            paddingHorizontal: 10,
-            paddingVertical: 4,
-            borderRadius: 999,
-          }}
-        >
-          <Text style={{ color: meta.fg, fontWeight: '800', fontSize: 11 }}>{meta.label}</Text>
-        </View>
-        <Text style={{ fontSize: 10, color: '#94a3b8' }}>{when}</Text>
+        <StatusChip label={meta.label} tone={meta.tone} size="sm" />
+        <Text style={{ fontSize: 10, color: theme.color.text.disabled }}>{when}</Text>
       </View>
       <View
         style={{
@@ -313,26 +303,54 @@ function OrderRow({ order, onPress }: { order: RefillOrder; onPress: () => void 
         }}
       >
         <View style={{ flex: 1, alignItems: 'flex-end' }}>
-          <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f172a' }}>{kindLabel}</Text>
+          <Text
+            style={{
+              fontSize: 14,
+              fontWeight: '800',
+              color: theme.color.text.primary,
+            }}
+          >
+            {kindLabel}
+          </Text>
           {driverName && (
-            <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+            <Text
+              style={{
+                ...theme.font.labelLg,
+                fontSize: 11,
+                fontWeight: '500',
+                color: theme.color.text.secondary,
+                marginTop: 2,
+              }}
+            >
               السائق: {driverName}
             </Text>
           )}
         </View>
         <View style={{ alignItems: 'flex-start' }}>
-          <Text style={{ fontSize: 16, fontWeight: '900', color: '#0e9384' }}>
+          <Text
+            style={{
+              fontSize: 16,
+              fontWeight: '900',
+              color: theme.color.accent.primary,
+            }}
+          >
             {(order.priceIqd ?? 0).toLocaleString('en-US')}{' '}
-            <Text style={{ fontSize: 10, color: '#64748b' }}>د.ع</Text>
+            <Text style={{ fontSize: 10, color: theme.color.text.secondary }}>د.ع</Text>
           </Text>
           {order.paidAmountIqd !== order.priceIqd && (
-            <Text style={{ fontSize: 10, color: '#dc2626', marginTop: 1 }}>
+            <Text
+              style={{
+                fontSize: 10,
+                color: theme.color.state.danger.solid,
+                marginTop: 1,
+              }}
+            >
               مدفوع: {(order.paidAmountIqd ?? 0).toLocaleString('en-US')}
             </Text>
           )}
         </View>
       </View>
-    </Pressable>
+    </Card>
   );
 }
 
@@ -355,7 +373,7 @@ function Pagination({
         flexDirection: 'row-reverse',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingVertical: 14,
+        paddingVertical: theme.space.md + 2,
         paddingHorizontal: 6,
       }}
     >
@@ -364,31 +382,46 @@ function Pagination({
         disabled={prevDisabled}
         style={({ pressed }) => ({
           padding: 10,
-          borderRadius: 12,
-          backgroundColor: prevDisabled ? '#f1f5f9' : '#fff',
+          borderRadius: theme.radius.md,
+          backgroundColor: prevDisabled
+            ? theme.color.raw.slate[100]
+            : theme.color.surface.card,
           borderWidth: 1,
-          borderColor: '#e2e8f0',
+          borderColor: theme.color.border.subtle,
           opacity: pressed ? 0.7 : prevDisabled ? 0.5 : 1,
         })}
       >
-        <MaterialIcons name="chevron-right" size={22} color={prevDisabled ? '#cbd5e1' : '#0e9384'} />
+        <MaterialIcons
+          name="chevron-right"
+          size={22}
+          color={prevDisabled ? theme.color.border.default : theme.color.accent.primary}
+        />
       </Pressable>
-      <Text style={{ fontWeight: '700', color: '#475569', fontSize: 13 }}>
-        صفحة {(page ?? 1).toLocaleString('en-US')} من {(totalPages ?? 1).toLocaleString('en-US')}
+      <Text
+        style={{ fontWeight: '700', color: theme.color.raw.slate[600], fontSize: 13 }}
+      >
+        صفحة {(page ?? 1).toLocaleString('en-US')} من{' '}
+        {(totalPages ?? 1).toLocaleString('en-US')}
       </Text>
       <Pressable
         onPress={onNext}
         disabled={nextDisabled}
         style={({ pressed }) => ({
           padding: 10,
-          borderRadius: 12,
-          backgroundColor: nextDisabled ? '#f1f5f9' : '#fff',
+          borderRadius: theme.radius.md,
+          backgroundColor: nextDisabled
+            ? theme.color.raw.slate[100]
+            : theme.color.surface.card,
           borderWidth: 1,
-          borderColor: '#e2e8f0',
+          borderColor: theme.color.border.subtle,
           opacity: pressed ? 0.7 : nextDisabled ? 0.5 : 1,
         })}
       >
-        <MaterialIcons name="chevron-left" size={22} color={nextDisabled ? '#cbd5e1' : '#0e9384'} />
+        <MaterialIcons
+          name="chevron-left"
+          size={22}
+          color={nextDisabled ? theme.color.border.default : theme.color.accent.primary}
+        />
       </Pressable>
     </View>
   );
