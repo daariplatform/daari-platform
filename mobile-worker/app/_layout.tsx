@@ -134,6 +134,10 @@ function RootLayoutInner() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="task/[id]" options={{ presentation: 'card' }} />
         <Stack.Screen name="walkin" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="cash" options={{ presentation: 'card' }} />
+        <Stack.Screen name="earnings" options={{ presentation: 'card' }} />
+        <Stack.Screen name="shift-summary" options={{ presentation: 'card' }} />
+        <Stack.Screen name="van-inventory" options={{ presentation: 'card' }} />
       </Stack>
     </View>
   );
@@ -150,9 +154,13 @@ function RootLayout() {
         buster: 'v1',
       }}
     >
+      {/* Always mount the provider so usePostHog() works, but when no key is
+          configured pass a placeholder key + `disabled: true` so the SDK
+          no-ops without the empty-key console.error that pops a LogBox in
+          __DEV__. A real key in production enables analytics. */}
       <PostHogProvider
-        apiKey={POSTHOG_API_KEY}
-        options={POSTHOG_OPTIONS}
+        apiKey={POSTHOG_API_KEY || 'phc_disabled_no_key'}
+        options={{ ...POSTHOG_OPTIONS, disabled: !POSTHOG_API_KEY }}
         autocapture={false}
       >
         <RootLayoutInner />

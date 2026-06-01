@@ -520,6 +520,33 @@ export class CustomersService {
    * customer row tied to the logged-in user.id.
    */
   async findByUserId(userId: string) {
+    // Resilience: a Customer row whose `userId` was never linked (a seed/import
+    // defect) used to 404 here, which bricked the customer app home on an
+    // infinite skeleton. If the primary lookup misses, fall back to matching
+    // the user's phone within their tenant and self-heal the link — a logged-in
+    // CUSTOMER should always be able to resolve their own profile.
+    const linked = await this.prisma.customer.findFirst({ where: { userId } });
+    if (!linked) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { phone: true, tenantId: true },
+      });
+      if (user?.phone) {
+        const byPhone = await this.prisma.customer.findFirst({
+          where: {
+            phone: user.phone,
+            ...(user.tenantId ? { tenantId: user.tenantId } : {}),
+            userId: null,
+          },
+        });
+        if (byPhone) {
+          await this.prisma.customer
+            .update({ where: { id: byPhone.id }, data: { userId } })
+            .catch(() => undefined); // best-effort one-time heal
+        }
+      }
+    }
+
     const customer = await this.prisma.customer.findFirst({
       where: { userId },
       include: {

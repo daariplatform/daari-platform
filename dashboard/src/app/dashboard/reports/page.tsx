@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { iqd } from '@/lib/format';
 import {
   BarChart, Bar, LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis,
   CartesianGrid, PieChart, Pie, Cell, Legend,
 } from 'recharts';
-import { Download, Calendar, TrendingUp, ShoppingCart, Users } from 'lucide-react';
+import { Download, Calendar, TrendingUp, ShoppingCart, Users, FileText, FileSpreadsheet } from 'lucide-react';
 
 interface Report {
   range: 'day' | 'week' | 'month' | 'year';
@@ -45,6 +45,41 @@ export default function ReportsPage() {
     queryFn: async () => (await api.get(`/tenants/me/reports?range=${range}`)).data,
   });
 
+  // Export — wires the existing `/plant/reports/export` endpoint. The
+  // backend builds a PDF (PDFKit) or XLSX (exceljs) on disk, then returns
+  // a public uploads URL we open in a new tab. Default window matches the
+  // currently-selected range to keep the export consistent with what
+  // the user is looking at on screen.
+  const exportMutation = useMutation({
+    mutationFn: async (input: {
+      type: 'pdf' | 'xlsx';
+      report: 'revenue' | 'top-customers' | 'top-drivers' | 'cohort';
+    }) => {
+      const now = new Date();
+      const from = new Date(now);
+      if (range === 'week') from.setDate(from.getDate() - 7);
+      else if (range === 'month') from.setMonth(from.getMonth() - 1);
+      else from.setFullYear(from.getFullYear() - 1);
+      const { data } = await api.post<{ url: string; expiresAt: string }>(
+        '/plant/reports/export',
+        {
+          type: input.type,
+          report: input.report,
+          from: from.toISOString(),
+          to: now.toISOString(),
+        },
+      );
+      window.open(data.url, '_blank');
+      return data;
+    },
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? 'فشل التصدير';
+      alert(msg);
+    },
+  });
+
   if (isLoading) {
     return <div className="h-96 bg-slate-100 animate-pulse rounded-2xl" />;
   }
@@ -56,18 +91,46 @@ export default function ReportsPage() {
           <h1 className="text-2xl font-bold">التقارير والتحليلات</h1>
           <p className="text-slate-500 text-sm mt-1">رؤية تفصيلية لأداء المعمل</p>
         </div>
-        <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
-          {(['week', 'month', 'year'] as const).map((r) => (
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Export menu — backend supports revenue / top-customers /
+              top-drivers / cohort in PDF or XLSX. We surface the two most
+              common (revenue + top-customers) as direct buttons; the
+              picker covers the rest. */}
+          <div className="flex gap-1">
             <button
-              key={r}
-              onClick={() => setRange(r)}
-              className={`px-4 py-1.5 rounded text-sm font-medium ${
-                range === r ? 'bg-white shadow-sm text-aqua-700' : 'text-slate-500'
-              }`}
+              type="button"
+              disabled={exportMutation.isPending}
+              onClick={() =>
+                exportMutation.mutate({ type: 'pdf', report: 'revenue' })
+              }
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5"
             >
-              {r === 'week' ? 'أسبوع' : r === 'month' ? 'شهر' : 'سنة'}
+              <FileText size={13} /> PDF
             </button>
-          ))}
+            <button
+              type="button"
+              disabled={exportMutation.isPending}
+              onClick={() =>
+                exportMutation.mutate({ type: 'xlsx', report: 'revenue' })
+              }
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5"
+            >
+              <FileSpreadsheet size={13} /> Excel
+            </button>
+          </div>
+          <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
+            {(['week', 'month', 'year'] as const).map((r) => (
+              <button
+                key={r}
+                onClick={() => setRange(r)}
+                className={`px-4 py-1.5 rounded text-sm font-medium ${
+                  range === r ? 'bg-white shadow-sm text-aqua-700' : 'text-slate-500'
+                }`}
+              >
+                {r === 'week' ? 'أسبوع' : r === 'month' ? 'شهر' : 'سنة'}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -102,10 +165,15 @@ export default function ReportsPage() {
               الأداء اليومي
             </h2>
             <button
-              onClick={() => alert('قريباً')}
-              className="text-xs text-aqua-700 flex items-center gap-1 hover:text-aqua-900"
+              type="button"
+              disabled={exportMutation.isPending}
+              onClick={() =>
+                exportMutation.mutate({ type: 'xlsx', report: 'revenue' })
+              }
+              className="text-xs text-aqua-700 flex items-center gap-1 hover:text-aqua-900 disabled:opacity-50"
             >
-              <Download size={14} /> تصدير CSV
+              <Download size={14} />{' '}
+              {exportMutation.isPending ? 'جارٍ التصدير…' : 'تصدير Excel'}
             </button>
           </div>
           <ResponsiveContainer width="100%" height={280}>

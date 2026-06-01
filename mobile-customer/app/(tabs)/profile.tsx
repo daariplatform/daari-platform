@@ -139,6 +139,47 @@ export default function Profile() {
           />
         </View>
 
+        {/* Feature shortcuts — wallet, addresses, auto-refill, support */}
+        <View
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: 18,
+            marginTop: 12,
+            shadowColor: '#0f172a',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.04,
+            shadowRadius: 8,
+            elevation: 1,
+            overflow: 'hidden',
+          }}
+        >
+          <NavRow
+            icon="account-balance-wallet"
+            tint="#0891b2"
+            label="محفظتي ونقاطي"
+            onPress={() => router.push('/wallet')}
+          />
+          <NavRow
+            icon="place"
+            tint="#7c3aed"
+            label="عناويني المحفوظة"
+            onPress={() => router.push('/addresses')}
+          />
+          <NavRow
+            icon="repeat"
+            tint="#059669"
+            label="التعبئة التلقائية"
+            onPress={() => router.push('/schedules')}
+          />
+          <NavRow
+            icon="help-outline"
+            tint="#d97706"
+            label="المساعدة والدعم"
+            onPress={() => router.push('/support')}
+            last
+          />
+        </View>
+
         {/* Contract signed indicator */}
         {profile.acceptedTermsAt && (
           <View
@@ -306,6 +347,52 @@ export default function Profile() {
         </Pressable>
       </ScrollView>
     </View>
+  );
+}
+
+function NavRow({
+  icon,
+  label,
+  tint,
+  onPress,
+  last,
+}: {
+  icon: React.ComponentProps<typeof MaterialIcons>['name'];
+  label: string;
+  tint: string;
+  onPress: () => void;
+  last?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: 10,
+        paddingHorizontal: 14,
+        paddingVertical: 14,
+        borderBottomWidth: last ? 0 : 1,
+        borderBottomColor: '#f1f5f9',
+      }}
+    >
+      <View
+        style={{
+          backgroundColor: `${tint}15`,
+          width: 34,
+          height: 34,
+          borderRadius: 11,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <MaterialIcons name={icon} size={19} color={tint} />
+      </View>
+      <Text style={{ color: '#0f172a', fontSize: 13, fontWeight: '700', flex: 1, textAlign: 'right' }}>
+        {label}
+      </Text>
+      <MaterialIcons name="chevron-left" size={22} color="#cbd5e1" />
+    </Pressable>
   );
 }
 

@@ -9,7 +9,7 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "owner": "a7medal3ni",
-    "description": "داري للعاملين — تطبيق سائقي معامل المياه والبائعين المتجولين على منصّة داري. يعرض مهام اليوم، يثبت التعبئات بـGPS وصورة، ويحسب العمولات تلقائياً.",
+    "description": "داري للعاملين — تطبيق سائقي معامل المياه والبائعين المتجولين على منصّة داري. يعرض مهام اليوم، يثبت التعبئات بموقع GPS، ويحسب العمولات تلقائياً.",
     "primaryColor": "#0891b2",
     "splash": {
       "image": "./assets/splash.png",
@@ -44,16 +44,9 @@
         "usesNonExemptEncryption": false
       },
       "infoPlist": {
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "نسجّل موقعك أثناء جولة العمل فقط، حتى تثبت تعبئاتك للمعمل وتُحسب عمولتك. التتبّع يتوقّف عند انتهاء وردية العمل.",
-        "NSLocationWhenInUseUsageDescription": "نحتاج موقعك لتأكيد وصولك للزبون.",
-        "NSLocationAlwaysUsageDescription": "نسجّل موقعك أثناء وردية العمل لتأكيد التعبئات.",
-        "NSCameraUsageDescription": "لمسح QR الخزانات والتقاط صورة دليل التعبئة.",
-        "NSPhotoLibraryUsageDescription": "لتحديد صورة دليل من المعرض.",
-        "NSPhotoLibraryAddUsageDescription": "لحفظ صور دليل التعبئة في الجهاز.",
+        "NSLocationWhenInUseUsageDescription": "نستخدم موقعك أثناء استخدامك للتطبيق في وردية العمل لتأكيد وصولك للزبون وإظهار موقعك للمعمل. لا نتتبّعك في الخلفية.",
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
-          "location",
-          "fetch",
           "remote-notification"
         ]
       }
@@ -68,22 +61,17 @@
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE",
+        "android.permission.WAKE_LOCK"
+      ],
+      "blockedPermissions": [
         "android.permission.ACCESS_BACKGROUND_LOCATION",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.POST_NOTIFICATIONS",
-        "android.permission.VIBRATE",
-        "android.permission.WAKE_LOCK",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_BACKGROUND_LOCATION",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_LOCATION",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
       ]
     },
     "locales": {
@@ -96,24 +84,10 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "نتتبّع موقعك أثناء وردية العمل لتأكيد التعبئات. التتبّع يتوقّف خارج الوردية.",
-          "locationWhenInUsePermission": "نحتاج موقعك لتأكيد وصولك للزبون.",
-          "isAndroidBackgroundLocationEnabled": true,
-          "isIosBackgroundLocationEnabled": true,
-          "isAndroidForegroundServiceEnabled": true
-        }
-      ],
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "نستخدم الكاميرا لمسح QR الخزانات وتصوير دليل التعبئة."
-        }
-      ],
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "نستخدم صورك لتحديد دليل التعبئة.",
-          "cameraPermission": "نستخدم الكاميرا لتصوير دليل التعبئة."
+          "locationWhenInUsePermission": "نستخدم موقعك أثناء وردية العمل لتأكيد وصولك للزبون. لا نتتبّعك في الخلفية.",
+          "isAndroidBackgroundLocationEnabled": false,
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false
         }
       ],
       [

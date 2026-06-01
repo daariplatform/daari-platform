@@ -419,12 +419,30 @@ export class DriversService {
         : null;
 
     // Rating proxy: % of orders the customer didn't dispute, mapped to 1..5
-    // stars. Replace once we add an actual rating model + driver-level
-    // customer feedback. Returns null when there's nothing to score on.
+    // stars. Kept for backward compat (mobile-admin binds `customerRating`).
     const disputed = orders.filter((o) => o.customerDisputedAt).length;
     const customerRating =
       completedOrders > 0
         ? Math.round(((completedOrders - disputed) / completedOrders) * 5 * 10) / 10
+        : null;
+
+    // Real star ratings left by customers on this driver's orders within the
+    // window. Additive to the existing shape — `avgRating` is the genuine
+    // average (1..5, rounded to 1 decimal) and `ratingCount` the sample size.
+    // null avg when no ratings yet so the UI can show "—" instead of 0 stars.
+    const ratingAgg = await this.prisma.rating.aggregate({
+      where: {
+        tenantId,
+        driverId,
+        createdAt: { gte: from, lte: now },
+      },
+      _avg: { stars: true },
+      _count: { _all: true },
+    });
+    const ratingCount = ratingAgg._count._all;
+    const avgRating =
+      ratingCount > 0 && ratingAgg._avg.stars != null
+        ? Math.round(ratingAgg._avg.stars * 10) / 10
         : null;
 
     return {
@@ -438,7 +456,139 @@ export class DriversService {
       bonusIqd,
       avgCompletionMin,
       customerRating,
+      avgRating,
+      ratingCount,
     };
+  }
+
+  /**
+   * Daily earnings series for the driver detail / worker earnings screen.
+   * Returns one row per calendar day in the window (week = last 7 days,
+   * month = since the 1st), each with the day's completed-order count,
+   * commission, and bonus. Commission is the driver's per-refill rate ×
+   * REFILL completions that day; bonus is the sum of per-order bonusIqd
+   * snapshots. Days with no completed orders still appear (zeros) so the
+   * client can render a continuous chart.
+   */
+  async earningsByPeriod(driverId: string, period: 'week' | 'month') {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      select: { commissionPerRefillIqd: true },
+    });
+    if (!driver) throw new NotFoundException('Driver not found');
+
+    const now = new Date();
+    const from = new Date(now);
+    from.setHours(0, 0, 0, 0);
+    if (period === 'week') {
+      from.setDate(from.getDate() - 6); // today + previous 6 days = 7 days
+    } else {
+      from.setDate(1);
+    }
+
+    const orders = await this.prisma.refillOrder.findMany({
+      where: {
+        driverId,
+        status: RefillOrderStatus.COMPLETED,
+        completedAt: { gte: from, lte: now },
+      },
+      select: { completedAt: true, bonusIqd: true, kind: true },
+    });
+
+    // Bucket per local calendar day (YYYY-MM-DD).
+    const buckets = new Map<
+      string,
+      { completedOrders: number; refillCount: number; bonusIqd: number }
+    >();
+    const dayKey = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    // Seed every day in the window so the series is continuous.
+    for (let d = new Date(from); d <= now; d.setDate(d.getDate() + 1)) {
+      buckets.set(dayKey(d), { completedOrders: 0, refillCount: 0, bonusIqd: 0 });
+    }
+
+    for (const o of orders) {
+      if (!o.completedAt) continue;
+      const key = dayKey(o.completedAt);
+      const b = buckets.get(key);
+      if (!b) continue;
+      b.completedOrders += 1;
+      if (o.kind === 'REFILL') b.refillCount += 1;
+      b.bonusIqd += o.bonusIqd ?? 0;
+    }
+
+    const rate = driver.commissionPerRefillIqd ?? 0;
+    return Array.from(buckets.entries())
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([date, b]) => ({
+        date,
+        completedOrders: b.completedOrders,
+        commissionIqd: rate * b.refillCount,
+        bonusIqd: b.bonusIqd,
+      }));
+  }
+
+  /**
+   * Today's shift summary for the worker app. Completed-order count, cash
+   * collected (sum of paidAmountIqd), and a per-kind breakdown for the three
+   * field operations (refills, deliveries, reclaims).
+   */
+  async shiftSummary(driverId: string) {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
+    const orders = await this.prisma.refillOrder.findMany({
+      where: {
+        driverId,
+        status: RefillOrderStatus.COMPLETED,
+        completedAt: { gte: start, lt: end },
+      },
+      select: { paidAmountIqd: true, kind: true },
+    });
+
+    const byKind = { REFILL: 0, TANK_DELIVERY: 0, TANK_RECLAIM: 0 };
+    let collectedCashIqd = 0;
+    for (const o of orders) {
+      collectedCashIqd += o.paidAmountIqd ?? 0;
+      if (o.kind === 'REFILL') byKind.REFILL += 1;
+      else if (o.kind === 'TANK_DELIVERY') byKind.TANK_DELIVERY += 1;
+      else if (o.kind === 'TANK_RECLAIM') byKind.TANK_RECLAIM += 1;
+    }
+
+    return {
+      completedOrders: orders.length,
+      collectedCashIqd,
+      byKind,
+    };
+  }
+
+  /**
+   * Driver updates the tank count currently loaded on their van (full /
+   * empty). Used by the worker app's van-inventory screen for end-of-shift
+   * reconciliation. Scoped to the driver's own row (id resolved from JWT by
+   * the controller).
+   */
+  async updateVanInventory(
+    driverId: string,
+    tanksFullOnVan: number,
+    tanksEmptyOnVan: number,
+  ) {
+    return this.prisma.driver.update({
+      where: { id: driverId },
+      data: { tanksFullOnVan, tanksEmptyOnVan },
+      select: {
+        id: true,
+        tanksFullOnVan: true,
+        tanksEmptyOnVan: true,
+      },
+    });
   }
 }
 

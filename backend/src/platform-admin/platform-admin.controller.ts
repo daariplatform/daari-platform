@@ -20,8 +20,14 @@ import {
 } from 'class-validator';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
-import { UserRole, WalletTopupSource } from '@prisma/client';
+import {
+  SubscriptionPlan,
+  TenantStatus,
+  UserRole,
+  WalletTopupSource,
+} from '@prisma/client';
 import { WalletService } from '../plant/wallet.service';
+import { PlatformAdminService } from './platform-admin.service';
 
 // OpenTelemetry's `require-in-the-middle` (loaded by Sentry's NestJS
 // instrumentation) wraps every `require(...)` call in this codebase. On
@@ -58,6 +64,21 @@ class WalletTopupDto {
   note?: string;
 }
 
+// Inline string unions for the same decorator-time Prisma-enum reason noted
+// above (require-in-the-middle can return a partial export at decorator time).
+const TENANT_STATUS_VALUES = ['TRIAL', 'ACTIVE', 'SUSPENDED', 'CANCELLED'] as const;
+const PLAN_VALUES = ['STARTER', 'PRO', 'BUSINESS', 'ENTERPRISE'] as const;
+
+class SetStatusDto {
+  @IsEnum(TENANT_STATUS_VALUES)
+  status!: TenantStatus;
+}
+
+class SetPlanDto {
+  @IsEnum(PLAN_VALUES)
+  plan!: SubscriptionPlan;
+}
+
 /**
  * Platform-admin (Ahmed / PhiBit) controls. All routes guarded by
  * UserRole.PLATFORM_ADMIN. Lives under /platform/* so it can never be
@@ -75,7 +96,45 @@ class WalletTopupDto {
 @UseGuards(RolesGuard)
 @Controller('platform')
 export class PlatformAdminController {
-  constructor(private wallet: WalletService) {}
+  constructor(
+    private wallet: WalletService,
+    private platform: PlatformAdminService,
+  ) {}
+
+  /** GET /platform/overview — cross-tenant KPIs + 6-month volume + plan mix. */
+  @Get('overview')
+  @Roles(UserRole.PLATFORM_ADMIN)
+  async overview() {
+    return this.platform.overview();
+  }
+
+  /** GET /platform/plants — every plant + plan/status/wallet + month metrics. */
+  @Get('plants')
+  @Roles(UserRole.PLATFORM_ADMIN)
+  async plants() {
+    return this.platform.listPlants();
+  }
+
+  /** POST /platform/plants/:id/status — suspend / activate a plant. */
+  @Post('plants/:id/status')
+  @Roles(UserRole.PLATFORM_ADMIN)
+  async setStatus(@Param('id') id: string, @Body() dto: SetStatusDto) {
+    return this.platform.setPlantStatus(id, dto.status);
+  }
+
+  /** POST /platform/plants/:id/plan — change a plant's subscription plan. */
+  @Post('plants/:id/plan')
+  @Roles(UserRole.PLATFORM_ADMIN)
+  async setPlan(@Param('id') id: string, @Body() dto: SetPlanDto) {
+    return this.platform.setPlantPlan(id, dto.plan);
+  }
+
+  /** GET /platform/health — lightweight system health (real DB ping). */
+  @Get('health')
+  @Roles(UserRole.PLATFORM_ADMIN)
+  async health() {
+    return this.platform.health();
+  }
 
   /** GET /platform/wallets — list every tenant + their current balance. */
   @Get('wallets')

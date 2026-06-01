@@ -13,6 +13,9 @@ import { EmailService } from '../email/email.service';
 import { PromoService } from '../plant/promo.service';
 import {
   CustomerStatus,
+  NotificationChannel,
+  NotificationKind,
+  NotificationStatus,
   PaymentMethod,
   Prisma,
   RefillOrderKind,
@@ -27,6 +30,8 @@ interface CreateOrderInput {
   kind?: RefillOrderKind;
   scheduledFor?: Date;
   priceIqd?: number;
+  /** Optional saved-address id to deliver to instead of the home location. */
+  addressId?: string;
 }
 
 interface CompleteOrderInput {
@@ -61,6 +66,41 @@ export class OrdersService {
     private email: EmailService,
     private promo: PromoService,
   ) {}
+
+  /**
+   * Persist an order-status notification into the customer's in-app inbox
+   * (NotificationLog, recipient = phone). The audit found we only sent push
+   * notifications on order events — which are skipped on simulators and
+   * never persisted — so the customer's notifications screen was always
+   * empty. This writes a durable inbox row so "حالة الطلب" shows up there
+   * regardless of whether the push was delivered. Best-effort: a failure
+   * here must never roll back or block the order itself.
+   */
+  private async notifyCustomerInbox(
+    tenantId: string,
+    phone: string | null | undefined,
+    kind: NotificationKind,
+    title: string,
+    body: string,
+  ): Promise<void> {
+    if (!phone) return;
+    try {
+      await this.prisma.notificationLog.create({
+        data: {
+          tenantId,
+          kind,
+          channel: NotificationChannel.PUSH,
+          recipient: phone,
+          title,
+          body,
+          status: NotificationStatus.SENT,
+          sentAt: new Date(),
+        },
+      });
+    } catch (err) {
+      this.log.warn(`[inbox] customer note failed: ${(err as Error).message}`);
+    }
+  }
 
   async create(tenantId: string, input: CreateOrderInput) {
     // Subscription gate — block new orders if the plant has blown past
@@ -134,14 +174,36 @@ export class OrdersService {
       }
     }
 
-    // Auto-assign to a driver. Preference order:
-    //   1. AVAILABLE drivers (online but not on a route) — most-recently-seen first
-    //   2. ON_ROUTE drivers (already working a tour, can pick up another)
-    //   3. Any active driver in the tenant (covers OFFLINE — they'll see
-    //      the assignment the moment they open the app)
-    // If literally no drivers exist we still create the order in PENDING so
-    // the plant admin sees it in the dashboard and can hire/assign manually.
-    const driver = await this.pickDriverForNewOrder(tenantId);
+    // CLAIM MODEL: orders are OFFERED to the tenant's drivers, not auto-assigned.
+    // The order is created PENDING + unassigned and enters the offer pool; the
+    // first driver to call POST /orders/:id/claim wins it (atomic, race-safe).
+    // The plant admin can still assign a specific driver from the dashboard as
+    // a fallback (POST /orders/:id/assign). pickDriverForNewOrder is retained
+    // for that manual/auto fallback path but is no longer used on create.
+
+    // Snapshot the chosen saved address (if any) onto the order so the driver
+    // routes there. Verified to belong to this customer; ignored otherwise.
+    let delivery: {
+      deliveryAddressId?: string;
+      deliveryAddressLine?: string;
+      deliveryDistrict?: string;
+      deliveryLat?: number | null;
+      deliveryLng?: number | null;
+    } = {};
+    if (input.addressId) {
+      const addr = await this.prisma.customerAddress.findFirst({
+        where: { id: input.addressId, customerId: input.customerId },
+      });
+      if (addr) {
+        delivery = {
+          deliveryAddressId: addr.id,
+          deliveryAddressLine: addr.addressLine,
+          deliveryDistrict: addr.district,
+          deliveryLat: addr.lat,
+          deliveryLng: addr.lng,
+        };
+      }
+    }
 
     const order = await this.prisma.refillOrder.create({
       data: {
@@ -152,43 +214,143 @@ export class OrdersService {
         priceIqd,
         promoCampaignId, // null when no active promo
         scheduledFor: input.scheduledFor,
-        ...(driver
-          ? {
-              driverId: driver.id,
-              status: RefillOrderStatus.ASSIGNED,
-              assignedAt: new Date(),
-            }
-          : {}),
+        ...delivery,
+        // status defaults to PENDING, driverId stays null → enters the offer pool.
       },
     });
 
-    // Notify the assigned driver — they don't have to keep polling. Fail
-    // silently if push delivery fails (the order still exists; driver will
-    // see it on next /me/today refresh as a fallback).
-    if (driver) {
-      this.push
-        .sendToUser(
-          driver.userId,
-          '🚐 طلب جديد',
-          `${customer.fullName} — ${customer.district}`,
-          { orderId: order.id, kind: 'new-order' },
-        )
-        .catch((err) => console.warn('[push] notify driver failed:', err));
-    }
+    // Broadcast the available order to every active driver in the tenant so
+    // they can race to claim it. Best-effort; the order also surfaces in the
+    // driver app's "available orders" list on the next refresh / socket tick.
+    this.notifyDriversOfOffer(tenantId, order.id, customer).catch((err) =>
+      console.warn('[push] notify drivers of offer failed:', err),
+    );
 
-    // Notify plant admins on the mobile-admin app. Only for customer-initiated
-    // orders — walk-in + tank-delivery flows already start from the admin's
-    // tap so the admin doesn't need to be told. Best-effort, never blocks.
+    // Notify plant admins on the mobile-admin app. Best-effort, never blocks.
     this.push
       .sendToTenantAdmins(
         tenantId,
-        driver ? 'طلب جديد (مُكلَّف)' : 'طلب جديد بانتظار تعيين سائق',
+        'طلب جديد بانتظار قبول سائق',
         `${customer.fullName} — ${customer.district} · ${priceIqd.toLocaleString('ar-IQ')} د.ع`,
         { orderId: order.id, kind: 'new-order', tenantId },
       )
       .catch((err) => console.warn('[push] notify admins failed:', err));
 
     return order;
+  }
+
+  /**
+   * Push an "order available to claim" notification to every active driver in
+   * the tenant. Best-effort — failures are swallowed by the caller.
+   */
+  private async notifyDriversOfOffer(
+    tenantId: string,
+    orderId: string,
+    customer: { fullName: string; district: string },
+  ) {
+    const drivers = await this.prisma.driver.findMany({
+      where: { tenantId, status: { in: ['AVAILABLE', 'ON_ROUTE'] } },
+      select: { userId: true },
+    });
+    await Promise.allSettled(
+      drivers.map((d) =>
+        this.push.sendToUser(
+          d.userId,
+          '🚐 طلب جديد متاح — سارِع بالقبول',
+          `${customer.fullName} — ${customer.district}`,
+          { orderId, kind: 'order-offer', tenantId },
+        ),
+      ),
+    );
+  }
+
+  /**
+   * First-come, race-safe claim. The conditional updateMany only mutates the
+   * row if it is STILL pending and unassigned, so two drivers tapping "قبول"
+   * at the same time can never both win — exactly one gets count===1.
+   */
+  async claim(orderId: string, driverId: string, tenantId: string) {
+    const res = await this.prisma.refillOrder.updateMany({
+      where: {
+        id: orderId,
+        tenantId,
+        status: RefillOrderStatus.PENDING,
+        driverId: null,
+      },
+      data: {
+        driverId,
+        status: RefillOrderStatus.ASSIGNED,
+        assignedAt: new Date(),
+      },
+    });
+    if (res.count === 0) {
+      const existing = await this.prisma.refillOrder.findFirst({
+        where: { id: orderId, tenantId },
+        select: { id: true, driverId: true, status: true },
+      });
+      if (!existing) throw new NotFoundException('الطلب غير موجود');
+      if (existing.driverId === driverId) {
+        // Idempotent: this driver already holds it (double-tap / retry).
+        return this.findOneForDriver(orderId, driverId);
+      }
+      if (existing.driverId)
+        throw new ConflictException('سبقك سائق آخر إلى هذا الطلب');
+      throw new ConflictException('لم يعد هذا الطلب متاحاً للقبول');
+    }
+    // The customer's meaningful "السائق متجه إليك" notification fires later on
+    // start() (EN_ROUTE); no separate claim-time inbox entry is needed.
+    return this.findOneForDriver(orderId, driverId);
+  }
+
+  /**
+   * The pool of orders a driver can claim: still PENDING + unassigned in the
+   * driver's tenant. Includes the customer + tank so the app can show name,
+   * district, coordinates (for distance/ETA) and tank size on the card.
+   */
+  async listAvailableForDrivers(tenantId: string) {
+    return this.prisma.refillOrder.findMany({
+      where: {
+        tenantId,
+        status: RefillOrderStatus.PENDING,
+        driverId: null,
+      },
+      orderBy: { requestedAt: 'asc' },
+      include: {
+        customer: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            district: true,
+            addressLine: true,
+            locationLat: true,
+            locationLng: true,
+          },
+        },
+        tank: { select: { id: true, qrCode: true, capacity: true } },
+      },
+    });
+  }
+
+  /** Single order scoped to the owning driver — used after claim. */
+  private findOneForDriver(orderId: string, driverId: string) {
+    return this.prisma.refillOrder.findFirst({
+      where: { id: orderId, driverId },
+      include: {
+        customer: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            district: true,
+            addressLine: true,
+            locationLat: true,
+            locationLng: true,
+          },
+        },
+        tank: { select: { id: true, qrCode: true, capacity: true } },
+      },
+    });
   }
 
   /**
@@ -279,6 +441,65 @@ export class OrdersService {
     return paginated(items, total, { page, pageSize });
   }
 
+  /**
+   * Full single-order shape for the order-detail page — used by BOTH the
+   * dashboard (`/dashboard/orders/[id]`) and the customer's live-tracking
+   * screen (`mobile-customer/app/order/[id]`).
+   *
+   * Scoping is by role:
+   *   - plant admins (OWNER/MANAGER/ACCOUNTANT/PLATFORM_ADMIN) → tenant-scoped
+   *   - the customer → only their OWN order (customer.userId === user.id)
+   * so a customer can never read another customer's order.
+   *
+   * Includes the driver's LIVE coordinates (currentLng/currentLat +
+   * lastLocationAt) so the customer can watch the driver approach on the map.
+   */
+  async findOneForViewer(
+    user: { id: string; role: string; tenantId?: string | null },
+    orderId: string,
+  ) {
+    const isCustomer = user.role === 'CUSTOMER';
+    const where: Prisma.RefillOrderWhereInput = isCustomer
+      ? { id: orderId, customer: { userId: user.id } }
+      : { id: orderId, tenantId: user.tenantId ?? undefined };
+
+    const order = await this.prisma.refillOrder.findFirst({
+      where,
+      include: {
+        customer: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            district: true,
+            addressLine: true,
+            locationLat: true,
+            locationLng: true,
+          },
+        },
+        driver: {
+          select: {
+            id: true,
+            vehiclePlate: true,
+            // Live position for the customer's tracking map.
+            currentLat: true,
+            currentLng: true,
+            lastLocationAt: true,
+            user: { select: { fullName: true, phone: true } },
+          },
+        },
+        tank: { select: { id: true, qrCode: true, capacity: true } },
+        // Surface the customer's rating (if any) so the detail page can show
+        // the stars + comment, and the customer app knows whether to prompt.
+        rating: {
+          select: { id: true, stars: true, comment: true, createdAt: true },
+        },
+      },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+    return order;
+  }
+
   async assign(tenantId: string, orderId: string, driverId: string) {
     const order = await this.prisma.refillOrder.findFirst({ where: { id: orderId, tenantId } });
     if (!order) throw new NotFoundException('Order not found');
@@ -322,6 +543,14 @@ export class OrdersService {
         )
         .catch((err) => console.warn('[push] en-route notify failed:', err));
     }
+    // Durable in-app inbox copy (push is best-effort / skipped on simulator).
+    await this.notifyCustomerInbox(
+      order.tenantId,
+      order.customer?.phone,
+      NotificationKind.DRIVER_EN_ROUTE,
+      '🚐 السائق متجه إليك',
+      'سيصل سائق المعمل خلال وقت قصير. تأكّد أنك متواجد في العنوان.',
+    );
     return updated;
   }
 
@@ -429,21 +658,14 @@ export class OrdersService {
       });
     }
 
-    // Layer 2: photo proof is required for refills — it's the evidence trail
-    // for the (rare) case where a customer disputes a refill via WhatsApp.
-    if (order.kind === RefillOrderKind.REFILL && !input.proofPhotoUrl) {
-      throw new BadRequestException(
-        'Photo proof is required for a refill. Take one quick photo of the filled tank.',
-      );
-    }
+    // Photo proof is now OPTIONAL (plants opted out of mandatory tank photos
+    // to save device storage / upload bandwidth). If the driver app sends a
+    // proofPhotoUrl we still store it, but completion no longer blocks on it.
 
-    // Reclaims require a reason + photo so the plant can audit later.
+    // Reclaims still require a reason (audit trail) — but the photo is optional.
     if (order.kind === RefillOrderKind.TANK_RECLAIM) {
       if (!input.reclaimReason) {
         throw new BadRequestException('Please pick a reason for reclaiming the tank.');
-      }
-      if (!input.proofPhotoUrl) {
-        throw new BadRequestException('Photo of the reclaimed tank is required.');
       }
     }
 
@@ -507,6 +729,12 @@ export class OrdersService {
           lastRefillAt: new Date(),
           totalRefills: { increment: 1 },
           balanceIqd: { increment: balanceDelta },
+          // Loyalty: +1 point for each completed REFILL (not deliveries /
+          // reclaims). Redeemable later. Lives in the same update that bumps
+          // totalRefills so it's atomic with the completion.
+          ...(order.kind === RefillOrderKind.REFILL && {
+            loyaltyPoints: { increment: 1 },
+          }),
         },
       });
 
@@ -576,6 +804,20 @@ export class OrdersService {
           { orderId, kind: 'completed' },
         )
         .catch((err) => console.warn('[push] completion notify failed:', err));
+    }
+    // Durable in-app inbox copy so the completion shows in the customer's
+    // notifications screen even when push is unavailable.
+    {
+      const arabicKind =
+        order.kind === RefillOrderKind.REFILL ? 'تعبئة' :
+        order.kind === RefillOrderKind.TANK_DELIVERY ? 'توصيل خزان' : 'سحب خزان';
+      await this.notifyCustomerInbox(
+        order.tenantId,
+        order.customer?.phone,
+        NotificationKind.ORDER_COMPLETED,
+        `✅ تمّت ${arabicKind}`,
+        `المبلغ المدفوع: ${input.paidAmountIqd.toLocaleString('ar-IQ')} د.ع. شكراً لاستخدامك داري.`,
+      );
     }
 
     // Cache invalidation: balance / lastRefillAt / totalRefills all changed,
@@ -680,9 +922,17 @@ export class OrdersService {
       if (order.customer?.userId !== user.id) {
         throw new ForbiddenException('Order does not belong to you');
       }
-      if (order.status !== RefillOrderStatus.PENDING) {
+      // Orders auto-assign a driver instantly (PENDING → ASSIGNED), so
+      // gating cancellation on PENDING-only left customers with no window
+      // to cancel at all. Allow cancel until the driver actually starts the
+      // trip (EN_ROUTE); after that the driver is on the road and the
+      // customer should call the plant instead.
+      if (
+        order.status !== RefillOrderStatus.PENDING &&
+        order.status !== RefillOrderStatus.ASSIGNED
+      ) {
         throw new BadRequestException(
-          'لا يمكن إلغاء الطلب بعد تعيين السائق. اتصل بالمعمل.',
+          'انطلق السائق إليك بالفعل — لا يمكن الإلغاء الآن. اتصل بالمعمل.',
         );
       }
     } else {
@@ -714,12 +964,10 @@ export class OrdersService {
       buyerPhone?: string;
       completionLng: number;
       completionLat: number;
-      proofPhotoUrl: string;
+      proofPhotoUrl?: string;
     },
   ) {
-    if (!input.proofPhotoUrl) {
-      throw new BadRequestException('Photo proof is required for walk-in sales');
-    }
+    // Photo proof is optional for walk-in sales too (storage/bandwidth opt-out).
     return this.prisma.refillOrder.create({
       data: {
         tenantId,
@@ -891,7 +1139,7 @@ export class OrdersService {
       walkinLiters?: number;
       paymentMethod: PaymentMethod;
       paidAmountIqd: number;
-      proofPhotoUrl: string;
+      proofPhotoUrl?: string;
       completionLng?: number;
       completionLat?: number;
     },

@@ -113,6 +113,14 @@ class StatusDto {
   status!: DriverStatus;
 }
 
+class VanInventoryDto {
+  @IsInt() @Min(0)
+  tanksFullOnVan!: number;
+
+  @IsInt() @Min(0)
+  tanksEmptyOnVan!: number;
+}
+
 @ApiBearerAuth()
 @ApiTags('drivers')
 @UseGuards(RolesGuard)
@@ -213,6 +221,57 @@ export class DriversController {
   async setStatus(@CurrentUser() user: AuthUser, @Body() dto: StatusDto) {
     const profile = await this.drivers.getMyDriverProfile(user.id);
     return this.drivers.setStatus(profile.id, dto.status);
+  }
+
+  /**
+   * Driver-scoped performance summary for the mobile worker profile.
+   * Same shape as `/drivers/:id/perf` but the driver passes no id —
+   * the resolved driver profile is read from `user.id`. Gated to the
+   * driver capability so plant admins must use the id-bearing route.
+   */
+  @RequireCapability('driver')
+  @ApiQuery({ name: 'period', required: false, enum: ['week', 'month'] })
+  @Get('me/perf')
+  async myPerf(@CurrentUser() user: AuthUser, @Query('period') period?: string) {
+    const profile = await this.drivers.getMyDriverProfile(user.id);
+    const p: 'week' | 'month' = period === 'week' ? 'week' : 'month';
+    return this.drivers.performanceByPeriod(profile.tenantId, profile.id, p);
+  }
+
+  /**
+   * Daily earnings series for the worker earnings-over-time chart. One row per
+   * day in the window (week = last 7 days, month = since the 1st).
+   */
+  @RequireCapability('driver')
+  @ApiQuery({ name: 'period', required: false, enum: ['week', 'month'] })
+  @Get('me/earnings')
+  async myEarnings(@CurrentUser() user: AuthUser, @Query('period') period?: string) {
+    const profile = await this.drivers.getMyDriverProfile(user.id);
+    const p: 'week' | 'month' = period === 'week' ? 'week' : 'month';
+    return this.drivers.earningsByPeriod(profile.id, p);
+  }
+
+  /** Today's shift summary (completed count, cash collected, per-kind breakdown). */
+  @RequireCapability('driver')
+  @Get('me/shift-summary')
+  async myShiftSummary(@CurrentUser() user: AuthUser) {
+    const profile = await this.drivers.getMyDriverProfile(user.id);
+    return this.drivers.shiftSummary(profile.id);
+  }
+
+  /** Driver updates the full/empty tank counts loaded on their van. */
+  @RequireCapability('driver')
+  @Post('me/van-inventory')
+  async myVanInventory(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: VanInventoryDto,
+  ) {
+    const profile = await this.drivers.getMyDriverProfile(user.id);
+    return this.drivers.updateVanInventory(
+      profile.id,
+      dto.tanksFullOnVan,
+      dto.tanksEmptyOnVan,
+    );
   }
 
   /**

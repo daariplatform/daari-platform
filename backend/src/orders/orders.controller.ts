@@ -25,6 +25,11 @@ class CreateOrderDto {
 
   @IsOptional() @IsInt() @Min(0)
   priceIqd?: number;
+
+  /** Optional saved-address id — when set, its coords/line are snapshotted
+   *  onto the order so the driver routes there instead of the default home. */
+  @IsOptional() @IsString()
+  addressId?: string;
 }
 
 class AssignOrderDto {
@@ -91,8 +96,10 @@ class WalkinRefillDto {
   @IsInt() @Min(0)
   paidAmountIqd!: number;
 
-  @IsString()
-  proofPhotoUrl!: string;
+  // Proof photo is optional — plants opted out of mandatory tank photos to
+  // avoid the storage/bandwidth cost of an image on every walk-in sale.
+  @IsOptional() @IsString()
+  proofPhotoUrl?: string;
 
   @IsOptional()
   completionLng?: number;
@@ -210,6 +217,29 @@ export class OrdersController {
   }
 
   /**
+   * The pool of orders this driver can CLAIM — still PENDING + unassigned in
+   * their tenant. Drives the "طلبات متاحة" section of the worker home so the
+   * driver can accept an order from the list without opening it.
+   * Declared BEFORE any /:id route so "me/available" isn't matched as an id.
+   */
+  @RequireCapability('driver')
+  @Get('me/available')
+  async myAvailable(@CurrentUser() user: AuthUser) {
+    return this.orders.listAvailableForDrivers(user.tenantId!);
+  }
+
+  /**
+   * Claim an offered order (first-come, race-safe). Returns the claimed order,
+   * or 409 if another driver already took it.
+   */
+  @RequireCapability('driver')
+  @Post(':id/claim')
+  async claim(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    const driver = await this.drivers.getMyDriverProfile(user.id);
+    return this.orders.claim(id, driver.id, user.tenantId!);
+  }
+
+  /**
    * Walk-in sale recorded by a driver. Either `customerId` (existing
    * out-of-cycle customer) OR `walkinBuyerName/Phone/Liters` (one-off
    * passerby). Pre-completed in one POST.
@@ -281,5 +311,19 @@ export class OrdersController {
   @Post(':id/dispute')
   dispute(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: DisputeDto) {
     return this.orders.disputeRefill(id, user.id, dto.reason);
+  }
+
+  /**
+   * Single-order detail — used by the dashboard order page AND the customer's
+   * live-tracking screen. The service scopes by role (plant admin → tenant,
+   * customer → own order only) and includes the driver's live coordinates.
+   * Declared LAST so the bare `:id` param route never shadows the specific
+   * string routes above (`me`, `me/today`, `me/history`) — Express matches
+   * in declaration order, so `GET /orders/me` must resolve before `:id`.
+   */
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT, UserRole.CUSTOMER)
+  @Get(':id')
+  getById(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.orders.findOneForViewer(user, id);
   }
 }

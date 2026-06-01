@@ -90,17 +90,28 @@ export function useNearestPlant(lng: number | null, lat: number | null) {
   });
 }
 
+/**
+ * Place a refill order. Accepts either a bare customerId (legacy callers) or
+ * an object `{ customerId, addressId? }` so the customer can deliver to a
+ * specific saved address. `addressId` is optional — the backend falls back to
+ * the customer's default/home location when omitted.
+ */
 export function useCreateRefillOrder() {
   const qc = useQueryClient();
   const demo = useAuth((s) => s.demoMode);
   return useMutation({
-    mutationFn: async (customerId: string) => {
+    mutationFn: async (arg: string | { customerId: string; addressId?: string | null }) => {
+      const { customerId, addressId } =
+        typeof arg === 'string' ? { customerId: arg, addressId: undefined } : arg;
       if (demo) {
         // Pretend the order was placed instantly.
         await new Promise((r) => setTimeout(r, 600));
         return { id: 'r-demo-' + Date.now(), status: 'PENDING' };
       }
-      const { data } = await api.post('/orders', { customerId });
+      const { data } = await api.post('/orders', {
+        customerId,
+        ...(addressId ? { addressId } : {}),
+      });
       return data;
     },
     onSuccess: () => {

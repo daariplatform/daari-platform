@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>داري · منصّة المالك — تصميم مقترح</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --aqua-700:#0e7490; --aqua-600:#0891b2; --aqua-500:#06b6d4; --aqua-400:#22d3ee; --aqua-50:#ecfeff;
+    --green-600:#059669; --green-500:#10b981; --amber:#f59e0b; --red:#ef4444; --violet:#7c3aed; --blue:#2563eb;
+    --ink:#0f172a; --slate:#475569; --muted:#94a3b8; --line:#e8edf2; --bg:#f4f7fa; --card:#fff;
+    --shadow:0 1px 3px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.05);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
+  body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--ink);display:flex;min-height:100vh}
+  .banner{position:fixed;top:0;left:0;right:0;background:#0f172a;color:#fff;text-align:center;font-size:12.5px;padding:6px;z-index:99;font-weight:700}
+  .banner b{color:var(--aqua-400)}
+
+  /* ===== Sidebar ===== */
+  .sidebar{width:248px;flex:0 0 248px;background:linear-gradient(180deg,#0e2a33,#0b1f27);color:#cbeaf2;display:flex;flex-direction:column;padding:26px 16px 16px;position:sticky;top:0;height:100vh}
+  .brand{display:flex;align-items:center;gap:11px;padding:0 8px 22px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:14px}
+  .brand .logo{width:42px;height:42px;border-radius:13px;background:linear-gradient(135deg,var(--aqua-400),var(--aqua-700));display:flex;align-items:center;justify-content:center;font-size:22px}
+  .brand .t{font-weight:900;font-size:17px;color:#fff;line-height:1.2}
+  .brand .t small{display:block;font-size:11px;color:var(--aqua-400);font-weight:700}
+  .nav{display:flex;flex-direction:column;gap:3px;margin-top:6px}
+  .nav a{display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:12px;color:#9fc4cf;text-decoration:none;font-size:14px;font-weight:700}
+  .nav a .ic{width:20px;text-align:center}
+  .nav a:hover{background:rgba(255,255,255,.06);color:#fff}
+  .nav a.active{background:linear-gradient(120deg,var(--aqua-600),var(--aqua-500));color:#fff;box-shadow:0 8px 18px rgba(8,145,178,.35)}
+  .nav .sep{font-size:10.5px;color:#5b818c;padding:14px 13px 6px;font-weight:800;letter-spacing:.5px}
+  .side-foot{margin-top:auto;display:flex;align-items:center;gap:10px;padding:11px;background:rgba(255,255,255,.05);border-radius:13px}
+  .side-foot .av{width:36px;height:36px;border-radius:11px;background:linear-gradient(135deg,#34d399,#059669);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff}
+  .side-foot .nm{font-size:13px;font-weight:800;color:#fff}.side-foot .rl{font-size:10.5px;color:var(--aqua-400)}
+
+  /* ===== Main ===== */
+  .main{flex:1;padding:24px 28px 60px;margin-top:30px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
+  .topbar h1{font-size:24px;font-weight:900}.topbar .sub{font-size:13px;color:var(--muted);margin-top:3px}
+  .topbar .search{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px 14px;width:280px;color:var(--muted);font-size:13px;box-shadow:var(--shadow)}
+
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:18px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+  .kpi .ic{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:19px;margin-bottom:10px}
+  .kpi .lbl{font-size:12px;color:var(--muted);font-weight:700}
+  .kpi .val{font-size:23px;font-weight:900;margin-top:2px}
+  .kpi .delta{font-size:11.5px;font-weight:800;margin-top:6px;display:inline-flex;gap:4px;align-items:center}
+  .up{color:var(--green-600)}.down{color:var(--red)}
+  .i-aqua{background:var(--aqua-50);color:var(--aqua-700)} .i-green{background:#dcfce7;color:var(--green-600)}
+  .i-violet{background:#ede9fe;color:var(--violet)} .i-blue{background:#dbeafe;color:var(--blue)} .i-amber{background:#fef3c7;color:#b45309}
+
+  .grid2{display:grid;grid-template-columns:1.6fr 1fr;gap:16px;margin-bottom:18px}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:var(--shadow)}
+  .panel h3{font-size:15px;font-weight:800;margin-bottom:3px}.panel .ph{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+  .panel .ph small{font-size:11.5px;color:var(--muted)}
+  .chip{font-size:11px;font-weight:800;padding:5px 10px;border-radius:999px;background:var(--aqua-50);color:var(--aqua-700)}
+
+  /* bar chart */
+  .chart{display:flex;align-items:flex-end;gap:14px;height:160px;padding-top:10px}
+  .chart .col{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;height:100%;justify-content:flex-end}
+  .chart .bar{width:60%;border-radius:8px 8px 4px 4px;background:linear-gradient(180deg,var(--aqua-400),var(--aqua-600))}
+  .chart .cl{font-size:10.5px;color:var(--muted);font-weight:700}
+
+  /* donut */
+  .donut{width:150px;height:150px;border-radius:50%;margin:6px auto 12px;
+    background:conic-gradient(var(--aqua-600) 0 46%, var(--green-500) 46% 72%, var(--violet) 72% 90%, var(--amber) 90% 100%);
+    display:flex;align-items:center;justify-content:center;position:relative}
+  .donut::after{content:'';width:92px;height:92px;border-radius:50%;background:#fff}
+  .donut .mid{position:absolute;text-align:center}.donut .mid b{font-size:21px;font-weight:900}.donut .mid span{font-size:10.5px;color:var(--muted)}
+  .legend{display:flex;flex-direction:column;gap:8px}
+  .legend div{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700}
+  .legend .d{width:11px;height:11px;border-radius:3px}
+
+  /* table */
+  table{width:100%;border-collapse:collapse}
+  th{font-size:11.5px;color:var(--muted);font-weight:800;text-align:right;padding:0 10px 12px}
+  td{padding:12px 10px;border-top:1px solid var(--line);font-size:13px;font-weight:600}
+  .pl-av{width:30px;height:30px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:12px;margin-left:8px;vertical-align:middle}
+  .plan{font-size:11px;font-weight:800;padding:4px 9px;border-radius:8px}
+  .plan.pro{background:#dbeafe;color:var(--blue)} .plan.biz{background:#ede9fe;color:var(--violet)} .plan.st{background:#f1f5f9;color:var(--slate)}
+  .st-on{color:var(--green-600);font-weight:800;font-size:12px}.st-off{color:var(--red);font-weight:800;font-size:12px}
+  .tact{display:inline-flex;gap:6px}
+  .tbtn{font-size:11px;font-weight:800;padding:6px 11px;border-radius:9px;border:1px solid var(--line);background:#fff;color:var(--slate);cursor:pointer}
+  .tbtn.warn{color:var(--red);border-color:#fecaca}
+
+  /* health strip */
+  .health{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+  .hcard{background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px 15px;box-shadow:var(--shadow);display:flex;align-items:center;gap:11px}
+  .hdot{width:11px;height:11px;border-radius:50%;background:var(--green-500);box-shadow:0 0 0 4px #dcfce7}
+  .hcard .hl{font-size:12.5px;font-weight:800}.hcard .hs{font-size:11px;color:var(--muted)}
+</style>
+</head>
+<body>
+  <div class="banner">🎨 تصميم مقترح (mockup) للموافقة قبل البناء — أرقام عيّنة توضيحية. اللوحة الفعلية ستعرض بيانات معاملك الحقيقية. النطاق: <b>platform.phi-bit.com</b></div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">💧</div>
+      <div class="t">داري<small>منصّة المالك</small></div>
+    </div>
+    <nav class="nav">
+      <a class="active"><span class="ic">📊</span> نظرة عامة</a>
+      <a><span class="ic">🏭</span> المعامل</a>
+      <a><span class="ic">💰</span> الإيرادات والاشتراكات</a>
+      <a><span class="ic">👛</span> محافظ العروض</a>
+      <div class="sep">عبر كل المعامل</div>
+      <a><span class="ic">📦</span> الطلبات</a>
+      <a><span class="ic">🚚</span> السائقون</a>
+      <a><span class="ic">👥</span> الزبائن</a>
+      <div class="sep">النظام</div>
+      <a><span class="ic">❤️</span> صحة النظام</a>
+      <a><span class="ic">📜</span> سجل التدقيق</a>
+      <a><span class="ic">⚙️</span> الإعدادات</a>
+    </nav>
+    <div class="side-foot">
+      <div class="av">أ</div>
+      <div><div class="nm">أحمد العاني</div><div class="rl">مالك المنصّة</div></div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <h1>نظرة عامة على المنصّة</h1>
+        <div class="sub">كل معاملك في مكان واحد · تحديث لحظي</div>
+      </div>
+      <div class="search">🔎 ابحث عن معمل، طلب، سائق…</div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpis">
+      <div class="kpi"><div class="ic i-aqua">🏭</div><div class="lbl">المعامل النشطة</div><div class="val">12</div><div class="delta up">▲ +2 هذا الشهر</div></div>
+      <div class="kpi"><div class="ic i-green">💰</div><div class="lbl">الإيراد الشهري (MRR)</div><div class="val">٤٫٨ م د.ع</div><div class="delta up">▲ +14%</div></div>
+      <div class="kpi"><div class="ic i-blue">📦</div><div class="lbl">طلبات اليوم (الكل)</div><div class="val">348</div><div class="delta up">▲ +9%</div></div>
+      <div class="kpi"><div class="ic i-violet">🚚</div><div class="lbl">سائقون متصلون</div><div class="val">27</div><div class="delta">من 41 سائقاً</div></div>
+      <div class="kpi"><div class="ic i-amber">↩️</div><div class="lbl">نسبة الإلغاء</div><div class="val">3.2%</div><div class="delta down">▼ -0.4%</div></div>
+    </div>
+
+    <!-- Charts -->
+    <div class="grid2">
+      <div class="panel">
+        <div class="ph"><div><h3>الإيراد عبر الأشهر</h3><small>إجمالي اشتراكات المعامل</small></div><span class="chip">آخر 6 أشهر</span></div>
+        <div class="chart">
+          <div class="col"><div class="bar" style="height:42%"></div><div class="cl">كانون١</div></div>
+          <div class="col"><div class="bar" style="height:55%"></div><div class="cl">شباط</div></div>
+          <div class="col"><div class="bar" style="height:50%"></div><div class="cl">آذار</div></div>
+          <div class="col"><div class="bar" style="height:70%"></div><div class="cl">نيسان</div></div>
+          <div class="col"><div class="bar" style="height:82%"></div><div class="cl">أيار</div></div>
+          <div class="col"><div class="bar" style="height:100%"></div><div class="cl">حزيران</div></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="ph"><div><h3>توزيع الخطط</h3><small>المعامل حسب الاشتراك</small></div></div>
+        <div class="donut"><div class="mid"><b>12</b><span>معمل</span></div></div>
+        <div class="legend">
+          <div><span class="d" style="background:var(--aqua-600)"></span> Pro — 6 معامل</div>
+          <div><span class="d" style="background:var(--green-500)"></span> Business — 3</div>
+          <div><span class="d" style="background:var(--violet)"></span> Starter — 2</div>
+          <div><span class="d" style="background:var(--amber)"></span> Enterprise — 1</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- System health -->
+    <div class="health">
+      <div class="hcard"><span class="hdot"></span><div><div class="hl">API · يعمل</div><div class="hs">api.phi-bit.com · 200</div></div></div>
+      <div class="hcard"><span class="hdot"></span><div><div class="hl">قاعدة البيانات</div><div class="hs">PostgreSQL · صحّية</div></div></div>
+      <div class="hcard"><span class="hdot"></span><div><div class="hl">Redis · يعمل</div><div class="hs">الكاش + الطوابير</div></div></div>
+      <div class="hcard"><span class="hdot"></span><div><div class="hl">آخر نسخة احتياطية</div><div class="hs">اليوم 03:00 ص ✓</div></div></div>
+    </div>
+
+    <!-- Plants table -->
+    <div class="panel">
+      <div class="ph"><div><h3>المعامل</h3><small>كل المعامل المشتركة في المنصّة</small></div><span class="chip">+ إضافة معمل</span></div>
+      <table>
+        <thead><tr><th>المعمل</th><th>الخطة</th><th>طلبات الشهر</th><th>الإيراد</th><th>المحفظة</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="pl-av" style="background:linear-gradient(135deg,#22d3ee,#0e7490)">د</span> داري — الكرادة</td>
+            <td><span class="plan biz">Business</span></td><td>1,240</td><td>620,000 د.ع</td><td>180,000 د.ع</td>
+            <td><span class="st-on">● نشط</span></td>
+            <td class="tact"><button class="tbtn">عرض</button><button class="tbtn warn">تعليق</button></td>
+          </tr>
+          <tr>
+            <td><span class="pl-av" style="background:linear-gradient(135deg,#34d399,#059669)">م</span> معمل النور</td>
+            <td><span class="plan pro">Pro</span></td><td>820</td><td>410,000 د.ع</td><td>40,000 د.ع</td>
+            <td><span class="st-on">● نشط</span></td>
+            <td class="tact"><button class="tbtn">عرض</button><button class="tbtn warn">تعليق</button></td>
+          </tr>
+          <tr>
+            <td><span class="pl-av" style="background:linear-gradient(135deg,#a78bfa,#7c3aed)">ص</span> صافي ماء</td>
+            <td><span class="plan pro">Pro</span></td><td>540</td><td>270,000 د.ع</td><td>0 د.ع</td>
+            <td><span class="st-off">● متأخر دفع</span></td>
+            <td class="tact"><button class="tbtn">عرض</button><button class="tbtn warn">تعليق</button></td>
+          </tr>
+          <tr>
+            <td><span class="pl-av" style="background:linear-gradient(135deg,#fbbf24,#d97706)">ع</span> عين الحياة</td>
+            <td><span class="plan st">Starter</span></td><td>190</td><td>95,000 د.ع</td><td>15,000 د.ع</td>
+            <td><span class="st-on">● نشط</span></td>
+            <td class="tact"><button class="tbtn">عرض</button><button class="tbtn warn">تعليق</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</body>
+</html>

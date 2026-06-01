@@ -12,6 +12,10 @@ import { TanksModule } from './tanks/tanks.module';
 import { CustomersModule } from './customers/customers.module';
 import { DriversModule } from './drivers/drivers.module';
 import { OrdersModule } from './orders/orders.module';
+import { RatingsModule } from './ratings/ratings.module';
+import { CustomerAddressModule } from './customer-address/customer-address.module';
+import { ScheduledOrdersModule } from './scheduled-orders/scheduled-orders.module';
+import { CashHandoverModule } from './cash-handover/cash-handover.module';
 import { AccountingModule } from './accounting/accounting.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PlantModule } from './plant/plant.module';
@@ -96,6 +100,10 @@ const optionalModules: DynamicModule['imports'] = vendorsEnabled ? [VendorsModul
     CustomersModule,
     DriversModule,
     OrdersModule,
+    RatingsModule,
+    CustomerAddressModule,
+    ScheduledOrdersModule,
+    CashHandoverModule,
     AccountingModule,
     NotificationsModule,
     PlantModule,

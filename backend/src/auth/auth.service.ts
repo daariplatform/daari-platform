@@ -256,19 +256,40 @@ export class AuthService {
     return this.issueTokens(user.id, user.phone, user.role, user.tenantId);
   }
 
+  /**
+   * Rotating refresh: each refresh revokes the presented token and issues a
+   * fresh pair. To avoid a spurious logout we allow a short **reuse-grace
+   * window**: after the access token expires (15-min TTL) the app can fire
+   * several requests at once, each 401ing and racing to refresh — or a flaky
+   * connection may retry the same refresh. Rejecting the 2nd presentation
+   * would 401 → the client force-logs-out (the "placing an order logs me out"
+   * bug). So a token revoked within REUSE_GRACE_MS is still honoured (issues a
+   * fresh pair); only a token revoked long ago — a genuinely dead session — is
+   * rejected. This is the standard "refresh token reuse interval" pattern.
+   */
   async refresh(refreshToken: string) {
+    const REUSE_GRACE_MS = 30_000;
     const tokenHash = this.hashToken(refreshToken);
     const stored = await this.prisma.refreshToken.findUnique({
       where: { tokenHash },
       include: { user: true },
     });
-    if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
+    if (!stored || stored.expiresAt < new Date()) {
       throw new UnauthorizedException('Invalid refresh token');
     }
-    await this.prisma.refreshToken.update({
-      where: { id: stored.id },
-      data: { revokedAt: new Date() },
-    });
+    if (
+      stored.revokedAt &&
+      Date.now() - stored.revokedAt.getTime() > REUSE_GRACE_MS
+    ) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    // Revoke on first use only (a within-grace replay is already revoked).
+    if (!stored.revokedAt) {
+      await this.prisma.refreshToken.update({
+        where: { id: stored.id },
+        data: { revokedAt: new Date() },
+      });
+    }
     return this.issueTokens(
       stored.user.id,
       stored.user.phone,

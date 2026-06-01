@@ -1,148 +1,210 @@
 # داري — Daari Platform
 
-> **خدمات منزلك بضغطة زر**
+> **خدمات منزلك بضغطة زر** — منصّة SaaS عراقية متعدّدة المستأجرين (multi-tenant).
+> الإطلاق الأول: **توصيل مياه الشرب** من المعامل إلى البيوت.
 
-منصّة SaaS عراقية متعدّدة المستأجرين لإدارة الخدمات المنزلية. **الإطلاق الأول**: توصيل مياه الشرب من المعامل للبيوت. **الخدمات القادمة**: توصيل الغاز، تنظيف الخزانات، فلاتر RO، صيانة منزلية، وأكثر.
+**شركة Phi-Bit** · أحمد العاني · [phi-bit.com](https://phi-bit.com)
 
-**شركة Phi-Bit** | أحمد العاني | [phi-bit.com](https://phi-bit.com)
+هذا الملف هو **المرجع الكامل للفريق**. اقرأه أولاً قبل أي عمل على المشروع.
 
-## ما الذي بُني في هذه الجولة
+---
+
+## 1) نظرة عامة سريعة
+
+النظام يخدم **٤ أنواع مستخدمين**، عبر **٥ أسطح برمجية** كلها تتكلّم مع **API واحد**:
+
+| المستخدم | السطح | التقنية | الرابط الحيّ |
+|---|---|---|---|
+| الزبون | تطبيق موبايل | Expo / React Native | (Expo Go أثناء التطوير) |
+| السائق | تطبيق موبايل | Expo / React Native | (Expo Go أثناء التطوير) |
+| صاحب المعمل | لوحة ويب | Next.js 14 | https://daari-admin.phi-bit.com |
+| **مالك المنصّة (Ahmed)** | لوحة ويب منفصلة | Next.js 14 | https://platform.phi-bit.com |
+| (الكل) | الـ API | NestJS 10 | https://api.phi-bit.com/api/v1 |
+
+> **اللغة موحّدة: TypeScript** في كل الأسطح الخمسة (موبايل + ويب + باك إند). نفس الأنواع (types) والمنطق يُشارَك — هذه ميزة أساسية في الصيانة.
+
+---
+
+## 2) الخريطة المعمارية
 
 ```
-daari-platform/
-├── backend/          ✅ NestJS API كامل (Prisma + PostGIS + JWT + Capabilities + Cron + WhatsApp/SMS)
-├── dashboard/        ✅ Next.js لوحة المعمل (RTL، عربي، صفحات أساسية)
-├── mobile-customer/  ✅ Expo (React Native + TypeScript + NativeWind) — تطبيق الزبون
-├── mobile-worker/    ✅ Expo — تطبيق العاملين الموحّد: سائق + بائع متجول
-├── mockup.html       ✅ نموذج HTML تفاعلي للعرض السريع
-├── DEPLOYMENT.md     ✅ دليل النشر الكامل لـ App Store و Google Play
-└── docs/             📋 مرجع API
+                         ┌─────────────────────────────────────┐
+                         │   Backend API — NestJS 10 (TS)        │
+                         │   PostgreSQL + Prisma 5 · Redis ·     │
+                         │   BullMQ · JWT + Capabilities · Cron  │
+                         │   api.phi-bit.com/api/v1              │
+                         └───────────────────┬───────────────────┘
+                                             │  REST (JWT Bearer)
+       ┌──────────────┬──────────────┬───────┴───────┬───────────────────┐
+       ▼              ▼              ▼               ▼                   ▼
+  تطبيق الزبون    تطبيق السائق   لوحة المعمل      لوحة المنصّة         Webhooks
+  Expo/RN         Expo/RN        Next.js          Next.js            (WhatsApp/SMS)
+  (mobile-        (mobile-       (dashboard)      (platform-console)
+   customer)       worker)       daari-admin      platform.phi-bit
+
+  خدمات خارجية:  Apple/Google Maps · WhatsApp · SMS (otpiq) · FCM Push · Zoho SMTP · Sentry · PostHog
 ```
 
-> **معمارية تطبيقَين** (وليس ٤): تطبيق خفيف للزبون بأذونات قليلة، وتطبيق ثقيل للعاملين. مستخدم واحد قد يحمل قدرتَي `driver` و `vendor` معاً ويبدّل بينهما داخل تطبيق العاملين.
+**ملاحظة مهمّة:** المنصّة **TypeScript بالكامل** — التطبيقات بُنيت بـ **Expo (React Native)**، **ليست Flutter**. (نسخة قديمة من هذا الملف ذكرت Flutter بالخطأ.)
 
-| المكوّن | الحالة | الوصف |
-|---|---|---|
-| Backend API | ✅ مكتمل وقابل للتشغيل | auth (JWT + capabilities)، tenants، tanks، customers، drivers، orders، accounting، vendors، notifications |
-| نموذج البيانات Prisma | ✅ مكتمل | جميع الجداول مع علاقات multi-tenant |
-| نظام القدرات (Capabilities) | ✅ | مستخدم واحد يحمل `driver` + `vendor` في آن واحد، Backend يفرض الصلاحيات تلقائياً |
-| لوحة Next.js | ✅ صفحات رئيسية | تسجيل دخول، Dashboard، الخزانات، الزبائن، الطلبات، المحاسبة |
-| **تطبيق الزبون (Expo)** | ✅ المعمار + الشاشات الأساسية | auth (OTP)، onboarding 4 خطوات، home، orders، profile |
-| **تطبيق العامل (Expo)** | ✅ المعمار + الشاشات الأساسية | role picker، login، today tasks، arrival flow، walk-in lookup/register، reclaim، wallet — مع offline queue و background GPS |
+---
 
-## التشغيل المحلي
+## 3) هيكل المستودع
+
+```
+maa-platform/
+├── backend/            NestJS API (Prisma + PostgreSQL + Redis + BullMQ)        → /var/www/daari-water-api
+├── mobile-customer/    تطبيق الزبون (Expo SDK 54 + expo-router + nativewind)     → Metro :8087
+├── mobile-worker/      تطبيق السائق (Expo SDK 54)                                 → Metro :8086
+├── dashboard/          لوحة المعمل (Next.js 14 + Tailwind + recharts)            → daari-admin.phi-bit.com :3005
+├── platform-console/   لوحة مالك المنصّة (Next.js 14) — جديدة                     → platform.phi-bit.com :3011
+├── mobile-admin/        (قديم — حُوِّل لـ PWA؛ متروك، لا تطوّره)
+├── docs/               توثيق (api-reference, MONITORING, UPTIMEROBOT)
+├── legal/ · store-assets/ · deploy/ · scripts/
+└── README.md           ← هذا الملف
+```
+
+كل تطبيق موبايل + كل لوحة فيها مجلّد `design/` فيه **mockups HTML** للتصاميم المعتمدة (افتحها في المتصفح).
+
+---
+
+## 4) التشغيل المحلي (التطوير)
 
 ### المتطلبات
-- Node.js 20+
-- Docker (لـ Postgres + Redis)
-- Flutter SDK 3.x (لتطبيقات الموبايل لاحقاً)
+- Node.js 20+ · Docker (لـ Postgres + Redis محلياً) · Expo Go على هاتفك أو iOS Simulator.
+
+### مهم جداً — جدول المنافذ الثابتة (لا تغيّرها)
+| المكوّن | المنفذ | الأمر |
+|---|---|---|
+| Backend API | `3000` (محلي) / `3004` (إنتاج) | `npm run start:dev` |
+| لوحة المعمل | `3005` | `npm run dev` |
+| لوحة المنصّة | `3011` | `npm run dev` |
+| Metro — الزبون | `8087` | `npx expo start --port 8087` |
+| Metro — السائق | `8086` | `npx expo start --port 8086` |
 
 ### Backend
-
 ```bash
 cd backend
-cp .env.example .env       # عدّل الأسرار
-docker compose up -d       # Postgres (PostGIS) + Redis
+cp .env.example .env          # عدّل الأسرار (DB, JWT_SECRET, ...)
+docker compose up -d          # Postgres + Redis
 npm install
-npm run prisma:migrate     # ينشئ المخطّط
-npm run prisma:seed        # بيانات تجريبية: معمل + سائق + ٣ خزانات + زبونان
-npm run start:dev          # http://localhost:3000/api/v1
-                           # Swagger:    http://localhost:3000/api/docs
+npx prisma generate
+npx prisma db push            # ⚠️ المشروع يستخدم db push وليس migrations
+npm run prisma:seed           # بيانات تجريبية
+npm run start:dev             # http://localhost:3000/api/v1  (Swagger: /api/docs)
 ```
 
-بيانات تسجيل الدخول للمعمل التجريبي:
-- **هاتف**: `07700000001`
-- **كلمة المرور**: `password123`
-
-### Dashboard
-
+### التطبيقات (الزبون / السائق)
 ```bash
-cd dashboard
+cd mobile-customer            # أو mobile-worker
 npm install
-npm run dev                # http://localhost:3001
+npx expo start --port 8087    # 8086 للسائق — امسح QR بـ Expo Go
 ```
 
-### تطبيقات Expo (الزبون + العامل)
-
+### اللوحات (المعمل / المنصّة)
 ```bash
-# لكل من mobile-customer و mobile-worker:
-cd mobile-customer
+cd dashboard                  # أو platform-console
 npm install
-npx expo login             # أو eas login إن نشرت
-npx expo start             # امسح QR بـ Expo Go على هاتفك
+npm run dev                   # 3005 للمعمل / 3011 للمنصّة
 ```
 
-للنشر للمتاجر — راجع [DEPLOYMENT.md](DEPLOYMENT.md). الخطوات الرئيسية:
+---
 
-```bash
-eas init                                              # ربط بحساب Expo
-eas build --profile production --platform android     # بناء AAB
-eas submit --platform android                         # رفع لـ Play Store
-eas update --auto                                     # تحديث OTA فوري
-```
+## 5) الأدوار والصلاحيات (Capabilities)
 
-## الخريطة المعمارية
+كل مستخدم له `role` أساسي، وقدراته تُحسَب تلقائياً ويفرضها الـ Backend عبر `RolesGuard`/`@RequireCapability`:
 
-```
-                      ┌──────────────────────────────┐
-                      │      Backend NestJS API       │
-                      │  PostgreSQL + PostGIS + Redis │
-                      └──────────────┬───────────────┘
-                                     │
-        ┌────────────────┬───────────┴────────────┬────────────┐
-        ▼                ▼                        ▼            ▼
-  لوحة المعمل      تطبيق الزبون            تطبيق العاملين    Webhooks
-  (Next.js)        (Flutter)                (Flutter)       (WhatsApp)
-                                            ├─ وضع السائق
-                                            └─ وضع البائع
-
-   خدمات:  Google Maps · WhatsApp Business · ZainCash · SMS · FCM
-```
-
-## نظام الصلاحيات (Capabilities)
-
-كل مستخدم له `role` أساسي، لكن قدراته الفعلية تُحسَب من ملفاته الجانبية:
-
-| Capability | يحصل عليها مَن؟ |
+| Capability | يحصل عليها |
 |---|---|
-| `customer` | كل من أنشأ حساباً ذاتياً عبر OTP |
-| `driver` | من فتح له المعمل ملف Driver وكلّفه بسائق |
-| `vendor` | من سجّل بيانات مركبته **وحصل على موافقة** الـ platform_admin |
-| `plant_admin` | OWNER / MANAGER / ACCOUNTANT للمعمل |
-| `platform_admin` | إدارة المنصة |
+| `customer` | الزبون |
+| `driver` | سائق فتح له المعمل ملفاً |
+| `plant_admin` | OWNER / MANAGER / ACCOUNTANT لمعمل |
+| `platform_admin` | مالك المنصّة (Ahmed) — عبر كل المعامل، `tenantId = null` |
 
-**مثال على الجمع**: سائق معمل (يملك `driver`) يستطيع التسجيل كبائع مستقل عبر `POST /vendors/me/register`، فيصبح JWT الخاص به: `capabilities: ["driver", "vendor"]`. تطبيق العاملين يكشف هذا ويُظهر له مفتاح التبديل.
-
-## مكوّنات Backend الرئيسية
-
-| المسار | الغرض | المسارات API |
+### حسابات تجريبية (على البروداكشن — معمل `demo-tenant`)
+| الدور | الهاتف | كلمة السر |
 |---|---|---|
-| `auth/` | JWT + refresh tokens + OTP للزبون | POST /auth/login, /auth/login/otp, /auth/refresh |
-| `tenants/` | تسجيل المعامل + إحصاءات لوحة | POST /tenants/register, GET /tenants/me/stats |
-| `tanks/` | جرد، QR، تخصيص للزبائن، سحب | CRUD + /tanks/qr/:code + /tanks/:id/assign |
-| `customers/` | CRM + حالة صحية (active/at_risk) | CRUD |
-| `drivers/` | حساب السائق + GPS + أداء شهري | CRUD + /drivers/me/location, /drivers/:id/performance |
-| `orders/` | RefillOrder كامل (تعبئة/توصيل/سحب) | CRUD + assign + start + complete + cancel |
-| `accounting/` | مصاريف + رواتب + P&L | CRUD expenses, salaries, GET /accounting/pnl |
-| `vendors/` | البائع المتجول + المطابقة + المحفظة | CRUD + delivery orders + match + accept |
-| `notifications/` | WhatsApp + SMS + سجل + جدولة يومية | جدولة Cron 9 صباحاً + سجل |
+| الزبون | `07710000001` | `password123` |
+| السائق | `07700000002` | `password123` |
+| صاحب المعمل | `07700000001` | `password123` |
+| **مالك المنصّة** | `07752222558` | `DaariOwner@2026` (مؤقتة) |
 
-## نموذج العمل (Pricing)
+> 🔒 كلها كلمات seed افتراضية — **غيّرها قبل أي استخدام حقيقي**.
 
-ثلاث خطط اشتراك للمعامل:
-- **Basic** — ٥٠,٠٠٠ د/شهر · حتى ١٠٠ زبون
-- **Pro** — ١٥٠,٠٠٠ د/شهر · حتى ٥٠٠ زبون + المحاسبة الكاملة
-- **Business** — ٣٠٠,٠٠٠ د/شهر · غير محدود + API
+---
 
-عمولة المنصة على البائعين المتجولين: **٨٪** من قيمة كل طلب.
+## 6) التدفّقات الرئيسية
 
-## الخطوة التالية (مرتّبة)
+### دورة حياة طلب التعبئة
+```
+الزبون يطلب → PENDING (بركة عروض، بلا سائق)
+   → سائق يضغط «قبول» (claim, أول من يضغط يفوز) → ASSIGNED
+   → السائق يبدأ → EN_ROUTE (الزبون يرى موقعه على الخريطة)
+   → يصل ويعبّئ ويُحصّل نقداً → COMPLETED  (أو FAILED / CANCELLED)
+```
 
-1. **اختبارات end-to-end** على Backend (Jest + supertest):
-   - `auth → create customer → assign tank → create order → complete → balance updated`
-2. **بناء تطبيق السائق Flutter** (الأهم بعد Backend):
-   - راجع `mobile-driver/README.md`
-   - الميزات الحرجة: GPS ping، QR scan، Offline queue
-3. **WhatsApp Business API** — إعداد حساب Meta + قالب رسائل (`refill_reminder_ar`).
-4. **خرائط حقيقية في Dashboard** — Google Maps JS SDK لعرض الخزانات والسائقين.
-5. **اختبار ميداني** — معمل واحد في بغداد، شهر، مع متابعة يومية.
+**نموذج «العرض والمنافسة» (claim):** الطلبات الجديدة **لا تُسنَد تلقائياً** — تدخل بركة `GET /orders/me/available`، وأول سائق ينادي `POST /orders/:id/claim` يأخذها (atomic، آمن ضد التسابق). المدير يستطيع الإسناد يدوياً كاحتياطي.
+
+- **الدفع: نقدي عند التسليم فقط.** لا صورة إثبات (توفيراً للذاكرة).
+- التتبّع الحيّ + ETA حقيقي عبر إحداثيات السائق.
+
+---
+
+## 7) مكوّنات الـ Backend
+
+| الموديول | الغرض | أمثلة Endpoints |
+|---|---|---|
+| `auth/` | JWT + refresh (rotating, نافذة سماح 30s) + OTP | `/auth/login`, `/auth/refresh`, `/auth/me` |
+| `orders/` | دورة الطلب + **claim** + الإلغاء + التقييم | `/orders`, `/orders/me/available`, `/orders/:id/claim` |
+| `customers/` | CRM + العناوين المتعدّدة + الجدولة التلقائية | `/customers`, `/customers/me/addresses`, `/customers/me/schedules` |
+| `drivers/` | السائق + GPS + الأرباح + ملخص الوردية + جرد الفان | `/drivers/me/earnings`, `/drivers/me/van-inventory` |
+| `cash-handover/` | تسوية نقد السائق | `/drivers/me/cash-handover`, `/plant/cash-handovers` |
+| `ratings/` | تقييم الزبون بعد التوصيل | `/orders/:id/rate`, `/drivers/:id/ratings` |
+| `tanks/` `accounting/` `notifications/` `plant/` | الخزانات · المحاسبة · WhatsApp/SMS · إحصاءات المعمل | — |
+| `platform-admin/` | **لوحة المنصّة** — كل المعامل + الإيرادات + الإجراءات | `/platform/overview`, `/platform/plants`, `/platform/wallets` |
+
+كل مسارات `/platform/*` محميّة بـ `@Roles(PLATFORM_ADMIN)`.
+
+---
+
+## 8) النشر (Deployment)
+
+كل شيء على **VPS واحد** (Contabo `45.84.138.119`, Ubuntu 24.04) — **لا تنشئ سيرفراً جديداً**.
+
+| الخدمة (systemd) | المنفذ | المسار | النطاق |
+|---|---|---|---|
+| `daari-water-api` | 3004 | `/var/www/daari-water-api` | api.phi-bit.com |
+| `daari-water-dashboard` | 3005 | `/var/www/daari-water-dashboard` | daari-admin.phi-bit.com |
+| `platform-console` | 3011 | `/var/www/platform-console` | platform.phi-bit.com |
+| `daari-customer-metro` | 8087 | `/var/www/daari-customer-mobile` | (تطوير) |
+| `daari-worker-metro` | 8086 | `/var/www/daari-worker-mobile` | (تطوير) |
+
+**دورة النشر** (باك إند مثالاً): `npm run build` محلياً → `rsync dist/src` للسيرفر → `systemctl restart daari-water-api`.
+**للموبايل في الإنتاج:** الطريق الصحيح هو **`eas build`** (تطبيق مستقل، لا يعتمد على Metro).
+
+> راجع `/root/PROJECTS.md` على السيرفر — هو **المرجع الوحيد** للمنافذ والخدمات والـ vhosts. حدّثه قبل أي نشر جديد.
+
+---
+
+## 9) قواعد ومزالق مهمّة للفريق (تجنّب هذه الأخطاء)
+
+- **db push وليس migrations** — لا تشغّل `prisma migrate` على الإنتاج. (الـ Prisma يقرأ `schema.prisma` الجذري على السيرفر.)
+- **ValidationPipe صارم** (`forbidNonWhitelisted: true`) — أي حقل زائد في جسم الطلب = خطأ 400. أرسل الحقول المسموحة فقط.
+- **reanimated 4 (الموبايل):** لا تكتب/تقرأ `sharedValue.value` أثناء الـ render (فقط داخل `useEffect` أو معالج حدث)، ولا تنادِ دالة JS عادية داخل worklet. مخالفة ذلك = انهيار التطبيق بالكامل.
+- **react-native-maps:** لا تمرّر إحداثيات غير صالحة / منطقة خريطة عملاقة لـ `MapView` — MapKit تنهار. قيّد الـ region وتحقق من finite.
+- **توكن التجديد one-time-use** — لا تُطلق عمليتَي refresh متزامنتين (الـ client single-flight يضمن ذلك).
+- **المنافذ ثابتة** (الجدول أعلاه) — لا تشغّل Metro/dev server على منفذ مشروع آخر.
+
+---
+
+## 10) نموذج العمل
+
+خطط اشتراك المعامل (شهرياً، IQD): **STARTER · PRO · BUSINESS · ENTERPRISE**.
+محفظة العروض: المعمل يدفع نقداً لـ Ahmed، وAhmed يشحن المحفظة من لوحة المنصّة (`/platform/wallets`).
+
+---
+
+## 11) المراقبة والتوثيق
+- `docs/api-reference.md` — مرجع الـ API.
+- `docs/MONITORING.md` · `docs/UPTIMEROBOT.md` — Sentry + UptimeRobot + التنبيهات.
+- mockups التصاميم: `mobile-worker/design/`, `dashboard/design/`.

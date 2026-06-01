@@ -93,11 +93,12 @@ export default function DashboardHome() {
   }
   if (!data) return null;
 
-  // Default to last 7 days if backend doesn't return revenueByDay yet
-  const revenueData =
-    data.revenueByDay && data.revenueByDay.length > 0
-      ? data.revenueByDay
-      : generateMockTrend(data.monthRevenueIqd ?? 0);
+  // Audit found the home page fabricated a 7-day trend with Math.random()
+  // when the backend returned no data — misleading the plant admin into
+  // thinking they had revenue history when they didn't. We now render an
+  // empty-state placeholder instead. The real series comes from the
+  // backend `/plant/kpis` → `revenueByDay` field once orders exist.
+  const revenueData = data.revenueByDay ?? [];
 
   return (
     <div className="space-y-6">
@@ -224,32 +225,45 @@ export default function DashboardHome() {
               التفاصيل <ArrowUpRight size={14} />
             </Link>
           </div>
-          <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={revenueData}>
-              <defs>
-                <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#0891b2" stopOpacity={0.4} />
-                  <stop offset="100%" stopColor="#0891b2" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="date" stroke="#94a3b8" fontSize={11} />
-              <YAxis stroke="#94a3b8" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-              <Tooltip
-                formatter={(v: any) => iqd(v as number)}
-                contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0' }}
-              />
-              <Line
-                type="monotone"
-                dataKey="revenueIqd"
-                stroke="#0891b2"
-                strokeWidth={3}
-                dot={{ r: 5, fill: '#0891b2', strokeWidth: 2, stroke: 'white' }}
-                activeDot={{ r: 7 }}
-                fill="url(#revGrad)"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          {revenueData.length === 0 ? (
+            <div className="h-[240px] flex flex-col items-center justify-center text-center">
+              <p className="text-sm font-bold text-slate-700">لا توجد بيانات إيرادات بعد</p>
+              <p className="text-xs text-slate-500 mt-1">
+                ستظهر هنا تلقائياً بعد أول طلب مكتمل
+              </p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={revenueData}>
+                <defs>
+                  <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#0891b2" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="#0891b2" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="date" stroke="#94a3b8" fontSize={11} />
+                <YAxis
+                  stroke="#94a3b8"
+                  fontSize={11}
+                  tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                />
+                <Tooltip
+                  formatter={(v: any) => iqd(v as number)}
+                  contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0' }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="revenueIqd"
+                  stroke="#0891b2"
+                  strokeWidth={3}
+                  dot={{ r: 5, fill: '#0891b2', strokeWidth: 2, stroke: 'white' }}
+                  activeDot={{ r: 7 }}
+                  fill="url(#revGrad)"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
         {/* Top customers (1/3 width) */}
@@ -400,13 +414,7 @@ function Kpi({
   );
 }
 
-// Fallback if backend doesn't provide trend yet
-function generateMockTrend(monthRevenue: number): Array<{ date: string; revenueIqd: number; refills: number }> {
-  const days = ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
-  const avg = Math.floor((monthRevenue || 100000) / 30);
-  return days.map((d, idx) => ({
-    date: d,
-    revenueIqd: Math.floor(avg * (0.7 + Math.random() * 0.8)),
-    refills: 5 + Math.floor(Math.random() * 12),
-  }));
-}
+// `generateMockTrend` was removed in the integration audit — it fabricated
+// 7 days of Math.random() revenue when the backend returned no data, which
+// misled plant admins into thinking they had real history. Empty state is
+// rendered inline instead.

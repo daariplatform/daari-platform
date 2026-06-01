@@ -122,7 +122,12 @@ export default function SubscriptionPage() {
         </div>
       </div>
 
-      {/* Tier cards */}
+      {/* Tier cards — each non-current plan now exposes an "upgrade via
+          WhatsApp" link that opens wa.me with a pre-filled message to the
+          PhiBit support number. Self-serve billing isn't built (Iraqi cards
+          don't work with Stripe/PayPal), so WhatsApp + manual bank transfer
+          is the actual conversion path. Audit found the previous design
+          was just informational with no way for the plant to act. */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         {(['STARTER', 'PRO', 'BUSINESS', 'ENTERPRISE'] as const).map((p) => (
           <PlanCard
@@ -223,6 +228,14 @@ export default function SubscriptionPage() {
   );
 }
 
+/**
+ * PhiBit support number for billing. Hardcoded to Ahmed's WhatsApp from
+ * the global PhiBit CLAUDE.md. Plants click "ترقية" → wa.me opens with a
+ * prefilled Arabic message identifying the plant + the requested tier, so
+ * Ahmed can confirm the bank transfer + flip the plan in /platform.
+ */
+const SUPPORT_WHATSAPP = '9647752222558';
+
 function PlanCard({
   plan,
   current,
@@ -235,6 +248,12 @@ function PlanCard({
   priceIqd: number;
 }) {
   const isCurrent = plan === current;
+  function openUpgradeChat() {
+    const msg = encodeURIComponent(
+      `مرحباً، أرغب بترقية اشتراك معملي إلى خطة ${plan}. الخطة الحالية: ${current}.`,
+    );
+    window.open(`https://wa.me/${SUPPORT_WHATSAPP}?text=${msg}`, '_blank');
+  }
   return (
     <div
       className={`rounded-xl border p-4 ${
@@ -257,6 +276,16 @@ function PlanCard({
           ? 'عمليات غير محدودة'
           : `${opsLimit.toLocaleString('ar-IQ')} عملية/شهر`}
       </p>
+      {!isCurrent && (
+        <button
+          type="button"
+          onClick={openUpgradeChat}
+          className="mt-3 w-full text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg py-2 flex items-center justify-center gap-1.5"
+        >
+          <MessageSquare size={12} />
+          ترقية عبر واتساب
+        </button>
+      )}
     </div>
   );
 }
@@ -285,6 +314,11 @@ function ComposeModal({
         </div>
 
         <div className="space-y-3">
+          {/* Channel picker — WhatsApp blast button used to be permanently
+              disabled with "(قريباً)". Backend `/plant/promo-blast` accepts
+              `channel: WHATSAPP` and routes through the same Wassenger
+              integration used for order confirmations, so it's wired up
+              now. The price line below reminds plants of the cost. */}
           <div className="flex gap-2">
             <button
               type="button"
@@ -306,7 +340,7 @@ function ComposeModal({
                   : 'bg-white border-slate-200 text-slate-500'
               }`}
             >
-              💬 WhatsApp (قريباً)
+              💬 WhatsApp
             </button>
           </div>
 
@@ -340,7 +374,7 @@ function ComposeModal({
           </button>
           <button
             onClick={() => onSubmit({ title, body, channel })}
-            disabled={!canSubmit || isPending || channel === 'WHATSAPP'}
+            disabled={!canSubmit || isPending}
             className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
           >
             {isPending ? 'جارٍ الإرسال...' : 'إرسال العرض'}

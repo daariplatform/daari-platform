@@ -1,0 +1,82 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { api, setTokens } from '@/lib/api';
+import { identifyPlantAdmin, trackEvent } from '@/lib/posthog';
+
+export default function LoginPage() {
+  const router = useRouter();
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const { data } = await api.post('/auth/login', { phone, password });
+      setTokens(data.accessToken, data.refreshToken);
+      if (data.user?.id) {
+        identifyPlantAdmin(data.user.id, {
+          phone: data.user.phone,
+          role: data.user.role,
+          tenantId: data.user.tenantId,
+        });
+      }
+      trackEvent('login_success', { role: data.user?.role ?? 'unknown' });
+      router.push('/dashboard');
+    } catch (err: any) {
+      trackEvent('login_failed', { reason: err.response?.status ?? 'network' });
+      setError(err.response?.data?.message ?? 'فشل تسجيل الدخول');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <main className="min-h-screen flex items-center justify-center px-4">
+      <form
+        onSubmit={onSubmit}
+        className="w-full max-w-sm bg-white rounded-2xl shadow-sm p-8 space-y-4"
+      >
+        <h1 className="text-2xl font-bold text-primary-700 text-center">دخول مالك المنصّة</h1>
+        <p className="text-center text-sm text-slate-500 -mt-2">داري · لوحة تحكّم المنصّة</p>
+
+        <div>
+          <label className="block text-sm mb-1">رقم الهاتف</label>
+          <input
+            type="tel"
+            placeholder="07XXXXXXXXX"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 outline-none"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm mb-1">كلمة المرور</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 outline-none"
+            required
+          />
+        </div>
+
+        {error && <p className="text-red-600 text-sm text-center">{error}</p>}
+
+        <button
+          disabled={loading}
+          className="w-full rounded-lg bg-primary-600 text-white py-2.5 hover:bg-primary-700 disabled:opacity-50"
+        >
+          {loading ? 'جاري الدخول…' : 'دخول'}
+        </button>
+      </form>
+    </main>
+  );
+}
