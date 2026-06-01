@@ -11,6 +11,7 @@ import {
   useActivePromo,
   type ActivePromo,
 } from '@/lib/queries';
+import { useMyAddresses, ADDRESS_LABEL_META } from '@/lib/features/addresses';
 import { useRouter } from 'expo-router';
 import { usePostHog } from 'posthog-react-native';
 import { track } from '@/lib/posthog';
@@ -19,6 +20,7 @@ import { RefillStatusStrip } from '@/components/RefillStatusStrip';
 import { RecentActivityList } from '@/components/RecentActivityList';
 import { RainBackground } from '@/components/RainBackground';
 import { Skeleton, SkeletonCard } from '@/components/Skeleton';
+import { useAuth } from '@/lib/auth-store';
 import { hap } from '@/lib/haptics';
 import { useState, useEffect } from 'react';
 import Animated, {
@@ -37,11 +39,23 @@ import Animated, {
  */
 export default function Home() {
   const router = useRouter();
-  const { data: profile, isLoading } = useMyProfile();
+  const { data: profile, isLoading, isError, refetch } = useMyProfile();
+  const { logout } = useAuth();
   const { data: orders } = useMyOrders();
   const { data: activePromo } = useActivePromo();
+  const { data: addresses } = useMyAddresses();
   const createOrder = useCreateRefillOrder();
   const ph = usePostHog();
+
+  // Which saved address to deliver to. Defaults to the customer's default
+  // address (or none → backend uses the home location).
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  useEffect(() => {
+    if (addresses && addresses.length > 0 && selectedAddressId === null) {
+      const def = addresses.find((a) => a.isDefault) ?? addresses[0];
+      setSelectedAddressId(def.id);
+    }
+  }, [addresses, selectedAddressId]);
 
   // Find an in-flight refill — used to disable the order button so the
   // customer can't pile up duplicate requests for the same tank. Matches
@@ -62,7 +76,11 @@ export default function Home() {
     }
     hap.press();
     try {
-      await createOrder.mutateAsync(profile.id);
+      await createOrder.mutateAsync({
+        customerId: profile.id,
+        // Only attach when the customer has saved addresses to choose from.
+        addressId: addresses && addresses.length > 0 ? selectedAddressId : undefined,
+      });
       hap.success();
       track(ph, 'order_created', {
         priceIqd: activePromo?.promoPriceIqd ?? profile.refillPriceIqd,
@@ -73,11 +91,80 @@ export default function Home() {
         // tenant-level setting; we omit it here and the worker fires the
         // detailed event with liters in `order_completed`.
       });
-      Alert.alert('تم إرسال طلبك للمعمل', 'سيصل السائق خلال ساعة');
+      Alert.alert('تم إرسال طلبك للمعمل', 'سيتولّى سائق طلبك ويمكنك متابعته على الخريطة.');
     } catch (err: any) {
       hap.error();
       Alert.alert('خطأ', err?.response?.data?.message ?? 'حاول مرة أخرى');
     }
+  }
+
+  // Settled error (not just loading) — previously `isLoading || !profile`
+  // kept the screen on skeletons forever when /customers/me failed (e.g. an
+  // unlinked Customer record, or a transient server error). Now we surface a
+  // real error state with retry + logout so the customer is never stuck.
+  if (!isLoading && (isError || !profile)) {
+    return (
+      <View className="flex-1 bg-slate-50">
+        <SafeAreaView edges={['top']} style={{ flex: 1 }}>
+          <View
+            style={{
+              flex: 1,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 32,
+            }}
+          >
+            <MaterialIcons name="cloud-off" size={56} color="#94a3b8" />
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: '700',
+                color: '#0f172a',
+                marginTop: 14,
+                textAlign: 'center',
+              }}
+            >
+              تعذّر تحميل بياناتك
+            </Text>
+            <Text
+              style={{
+                fontSize: 13,
+                color: '#64748b',
+                marginTop: 6,
+                textAlign: 'center',
+                lineHeight: 20,
+              }}
+            >
+              تأكّد من اتصالك بالإنترنت وحاول مرة أخرى. إذا استمرّت المشكلة سجّل
+              الخروج وادخل من جديد.
+            </Text>
+            <Pressable
+              onPress={() => refetch()}
+              style={{
+                backgroundColor: '#0284c7',
+                borderRadius: 14,
+                paddingVertical: 12,
+                paddingHorizontal: 28,
+                marginTop: 20,
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700' }}>إعادة المحاولة</Text>
+            </Pressable>
+            <Pressable
+              onPress={async () => {
+                await logout();
+                router.replace('/(auth)/welcome' as any);
+              }}
+              style={{ marginTop: 14, paddingVertical: 8 }}
+            >
+              <Text style={{ color: '#dc2626', fontWeight: '700', fontSize: 13 }}>
+                تسجيل الخروج
+              </Text>
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      </View>
+    );
   }
 
   if (isLoading || !profile) {
@@ -174,6 +261,49 @@ export default function Home() {
         showsVerticalScrollIndicator={false}
       >
         <View className="px-4" style={{ marginTop: 12 }}>
+          {/* Saved-address selector — only when the customer saved >1 address
+              AND has no in-flight order (the CTA becomes "track" then). */}
+          {!activeOrder && addresses && addresses.length > 1 && (
+            <MotiView
+              from={{ opacity: 0, translateY: -8 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ type: 'timing', delay: 350, duration: 400 }}
+              style={{ marginBottom: 10 }}
+            >
+              <Text style={{ fontSize: 11, color: '#64748b', textAlign: 'right', marginBottom: 6, fontWeight: '700' }}>
+                توصيل إلى
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View className="flex-row-reverse gap-2">
+                  {addresses.map((a) => {
+                    const active = selectedAddressId === a.id;
+                    const meta = ADDRESS_LABEL_META[a.label] ?? ADDRESS_LABEL_META.CUSTOM;
+                    return (
+                      <Pressable key={a.id} onPress={() => { hap.tap(); setSelectedAddressId(a.id); }}>
+                        <View
+                          style={{
+                            flexDirection: 'row-reverse',
+                            alignItems: 'center',
+                            gap: 6,
+                            paddingHorizontal: 12,
+                            paddingVertical: 8,
+                            borderRadius: 12,
+                            backgroundColor: active ? meta.grad[1] : '#fff',
+                            borderWidth: 1,
+                            borderColor: active ? meta.grad[1] : '#e2e8f0',
+                          }}
+                        >
+                          <Ionicons name={meta.icon} size={14} color={active ? '#fff' : meta.grad[1]} />
+                          <Text style={{ color: active ? '#fff' : '#475569', fontSize: 12, fontWeight: '700' }}>{a.title}</Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            </MotiView>
+          )}
+
           {/* Big order CTA — with pulse animation when idle */}
           <MotiView
             from={{ opacity: 0, scale: 0.9 }}
@@ -220,6 +350,38 @@ export default function Home() {
               />
             )}
           </View>
+
+          {/* Auto-refill hint — nudge toward the scheduled-orders feature. */}
+          <MotiView
+            from={{ opacity: 0, translateY: 12 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', delay: 600, duration: 500 }}
+            style={{ marginTop: 12 }}
+          >
+            <Pressable onPress={() => { hap.tap(); router.push('/schedules'); }}>
+              <View
+                style={{
+                  backgroundColor: '#ecfeff',
+                  borderColor: '#a5f3fc',
+                  borderWidth: 1,
+                  borderRadius: 16,
+                  padding: 12,
+                  flexDirection: 'row-reverse',
+                  alignItems: 'center',
+                  gap: 10,
+                }}
+              >
+                <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: '#cffafe', alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="repeat" size={20} color="#0891b2" />
+                </View>
+                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                  <Text style={{ color: '#0e7490', fontWeight: '800', fontSize: 13 }}>فعّل التعبئة التلقائية</Text>
+                  <Text style={{ color: '#0891b2', fontSize: 10, marginTop: 1 }}>لا تنسَ ماءك — نطلب لك دورياً</Text>
+                </View>
+                <Ionicons name="chevron-back" size={18} color="#67e8f9" />
+              </View>
+            </Pressable>
+          </MotiView>
 
           {/* نشاطك الأخير — آخر ٣ طلبات + ملخص معدّل التعبئة */}
           <MotiView
@@ -410,7 +572,7 @@ function OrderButton({
                       </Text>
                     </Text>
                     <Text style={{ color: '#bae6fd', fontSize: 10, marginTop: 4 }}>
-                      يصلك خلال ساعة · دفع نقدي
+                      دفع نقدي عند الاستلام · تتابع السائق على الخريطة
                     </Text>
                   </>
                 )}

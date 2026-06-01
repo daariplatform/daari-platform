@@ -23,6 +23,7 @@ import {
   LogOut,
   Megaphone,
   Wallet,
+  Banknote,
   Menu,
   X,
 } from 'lucide-react';
@@ -44,6 +45,7 @@ const NAV: Array<{ href: string; label: string; icon: any }> = [
   { href: '/dashboard/drivers/live', label: 'تتبع مباشر', icon: MapPin },
   { href: '/dashboard/orders', label: 'الطلبات', icon: ClipboardList },
   { href: '/dashboard/accounting', label: 'المحاسبة', icon: CreditCard },
+  { href: '/dashboard/cash', label: 'النقد', icon: Banknote },
   { href: '/dashboard/notifications', label: 'التنبيهات', icon: Bell },
   { href: '/dashboard/reports', label: 'التقارير', icon: BarChart3 },
   { href: '/dashboard/settings', label: 'الإعدادات', icon: Settings },

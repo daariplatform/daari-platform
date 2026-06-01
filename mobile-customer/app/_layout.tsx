@@ -1,5 +1,5 @@
 import '../global.css';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -12,6 +12,7 @@ import { ensureRTL } from '@/lib/i18n';
 import { initSentry, Sentry } from '@/lib/sentry';
 import { registerForPushNotifications, setupNotificationListener } from '@/lib/push';
 import { persister, shouldPersistQuery, CACHE_MAX_AGE_MS } from '@/lib/persist';
+import { hasSeenIntro } from '@/lib/features/intro';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import {
   POSTHOG_API_KEY,
@@ -46,9 +47,16 @@ function RootLayoutInner() {
   const segments = useSegments();
   const { hydrating, user, hydrate } = useAuth();
   const ph = usePostHog();
+  // null = not yet checked; true/false once AsyncStorage is read.
+  const [introSeen, setIntroSeen] = useState<boolean | null>(null);
 
   // Auto-track screen_view on every route change.
   useScreenTracking();
+
+  // Read the first-run intro flag once on mount.
+  useEffect(() => {
+    hasSeenIntro().then(setIntroSeen);
+  }, []);
 
   // 1. Set RTL on first mount before any rendering.
   useEffect(() => {
@@ -62,17 +70,40 @@ function RootLayoutInner() {
 
   // 3. Once hydrated, route based on auth state.
   useEffect(() => {
-    if (hydrating) return;
+    if (hydrating || introSeen === null) return;
     const inAuthGroup = segments[0] === '(auth)';
+    const onIntro = segments[0] === 'intro';
     if (!user && !inAuthGroup) {
       // Land on welcome — opens two paths (existing-customer login OR
       // discover-a-plant signup). This is the entry point for viral growth.
       router.replace('/(auth)/welcome' as any);
     } else if (user && inAuthGroup) {
-      router.replace('/(tabs)/home');
+      // Authenticated but coming from auth: show the one-time intro carousel
+      // to first-run users before the tabs; everyone else goes home.
+      if (introSeen) {
+        router.replace('/(tabs)/home');
+      } else {
+        // Re-read the flag right before navigating — the intro screen marks
+        // it on completion, and our in-memory `introSeen` may be stale.
+        hasSeenIntro().then((seen) => {
+          if (seen) setIntroSeen(true);
+          router.replace(seen ? '/(tabs)/home' : ('/intro' as any));
+        });
+      }
+    } else if (user && !introSeen && !onIntro && segments[0] === '(tabs)') {
+      // Safety net — a first-run user who somehow landed on the tabs (e.g.
+      // already-hydrated session, no auth redirect) still sees the intro once.
+      // Re-read the flag so a freshly-completed intro doesn't bounce back.
+      hasSeenIntro().then((seen) => {
+        if (seen) {
+          setIntroSeen(true);
+        } else {
+          router.replace('/intro' as any);
+        }
+      });
     }
     SplashScreen.hideAsync().catch(() => {});
-  }, [hydrating, user, segments]);
+  }, [hydrating, user, segments, introSeen]);
 
   // 4. Identify the user in PostHog whenever the auth state changes.
   // Demo logins are intentionally NOT identified — we don't want fake
@@ -124,6 +155,11 @@ function RootLayoutInner() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="onboarding" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="intro" />
+        <Stack.Screen name="addresses" options={{ animation: 'slide_from_left' }} />
+        <Stack.Screen name="schedules" options={{ animation: 'slide_from_left' }} />
+        <Stack.Screen name="wallet" options={{ animation: 'slide_from_left' }} />
+        <Stack.Screen name="support" options={{ animation: 'slide_from_left' }} />
       </Stack>
     </View>
   );
@@ -144,12 +180,16 @@ function RootLayout() {
         buster: 'v1',
       }}
     >
+      {/* PostHog is a soft-dependency. posthog-react-native (v4) console.errors
+          "You must pass your PostHog project's api key" when apiKey is empty,
+          which pops a full-screen LogBox in __DEV__. usePostHog() ALSO errors
+          if no provider is mounted. So we always mount the provider, but when
+          no key is configured we pass a placeholder key + `disabled: true` —
+          the SDK then no-ops (zero network) without erroring, and usePostHog()
+          keeps working everywhere. In production a real key enables it. */}
       <PostHogProvider
-        apiKey={POSTHOG_API_KEY}
-        options={POSTHOG_OPTIONS}
-        // PostHog is a soft-dependency — even with an empty key, the SDK
-        // is safe to mount and noops on capture(). This means a misconfigured
-        // .env never breaks the app.
+        apiKey={POSTHOG_API_KEY || 'phc_disabled_no_key'}
+        options={{ ...POSTHOG_OPTIONS, disabled: !POSTHOG_API_KEY }}
         autocapture={false}
       >
         <RootLayoutInner />

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>داري — تصميم تدفّق الطلبات للسائق</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --aqua-700:#0e7490; --aqua-600:#0891b2; --aqua-500:#06b6d4; --aqua-400:#22d3ee;
+    --aqua-50:#ecfeff; --aqua-100:#cffafe;
+    --green-600:#059669; --green-500:#10b981; --green-400:#34d399;
+    --red-500:#ef4444; --red-50:#fef2f2; --amber:#f59e0b;
+    --ink:#0f172a; --slate:#475569; --muted:#94a3b8; --line:#e2e8f0;
+    --bg:#eef2f6; --card:#ffffff;
+    --shadow: 0 10px 30px rgba(15,23,42,.10);
+    --shadow-sm: 0 2px 8px rgba(15,23,42,.06);
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-font-smoothing:antialiased;}
+  body{font-family:'Cairo',sans-serif; background:
+      radial-gradient(1200px 600px at 80% -10%, #d9f4fb 0%, transparent 60%),
+      radial-gradient(1000px 500px at 0% 0%, #e6fbf2 0%, transparent 55%),
+      var(--bg);
+    color:var(--ink); padding:40px 20px 80px; min-height:100vh;}
+  .wrap{max-width:1280px; margin:0 auto;}
+  .intro{text-align:center; margin-bottom:14px;}
+  .intro h1{font-size:30px; font-weight:900; letter-spacing:-.5px;}
+  .intro .brand{color:var(--aqua-600);}
+  .intro p{color:var(--slate); margin-top:8px; font-size:15px;}
+  .pill-row{display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:16px;}
+  .pill{background:#fff; border:1px solid var(--line); border-radius:999px; padding:7px 14px;
+    font-size:12.5px; font-weight:700; color:var(--slate); box-shadow:var(--shadow-sm); display:flex; gap:6px; align-items:center;}
+  .pill b{color:var(--aqua-700);}
+  .stage{display:flex; gap:34px; justify-content:center; align-items:flex-start; flex-wrap:wrap; margin-top:34px;}
+  .col{display:flex; flex-direction:column; align-items:center; width:340px;}
+  .col .cap{margin-bottom:14px; text-align:center;}
+  .col .cap .step{display:inline-block; background:var(--aqua-600); color:#fff; font-weight:800; font-size:13px;
+    width:26px;height:26px;line-height:26px;border-radius:50%; margin-bottom:8px;}
+  .col .cap h3{font-size:16px; font-weight:800;}
+  .col .cap span{font-size:12.5px; color:var(--muted);}
+
+  /* ===== Phone frame ===== */
+  .phone{width:340px; height:712px; background:#0b1220; border-radius:52px; padding:11px;
+    box-shadow:0 30px 60px rgba(15,23,42,.28), inset 0 0 0 2px #1e293b; position:relative;}
+  .screen{width:100%; height:100%; background:#f6f8fa; border-radius:42px; overflow:hidden; position:relative; display:flex; flex-direction:column;}
+  .notch{position:absolute; top:11px; left:50%; transform:translateX(-50%); width:116px; height:30px; background:#0b1220; border-radius:18px; z-index:40;}
+  .statusbar{height:50px; flex:0 0 50px; display:flex; align-items:center; justify-content:space-between; padding:0 26px 0 22px; font-size:14px; font-weight:800; color:var(--ink); z-index:30;}
+  .statusbar .r{display:flex; gap:7px; align-items:center; font-size:12px;}
+  .body{flex:1; overflow:hidden; position:relative;}
+  .scroll{position:absolute; inset:0; overflow:hidden; padding:6px 16px 18px;}
+
+  /* ===== generic ===== */
+  .card{background:var(--card); border-radius:22px; box-shadow:var(--shadow); padding:16px; margin-bottom:14px;}
+  .avatar{width:46px;height:46px;border-radius:15px; display:flex;align-items:center;justify-content:center; color:#fff; font-weight:800; font-size:18px;
+    background:linear-gradient(135deg,var(--aqua-400),var(--aqua-700));}
+  .chip{display:inline-flex; align-items:center; gap:5px; background:#f1f5f9; color:var(--slate);
+    font-size:11.5px; font-weight:700; padding:6px 10px; border-radius:999px;}
+  .chip.aqua{background:var(--aqua-50); color:var(--aqua-700);}
+  .btn{border:none; border-radius:16px; padding:14px; font-family:inherit; font-weight:800; font-size:15px; width:100%; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;}
+  .btn.green{background:linear-gradient(120deg,var(--green-500),var(--green-600)); color:#fff; box-shadow:0 8px 18px rgba(5,150,105,.30);}
+  .btn.aqua{background:linear-gradient(120deg,var(--aqua-500),var(--aqua-700)); color:#fff; box-shadow:0 8px 18px rgba(8,145,178,.30);}
+  .btn.ghost{background:#fff; color:var(--slate); border:1.5px solid var(--line); box-shadow:none;}
+  .btn.danger-ghost{background:#fff; color:var(--red-500); border:1.5px solid #fecaca; box-shadow:none; font-size:13.5px; padding:11px;}
+  .icbtn{width:46px;height:46px;border-radius:15px; display:flex;align-items:center;justify-content:center; font-size:20px; border:none; cursor:pointer;}
+  .icbtn.green{background:var(--green-500); color:#fff;}
+  .icbtn.aqua{background:var(--aqua-50); color:var(--aqua-700);}
+  .muted{color:var(--muted);} .slate{color:var(--slate);}
+
+  /* list header */
+  .lh{display:flex; align-items:center; justify-content:space-between; padding:8px 2px 14px;}
+  .lh h2{font-size:21px; font-weight:900;}
+  .lh .online{display:flex; align-items:center; gap:7px; background:#dcfce7; color:#15803d; font-weight:800; font-size:12px; padding:7px 12px; border-radius:999px;}
+  .dot{width:9px;height:9px;border-radius:50%; background:#22c55e; box-shadow:0 0 0 4px rgba(34,197,94,.18);}
+  .dot.pulse{animation:pulse 1.4s infinite;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.45);}70%{box-shadow:0 0 0 10px rgba(34,197,94,0);}100%{box-shadow:0 0 0 0 rgba(34,197,94,0);}}
+
+  /* NEW order card */
+  .order{border:1.5px solid var(--line);}
+  .order.new{border:1.5px solid var(--aqua-200,#a5e8f5); box-shadow:0 12px 28px rgba(8,145,178,.14); position:relative;}
+  .order .top{display:flex; align-items:center; gap:11px;}
+  .order .top .name{font-weight:800; font-size:16px;}
+  .order .top .sub{font-size:12px; color:var(--muted); margin-top:2px;}
+  .badge-new{position:absolute; top:14px; left:14px; background:linear-gradient(120deg,#22d3ee,#0891b2); color:#fff; font-size:10.5px; font-weight:800; padding:5px 9px; border-radius:999px; display:flex; gap:5px; align-items:center;}
+  .chips{display:flex; gap:7px; flex-wrap:wrap; margin:13px 0;}
+  .cash-line{display:flex; align-items:center; justify-content:space-between; background:#f0fdf4; border:1px dashed #bbf7d0; border-radius:14px; padding:10px 13px; margin-bottom:13px;}
+  .cash-line .lbl{font-size:12px; color:#166534; font-weight:700;}
+  .cash-line .val{font-size:17px; font-weight:900; color:#15803d;}
+  .row2{display:flex; gap:9px;}
+  .row2 .btn{flex:1;}
+  .reject{text-align:center; margin-top:10px; font-size:12.5px; color:var(--muted); font-weight:700;}
+
+  /* active order (already accepted) */
+  .order.active{background:linear-gradient(180deg,#fff, #fbfdff);}
+  .order.active .statusline{display:flex; align-items:center; gap:7px; color:var(--aqua-700); font-weight:800; font-size:13px; margin:10px 0 12px;}
+
+  /* ===== Detail screen ===== */
+  .hdr{background:linear-gradient(135deg,var(--aqua-700),var(--aqua-500)); padding:8px 16px 22px; border-radius:0 0 26px 26px; position:relative; z-index:5;}
+  .hdr .top{display:flex; align-items:center; justify-content:space-between;}
+  .hdr .back{width:38px;height:38px;border-radius:13px; background:rgba(255,255,255,.18); color:#fff; display:flex;align-items:center;justify-content:center; font-size:18px;}
+  .hdr h2{color:#fff; font-size:17px; font-weight:800;}
+  .hdr .statuspill{background:rgba(255,255,255,.22); color:#fff; font-weight:800; font-size:11.5px; padding:6px 11px; border-radius:999px; display:flex; gap:6px; align-items:center;}
+  .hdr .titlerow{margin-top:14px; color:#fff;}
+  .hdr .titlerow .n{font-size:21px; font-weight:900;}
+  .hdr .titlerow .a{font-size:12.5px; opacity:.9; margin-top:3px;}
+
+  /* map */
+  .map{height:158px; border-radius:20px; margin:-14px 0 0; position:relative; overflow:hidden; box-shadow:var(--shadow); z-index:8;
+    background:
+      linear-gradient(115deg, transparent 38%, #bfe3f7 38%, #bfe3f7 52%, transparent 52%),
+      repeating-linear-gradient(0deg,#e9eef2 0 22px,#eef3f6 22px 23px),
+      repeating-linear-gradient(90deg,#e9eef2 0 26px,#eef3f6 26px 27px),
+      #eaf0f4;}
+  .map .pin{position:absolute; top:42%; left:58%; transform:translate(-50%,-50%); width:38px;height:38px;border-radius:50% 50% 50% 0; transform-origin:center; rotate:-45deg;
+    background:linear-gradient(135deg,var(--aqua-500),var(--aqua-700)); box-shadow:0 8px 16px rgba(8,145,178,.4);}
+  .map .pin::after{content:''; position:absolute; inset:11px; background:#fff; border-radius:50%;}
+  .glass{position:absolute; bottom:10px; right:10px; left:10px; background:rgba(255,255,255,.82); backdrop-filter:blur(8px);
+    border-radius:14px; padding:9px 12px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 4px 14px rgba(15,23,42,.12);}
+  .glass .eta{display:flex; gap:14px;}
+  .glass .eta div{font-size:12px; color:var(--slate); font-weight:700;}
+  .glass .eta b{display:block; font-size:15px; color:var(--ink); font-weight:900;}
+  .glass .nav{background:var(--aqua-600); color:#fff; border-radius:11px; padding:9px 12px; font-size:12.5px; font-weight:800; display:flex; gap:6px; align-items:center;}
+
+  /* step tracker */
+  .steps{display:flex; align-items:flex-start; justify-content:space-between; padding:4px 4px 0; margin:4px 0 14px;}
+  .steps .s{flex:1; display:flex; flex-direction:column; align-items:center; position:relative;}
+  .steps .s .c{width:30px;height:30px;border-radius:50%; display:flex;align-items:center;justify-content:center; font-size:13px; font-weight:800; background:#e2e8f0; color:#94a3b8; z-index:2;}
+  .steps .s.done .c{background:var(--green-500); color:#fff;}
+  .steps .s.cur .c{background:var(--aqua-600); color:#fff; box-shadow:0 0 0 5px rgba(8,145,178,.16);}
+  .steps .s .t{font-size:10px; margin-top:6px; color:var(--muted); font-weight:700; text-align:center;}
+  .steps .s.done .t, .steps .s.cur .t{color:var(--ink);}
+  .steps .s::before{content:''; position:absolute; top:15px; right:50%; width:100%; height:3px; background:#e2e8f0; z-index:1;}
+  .steps .s:first-child::before{display:none;}
+  .steps .s.done::before, .steps .s.cur::before{background:var(--green-400);}
+
+  .cashcard{background:linear-gradient(120deg,#0e7490,#0891b2); color:#fff; border-radius:20px; padding:16px; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 12px 24px rgba(8,145,178,.28);}
+  .cashcard .l{font-size:12px; opacity:.9; font-weight:700;}
+  .cashcard .v{font-size:26px; font-weight:900; margin-top:2px;}
+  .cashcard .ic{width:48px;height:48px;border-radius:15px; background:rgba(255,255,255,.18); display:flex; align-items:center; justify-content:center; font-size:24px;}
+
+  .checks{font-size:11.5px; color:var(--slate); line-height:2; margin:2px 0 14px; padding:0 4px;}
+  .checks div{display:flex; gap:6px; align-items:center;}
+  .checks .ok{color:var(--green-600); font-weight:900;}
+
+  .note{width:340px; background:#fff; border:1px solid var(--line); border-right:4px solid var(--aqua-500); border-radius:14px; padding:13px 15px; box-shadow:var(--shadow-sm); margin-top:16px;}
+  .note h4{font-size:13.5px; color:var(--aqua-700); font-weight:800; margin-bottom:5px; display:flex; gap:7px; align-items:center;}
+  .note p{font-size:12.5px; color:var(--slate); line-height:1.7;}
+  .legend{display:flex; flex-direction:column; gap:12px; width:300px; margin-top:6px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="intro">
+    <h1>داري · <span class="brand">تطبيق السائق</span> — تصميم مقترح لتدفّق الطلب</h1>
+    <p>هذه رسومات (mockup) للموافقة على الشكل قبل البرمجة — ليست التطبيق الفعلي.</p>
+    <div class="pill-row">
+      <div class="pill">✅ <b>قبول الطلب من القائمة</b> دون فتحه</div>
+      <div class="pill">🧭 خريطة فيها <b>المسافة والوقت</b></div>
+      <div class="pill">📊 <b>شريط مراحل</b> بدل أزرار مبعثرة</div>
+      <div class="pill">💵 <b>مبلغ التحصيل</b> بارز</div>
+    </div>
+  </div>
+
+  <div class="stage">
+
+    <!-- ============ PHONE 1: ORDERS LIST (accept from outside) ============ -->
+    <div class="col">
+      <div class="cap"><span class="step">١</span><h3>قائمة الطلبات</h3><span>السائق يقبل الطلب من هنا مباشرة</span></div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="statusbar"><span>5:36</span><span class="r">📶 🔋</span></div>
+          <div class="body"><div class="scroll">
+            <div class="lh">
+              <h2>طلبات اليوم</h2>
+              <div class="online"><span class="dot pulse"></span> متصل</div>
+            </div>
+
+            <!-- NEW order -->
+            <div class="card order new">
+              <div class="badge-new"><span class="dot" style="background:#fff;box-shadow:none;width:6px;height:6px"></span> طلب جديد</div>
+              <div class="top">
+                <div class="avatar">أ</div>
+                <div>
+                  <div class="name">أم محمد</div>
+                  <div class="sub">الكرادة، شارع رئيسي · QR T-1002</div>
+                </div>
+              </div>
+              <div class="chips">
+                <span class="chip aqua">🧭 ٢.٤ كم</span>
+                <span class="chip aqua">⏱️ ٨ دقائق</span>
+                <span class="chip">🛢️ خزان ٥٠٠ ل</span>
+              </div>
+              <div class="cash-line">
+                <span class="lbl">تحصيل نقدي عند التسليم</span>
+                <span class="val">٤,٠٠٠ د.ع</span>
+              </div>
+              <div class="row2">
+                <button class="btn green">✓ قبول الطلب</button>
+                <button class="btn ghost" style="flex:.7">التفاصيل</button>
+              </div>
+              <div class="reject">تخطّي هذا الطلب</div>
+            </div>
+
+            <!-- Active (already accepted) -->
+            <div class="card order active">
+              <div class="top">
+                <div class="avatar" style="background:linear-gradient(135deg,#34d399,#059669)">ح</div>
+                <div>
+                  <div class="name">أبو حسن</div>
+                  <div class="sub">الكاظمية · QR T-1014</div>
+                </div>
+              </div>
+              <div class="statusline"><span class="dot" style="background:#0891b2;box-shadow:none"></span> في الطريق — أنت تُوصِّل الآن</div>
+              <button class="btn aqua">متابعة المهمة ›</button>
+            </div>
+
+            <!-- Done -->
+            <div class="card order" style="opacity:.6">
+              <div class="top">
+                <div class="avatar" style="background:#cbd5e1;color:#64748b">س</div>
+                <div>
+                  <div class="name">سيف العامري</div>
+                  <div class="sub">المنصور · تم التسليم ١:٢٠ م</div>
+                </div>
+                <span class="chip" style="margin-right:auto;background:#dcfce7;color:#15803d">✓ مكتمل</span>
+              </div>
+            </div>
+
+          </div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ PHONE 2: DETAIL — accepted, start delivery ============ -->
+    <div class="col">
+      <div class="cap"><span class="step">٢</span><h3>تفاصيل المهمة (تصميم جديد)</h3><span>بعد القبول — جاهز للانطلاق</span></div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="statusbar" style="color:#fff"><span>5:36</span><span class="r">📶 🔋</span></div>
+          <div class="body">
+            <div class="hdr" style="margin-top:-50px; padding-top:58px;">
+              <div class="top">
+                <div class="back">→</div>
+                <h2>مهمة توصيل</h2>
+                <div class="statuspill">● مقبول</div>
+              </div>
+              <div class="titlerow">
+                <div class="n">أم محمد</div>
+                <div class="a">الكرادة، شارع رئيسي الكرادة · QR T-1002</div>
+              </div>
+            </div>
+            <div class="scroll" style="position:relative; inset:auto; padding-top:0;">
+              <div class="map">
+                <div class="pin"></div>
+                <div class="glass">
+                  <div class="eta">
+                    <div>المسافة<b>٢.٤ كم</b></div>
+                    <div>الوصول<b>٨ دقائق</b></div>
+                  </div>
+                  <div class="nav">🧭 الملاحة</div>
+                </div>
+              </div>
+
+              <div class="card" style="padding:13px; margin-top:14px;">
+                <div style="display:flex; align-items:center; gap:11px;">
+                  <div class="avatar">أ</div>
+                  <div style="flex:1">
+                    <div style="font-weight:800;font-size:15px">أم محمد</div>
+                    <div style="font-size:11.5px;color:var(--muted)">٠٧٧١٠٠٠٠٠٠١</div>
+                  </div>
+                  <button class="icbtn green">📞</button>
+                  <button class="icbtn green" style="background:#25D366">💬</button>
+                </div>
+              </div>
+
+              <div class="steps">
+                <div class="s done"><div class="c">✓</div><div class="t">قبول</div></div>
+                <div class="s cur"><div class="c">٢</div><div class="t">في الطريق</div></div>
+                <div class="s"><div class="c">٣</div><div class="t">وصلت</div></div>
+                <div class="s"><div class="c">٤</div><div class="t">تعبئة</div></div>
+                <div class="s"><div class="c">٥</div><div class="t">تأكيد</div></div>
+              </div>
+
+              <div class="cashcard">
+                <div><div class="l">تُحصّل نقداً عند التسليم</div><div class="v">٤,٠٠٠ د.ع</div></div>
+                <div class="ic">💵</div>
+              </div>
+
+              <button class="btn aqua" style="font-size:16px; padding:16px;">▶ ابدأ التوصيل</button>
+              <button class="btn danger-ghost" style="margin-top:9px">✕ تعذّر التسليم</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ PHONE 3: DETAIL — arrived, confirm ============ -->
+    <div class="col">
+      <div class="cap"><span class="step">٣</span><h3>عند الوصول — التأكيد</h3><span>الزر يتغيّر حسب المرحلة</span></div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="statusbar" style="color:#fff"><span>5:36</span><span class="r">📶 🔋</span></div>
+          <div class="body">
+            <div class="hdr" style="margin-top:-50px; padding-top:58px; background:linear-gradient(135deg,#047857,#10b981);">
+              <div class="top">
+                <div class="back">→</div>
+                <h2>مهمة توصيل</h2>
+                <div class="statuspill">● وصلت</div>
+              </div>
+              <div class="titlerow">
+                <div class="n">أم محمد</div>
+                <div class="a">الكرادة، شارع رئيسي الكرادة · QR T-1002</div>
+              </div>
+            </div>
+            <div class="scroll" style="position:relative; inset:auto; padding-top:0;">
+              <div class="map" style="height:130px">
+                <div class="pin"></div>
+                <div class="glass"><div class="eta"><div>الحالة<b style="color:#059669">وصلت للموقع</b></div></div><div class="nav" style="background:#059669">📍 هنا</div></div>
+              </div>
+
+              <div class="steps">
+                <div class="s done"><div class="c">✓</div><div class="t">قبول</div></div>
+                <div class="s done"><div class="c">✓</div><div class="t">في الطريق</div></div>
+                <div class="s cur"><div class="c">●</div><div class="t">وصلت</div></div>
+                <div class="s"><div class="c">٤</div><div class="t">تعبئة</div></div>
+                <div class="s"><div class="c">٥</div><div class="t">تأكيد</div></div>
+              </div>
+
+              <div class="checks">
+                <div><span class="ok">✓</span> سيُؤخذ GPS تلقائياً للتحقق من وصولك للعنوان</div>
+                <div><span class="ok">✓</span> الدفع نقدي عند التسليم</div>
+                <div><span class="ok">✓</span> الزبون يستلم تأكيد WhatsApp تلقائياً</div>
+              </div>
+
+              <div class="cashcard">
+                <div><div class="l">المبلغ المستلَم</div><div class="v">٤,٠٠٠ د.ع</div></div>
+                <div class="ic">✓</div>
+              </div>
+
+              <button class="btn green" style="font-size:16px; padding:16px;">✓ تأكيد التعبئة والتحصيل</button>
+              <button class="btn danger-ghost" style="margin-top:9px">✕ تعذّر التسليم</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- annotations -->
+    <div class="legend">
+      <div class="note">
+        <h4>⚡ الفكرة الأساسية</h4>
+        <p>السائق يضغط <b>«قبول الطلب»</b> من القائمة مباشرة (الشاشة ١) دون فتح أي صفحة. بعد القبول ينتقل الطلب لقسم «نشط» ويبدأ التتبّع.</p>
+      </div>
+      <div class="note">
+        <h4>🎯 ما الذي تحسّن؟</h4>
+        <p>• هيدر متدرّج فيه اسم الزبون والحالة.<br>• خريطة عليها بطاقة زجاجية بالمسافة/الوقت.<br>• <b>شريط مراحل</b> واضح بدل تكدّس الأزرار.<br>• <b>زر رئيسي واحد</b> يتغيّر حسب المرحلة.<br>• مبلغ التحصيل في بطاقة بارزة.</p>
+      </div>
+      <div class="note" style="border-right-color:var(--green-500)">
+        <h4>🔁 تدفّق الأزرار</h4>
+        <p>قبول ← <b>ابدأ التوصيل</b> ← <b>وصلت</b> ← <b>تأكيد التعبئة والتحصيل</b> ← مكتمل. «تعذّر التسليم» متاح بهدوء أسفل كل مرحلة.</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

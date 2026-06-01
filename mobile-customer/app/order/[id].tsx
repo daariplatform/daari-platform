@@ -10,7 +10,8 @@
  *   - زر إلغاء (إذا الحالة pending/assigned)
  */
 
-import { View, Text, Pressable, ScrollView, Linking, Alert, ActivityIndicator, Platform } from 'react-native';
+import { useState } from 'react';
+import { View, Text, Pressable, ScrollView, TextInput, Linking, Alert, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +21,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import MapView, { Marker, type Region } from 'react-native-maps';
 import { api } from '@/lib/api';
 import { iqd, fmtArabicDate } from '@/lib/format';
+import { hap } from '@/lib/haptics';
+import { useRateOrder, type OrderRating } from '@/lib/features/ratings';
+import { StarRating } from '@/components/StarRating';
+import { Burst } from '@/components/Burst';
 import type { RefillOrder, RefillOrderStatus } from '@/lib/types';
 
 const STAGES: { key: RefillOrderStatus; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -29,10 +34,41 @@ const STAGES: { key: RefillOrderStatus; label: string; icon: keyof typeof Ionico
   { key: 'COMPLETED', label: 'تم التسليم', icon: 'checkmark-circle' },
 ];
 
+/** Haversine distance in km between two lat/lng points. */
+function distanceKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const R = 6371;
+  const dLat = ((bLat - aLat) * Math.PI) / 180;
+  const dLng = ((bLng - aLng) * Math.PI) / 180;
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((aLat * Math.PI) / 180) * Math.cos((bLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+/**
+ * Honest, distance-based ETA — NOT a hardcoded "within an hour". Returns a
+ * minutes estimate computed from the driver's live position to the customer
+ * at an assumed ~22 km/h Baghdad city speed, with a 3-min handling floor.
+ * Returns null when we can't compute it (no driver coords yet), so the UI
+ * shows nothing rather than a fake number.
+ */
+function computeEtaMinutes(order: any): number | null {
+  const custLat = order?.deliveryLat ?? order?.customer?.locationLat;
+  const custLng = order?.deliveryLng ?? order?.customer?.locationLng;
+  const drvLat = order?.driver?.currentLat ?? order?.driver?.lastLat ?? null;
+  const drvLng = order?.driver?.currentLng ?? order?.driver?.lastLng ?? null;
+  if (custLat == null || custLng == null || drvLat == null || drvLng == null) return null;
+  const km = distanceKm(drvLat, drvLng, custLat, custLng);
+  const AVG_KMH = 22;
+  const minutes = Math.round((km / AVG_KMH) * 60) + 3;
+  return Math.max(3, minutes);
+}
+
 export default function OrderDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const qc = useQueryClient();
+  const [showBurst, setShowBurst] = useState(false);
 
   const { data: order, isLoading } = useQuery<any>({
     queryKey: ['order', id],
@@ -114,6 +150,9 @@ export default function OrderDetail() {
   const currentStageIdx = STAGES.findIndex((s) => s.key === order.status);
   const isCancellable = order.status === 'PENDING' || order.status === 'ASSIGNED';
   const isCancelled = order.status === 'CANCELLED' || order.status === 'FAILED';
+  // Real ETA only while the driver is actually en route AND we have their
+  // live coordinates — otherwise we deliberately show nothing.
+  const etaMinutes = order.status === 'EN_ROUTE' ? computeEtaMinutes(order) : null;
 
   return (
     <View className="flex-1 bg-slate-50">
@@ -217,6 +256,37 @@ export default function OrderDetail() {
                   );
                 })}
               </View>
+            )}
+
+            {/* Honest ETA — distance-based, only while the driver is en route
+                and we have their live coords. No fake "within an hour". */}
+            {etaMinutes != null && (
+              <MotiView
+                from={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: 'spring' }}
+                style={{
+                  marginTop: 12,
+                  backgroundColor: '#ecfeff',
+                  borderColor: '#a5f3fc',
+                  borderWidth: 1,
+                  borderRadius: 14,
+                  padding: 12,
+                  flexDirection: 'row-reverse',
+                  alignItems: 'center',
+                  gap: 10,
+                }}
+              >
+                <Ionicons name="time" size={22} color="#0891b2" />
+                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                  <Text style={{ color: '#0e7490', fontWeight: '800', fontSize: 14 }}>
+                    يصل خلال ~{etaMinutes} دقيقة تقريباً
+                  </Text>
+                  <Text style={{ color: '#0891b2', fontSize: 10, marginTop: 2 }}>
+                    تقدير حسب موقع السائق الحالي — يتحدّث تلقائياً
+                  </Text>
+                </View>
+              </MotiView>
             )}
           </MotiView>
 
@@ -370,7 +440,7 @@ export default function OrderDetail() {
                         { text: 'إلغاء', style: 'cancel' },
                         {
                           text: 'إرسال',
-                          onPress: (val) =>
+                          onPress: (val?: string) =>
                             disputeMutation.mutate(
                               (val ?? '').trim() || 'مشكلة في الطلب',
                             ),
@@ -436,9 +506,206 @@ export default function OrderDetail() {
               </Text>
             </View>
           )}
+
+          {/* Ratings — only for completed orders. Shows the prompt when no
+              rating exists yet, otherwise the submitted rating. */}
+          {order.status === 'COMPLETED' && (
+            <RatingSection
+              orderId={order.id}
+              rating={order.rating ?? null}
+              onCelebrate={() => {
+                hap.success();
+                setShowBurst(true);
+              }}
+            />
+          )}
         </View>
       </ScrollView>
+
+      {/* Celebratory burst overlay — fires once after a rating is submitted. */}
+      {showBurst && <Burst onDone={() => setShowBurst(false)} />}
     </View>
+  );
+}
+
+/**
+ * Star-rating prompt (when `rating` is null) OR a read-only display of the
+ * already-submitted rating. Spring-pop stars, optional comment, and a
+ * celebratory burst (via `onCelebrate`) on a successful submit.
+ */
+function RatingSection({
+  orderId,
+  rating,
+  onCelebrate,
+}: {
+  orderId: string;
+  rating: OrderRating | null;
+  onCelebrate: () => void;
+}) {
+  const [stars, setStars] = useState(0);
+  const [comment, setComment] = useState('');
+  const rate = useRateOrder(orderId);
+
+  // Already rated — show it nicely.
+  if (rating) {
+    return (
+      <MotiView
+        from={{ opacity: 0, translateY: 20 }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={{ type: 'timing', delay: 200, duration: 500 }}
+        style={{
+          backgroundColor: 'white',
+          borderRadius: 22,
+          padding: 18,
+          marginTop: 16,
+          shadowColor: '#0f172a',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 8,
+        }}
+      >
+        <Text className="text-base font-bold mb-3 text-right">تقييمك</Text>
+        <StarRating value={rating.stars} editable={false} size={32} />
+        {rating.comment ? (
+          <View
+            style={{
+              backgroundColor: '#f8fafc',
+              borderRadius: 14,
+              padding: 12,
+              marginTop: 12,
+            }}
+          >
+            <Text style={{ color: '#475569', fontSize: 13, textAlign: 'right', lineHeight: 20 }}>
+              {rating.comment}
+            </Text>
+          </View>
+        ) : null}
+        <Text style={{ color: '#94a3b8', fontSize: 10, textAlign: 'center', marginTop: 10 }}>
+          شكراً لمساعدتنا على تحسين الخدمة 💧
+        </Text>
+      </MotiView>
+    );
+  }
+
+  async function submit() {
+    if (stars === 0 || rate.isPending) return;
+    try {
+      await rate.mutateAsync({ stars, comment: comment.trim() || undefined });
+      onCelebrate();
+    } catch (err: any) {
+      hap.error();
+      Alert.alert('خطأ', err?.response?.data?.message ?? 'تعذّر إرسال التقييم. حاول لاحقاً.');
+    }
+  }
+
+  return (
+    <MotiView
+      from={{ opacity: 0, translateY: 20, scale: 0.97 }}
+      animate={{ opacity: 1, translateY: 0, scale: 1 }}
+      transition={{ type: 'spring', delay: 200, damping: 15 }}
+      style={{
+        borderRadius: 22,
+        marginTop: 16,
+        overflow: 'hidden',
+        shadowColor: '#0891b2',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.18,
+        shadowRadius: 14,
+        elevation: 4,
+      }}
+    >
+      <LinearGradient
+        colors={['#ecfeff', '#ffffff']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={{ padding: 18, borderWidth: 1, borderColor: '#a5f3fc', borderRadius: 22 }}
+      >
+        {/* Pulsing heading icon */}
+        <View style={{ alignItems: 'center', marginBottom: 6 }}>
+          <MotiView
+            from={{ scale: 0.9 }}
+            animate={{ scale: 1.06 }}
+            transition={{ loop: true, type: 'timing', duration: 1300 }}
+          >
+            <LinearGradient
+              colors={['#22d3ee', '#0891b2']}
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 18,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="sparkles" size={28} color="#fff" />
+            </LinearGradient>
+          </MotiView>
+        </View>
+        <Text className="text-base font-bold text-center" style={{ color: '#0e7490' }}>
+          كيف كانت تجربتك؟
+        </Text>
+        <Text style={{ color: '#64748b', fontSize: 12, textAlign: 'center', marginTop: 2, marginBottom: 14 }}>
+          قيّم تعبئتك ليصلك خدمة أفضل في المرة القادمة
+        </Text>
+
+        <StarRating value={stars} onChange={setStars} size={42} />
+
+        {stars > 0 && (
+          <MotiView
+            from={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 90 }}
+            transition={{ type: 'timing', duration: 300 }}
+            style={{ overflow: 'hidden', marginTop: 14 }}
+          >
+            <TextInput
+              value={comment}
+              onChangeText={setComment}
+              placeholder="أضف تعليقاً (اختياري)…"
+              placeholderTextColor="#94a3b8"
+              multiline
+              maxLength={300}
+              textAlign="right"
+              style={{
+                backgroundColor: '#fff',
+                borderWidth: 1,
+                borderColor: '#cbd5e1',
+                borderRadius: 14,
+                padding: 12,
+                minHeight: 70,
+                fontSize: 13,
+                color: '#0f172a',
+                textAlignVertical: 'top',
+              }}
+            />
+          </MotiView>
+        )}
+
+        <Pressable onPress={submit} disabled={stars === 0 || rate.isPending} style={{ marginTop: 14 }}>
+          <LinearGradient
+            colors={stars === 0 ? ['#cbd5e1', '#94a3b8'] : ['#06b6d4', '#0891b2', '#0e7490']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={{
+              paddingVertical: 14,
+              borderRadius: 14,
+              flexDirection: 'row-reverse',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+            }}
+          >
+            {rate.isPending ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="send" size={18} color="#fff" />
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>إرسال التقييم</Text>
+              </>
+            )}
+          </LinearGradient>
+        </Pressable>
+      </LinearGradient>
+    </MotiView>
   );
 }
 
@@ -458,14 +725,29 @@ function Row({ label, value }: { label: string; value: string }) {
  * 15s elsewhere; a hard re-center would feel jarring during a scroll.
  */
 function OrderMap({ order }: { order: any }) {
+  // MapKit's setRegion: raises an (uncatchable) NSException — which crashes
+  // the whole app — if it receives a non-finite coordinate or a span wider
+  // than its valid range (lat>180 / lng>360). So we (1) require finite
+  // customer coords, (2) accept the driver pin ONLY when it's finite AND
+  // plausibly near the customer (< ~1.5° ≈ 160 km — a far/garbage fix such as
+  // a simulator's default GPS is ignored), and (3) clamp the region span.
+  const fin = (n: any): n is number => typeof n === 'number' && Number.isFinite(n);
+  const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
+
   const custLat = order.deliveryLat ?? order.customer?.locationLat;
   const custLng = order.deliveryLng ?? order.customer?.locationLng;
-  if (custLat == null || custLng == null) return null;
-  const driverLat = order.driver?.lastLat ?? order.driver?.locationLat ?? null;
-  const driverLng = order.driver?.lastLng ?? order.driver?.locationLng ?? null;
+  if (!fin(custLat) || !fin(custLng)) return null;
 
-  // Default zoom shows ~1km around the customer. If we have a driver pin,
-  // widen until both are comfortably in frame.
+  const dvLat = order.driver?.currentLat ?? order.driver?.lastLat ?? order.driver?.locationLat;
+  const dvLng = order.driver?.currentLng ?? order.driver?.lastLng ?? order.driver?.locationLng;
+  const hasDriver =
+    fin(dvLat) && fin(dvLng) &&
+    Math.abs(custLat - dvLat) < 1.5 && Math.abs(custLng - dvLng) < 1.5;
+  const driverLat = hasDriver ? dvLat : null;
+  const driverLng = hasDriver ? dvLng : null;
+
+  // Default zoom shows ~1km around the customer. If we have a (near) driver
+  // pin, widen until both are in frame — but never beyond a safe 1.5° span.
   let region: Region = {
     latitude: custLat,
     longitude: custLng,
@@ -473,11 +755,12 @@ function OrderMap({ order }: { order: any }) {
     longitudeDelta: 0.01,
   };
   if (driverLat != null && driverLng != null) {
-    const midLat = (custLat + driverLat) / 2;
-    const midLng = (custLng + driverLng) / 2;
-    const dLat = Math.abs(custLat - driverLat) * 2.4 + 0.005;
-    const dLng = Math.abs(custLng - driverLng) * 2.4 + 0.005;
-    region = { latitude: midLat, longitude: midLng, latitudeDelta: dLat, longitudeDelta: dLng };
+    region = {
+      latitude: (custLat + driverLat) / 2,
+      longitude: (custLng + driverLng) / 2,
+      latitudeDelta: clamp(Math.abs(custLat - driverLat) * 2.4 + 0.01, 0.005, 1.5),
+      longitudeDelta: clamp(Math.abs(custLng - driverLng) * 2.4 + 0.01, 0.005, 1.5),
+    };
   }
 
   return (

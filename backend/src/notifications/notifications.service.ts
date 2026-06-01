@@ -5,6 +5,30 @@ import { WhatsAppProvider } from './providers/whatsapp.provider';
 import { SmsProvider } from './providers/sms.provider';
 import { paginated, type PaginatedResult } from '../common/dto/pagination.dto';
 
+/**
+ * Map a NotificationKind enum to the coarse `type` the mobile-customer
+ * notifications screen uses for its icon + color (order|payment|system|promo).
+ */
+function kindToInboxType(
+  kind: NotificationKind,
+): 'order' | 'payment' | 'system' | 'promo' {
+  switch (kind) {
+    case 'ORDER_COMPLETED':
+    case 'DRIVER_EN_ROUTE':
+    case 'REFILL_REMINDER':
+    case 'REFILL_WARNING':
+    case 'TANK_RECLAIM_NOTICE':
+      return 'order';
+    case 'SUBSCRIPTION_REMINDER_14D':
+    case 'SUBSCRIPTION_REMINDER_7D':
+    case 'SUBSCRIPTION_EXPIRING_3D':
+    case 'SUBSCRIPTION_EXPIRED':
+      return 'system';
+    default:
+      return 'system';
+  }
+}
+
 interface SendInput {
   tenantId: string;
   recipient: string;
@@ -185,8 +209,21 @@ export class NotificationsService {
         where: { recipient: user.phone, readAt: null },
       }),
     ]);
+    // Map the raw NotificationLog rows to the shape mobile-customer's
+    // notifications screen expects: `read` (boolean from readAt) and `type`
+    // (one of order|payment|system|promo, derived from the kind enum).
+    // Previously the screen received `readAt`/`kind` and rendered every row
+    // as unread with a missing type icon.
+    const mapped = items.map((r) => ({
+      id: r.id,
+      title: r.title ?? '',
+      body: r.body,
+      read: r.readAt != null,
+      createdAt: r.createdAt,
+      type: kindToInboxType(r.kind),
+    }));
     return {
-      ...paginated(items, total, { page, pageSize }),
+      ...paginated(mapped, total, { page, pageSize }),
       unreadCount,
     } as PaginatedResult<unknown> & { unreadCount: number };
   }

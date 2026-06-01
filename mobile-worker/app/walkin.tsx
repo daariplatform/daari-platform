@@ -11,7 +11,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
   useCustomerSearch,
@@ -216,6 +215,12 @@ function Lookup({ onBack }: { onBack: () => void }) {
   const [q, setQ] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Walk-in liters + paid amount — were hardcoded (1000 IQD, no liters)
+  // so every walk-in revenue row in the manager dashboard was wrong.
+  // Backend's WalkinRefillDto accepts walkinLiters + paidAmountIqd as
+  // independent fields and stamps both onto the order.
+  const [liters, setLiters] = useState('500');
+  const [paidAmount, setPaidAmount] = useState('1000');
   const { data: results, isLoading } = useCustomerSearch(q);
   const walkin = useWalkinRefill();
   const router = useRouter();
@@ -226,38 +231,29 @@ function Lookup({ onBack }: { onBack: () => void }) {
     if (!selected) return;
     setSubmitting(true);
     try {
-      // Try the camera first — that's the production path. On iOS Simulator
-      // (no camera hardware) Apple throws "Camera not available on simulator"
-      // so we fall back to the photo library, which the simulator DOES have.
-      // Same fallback also covers users who tap "Don't Allow" on the perm
-      // prompt: better to let them pick an existing photo than abort entirely.
-      let photo: ImagePicker.ImagePickerResult;
-      try {
-        const perm = await ImagePicker.requestCameraPermissionsAsync();
-        if (perm.status !== 'granted') {
-          throw new Error('camera-permission-denied');
-        }
-        photo = await ImagePicker.launchCameraAsync({ quality: 0.6 });
-      } catch (cameraErr: any) {
-        console.warn('[walkin] camera unavailable, falling back to library:', cameraErr?.message);
-        const libPerm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (libPerm.status !== 'granted') {
-          Alert.alert('لا يوجد إذن', 'فعّل الكاميرا أو معرض الصور لإثبات التعبئة');
-          return;
-        }
-        photo = await ImagePicker.launchImageLibraryAsync({ quality: 0.6 });
-      }
-      if (photo.canceled) return;
+      // Photo proof + payment picker removed by request: every walk-in is a
+      // cash sale, and the tank photo was dropped to save storage/bandwidth.
+      // GPS is captured as the completion evidence.
       const coords = await getCurrentCoords();
       if (!coords) {
         Alert.alert('GPS غير متاح', 'فعّل خدمات الموقع');
         return;
       }
+      const litersNum = parseInt(liters, 10);
+      const paidNum = parseInt(paidAmount, 10);
+      if (!Number.isFinite(litersNum) || litersNum <= 0) {
+        Alert.alert('قيمة غير صحيحة', 'أدخل عدد لترات صحيح أكبر من صفر.');
+        return;
+      }
+      if (!Number.isFinite(paidNum) || paidNum < 0) {
+        Alert.alert('قيمة غير صحيحة', 'أدخل مبلغ مدفوع صحيح.');
+        return;
+      }
       const body = {
         customerId: selected.id,
         paymentMethod: 'CASH' as const,
-        paidAmountIqd: 1000,
-        proofPhotoUrl: photo.assets[0].uri,
+        paidAmountIqd: paidNum,
+        walkinLiters: litersNum,
         completionLng: coords.lng,
         completionLat: coords.lat,
       };
@@ -301,6 +297,35 @@ function Lookup({ onBack }: { onBack: () => void }) {
           </View>
         </View>
 
+        {/* Liters + paid amount. Payment is cash-only and the tank photo
+            was removed (storage/bandwidth), so the picker is gone. */}
+        <View className="bg-white border border-slate-200 rounded-2xl p-4 mb-3">
+          <Text className="text-xs font-bold text-slate-600 mb-2 text-right">
+            عدد اللترات
+          </Text>
+          <TextInput
+            value={liters}
+            onChangeText={setLiters}
+            keyboardType="number-pad"
+            placeholder="500"
+            className="border border-slate-200 rounded-xl px-3 py-2 text-right text-sm mb-3"
+          />
+          <Text className="text-xs font-bold text-slate-600 mb-2 text-right">
+            المبلغ المدفوع (د.ع)
+          </Text>
+          <TextInput
+            value={paidAmount}
+            onChangeText={setPaidAmount}
+            keyboardType="number-pad"
+            placeholder="1000"
+            className="border border-slate-200 rounded-xl px-3 py-2 text-right text-sm"
+          />
+          <View className="flex-row-reverse items-center gap-1.5 mt-3">
+            <MaterialIcons name="payments" size={16} color="#16a34a" />
+            <Text className="text-[11px] font-bold text-emerald-700">دفع نقدي عند التسليم</Text>
+          </View>
+        </View>
+
         <View className="flex-row gap-2">
           <Pressable
             onPress={() => setSelectedId(null)}
@@ -316,7 +341,7 @@ function Lookup({ onBack }: { onBack: () => void }) {
             {submitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text className="text-white font-bold text-center">📷 صوّر وأكّد</Text>
+              <Text className="text-white font-bold text-center">✓ أكّد البيع</Text>
             )}
           </Pressable>
         </View>
@@ -346,10 +371,10 @@ function Lookup({ onBack }: { onBack: () => void }) {
           className="bg-white rounded-xl p-3 mb-1.5 border border-slate-200 flex-row items-center gap-3"
         >
           <View className="w-9 h-9 bg-aqua-50 rounded-lg items-center justify-center">
-            <Text className="font-bold text-aqua-700">{c.fullName[0]}</Text>
+            <Text className="font-bold text-aqua-700">{c.fullName?.[0] ?? '؟'}</Text>
           </View>
           <View className="flex-1">
-            <Text className="font-bold text-sm">{c.fullName}</Text>
+            <Text className="font-bold text-sm">{c.fullName ?? 'بدون اسم'}</Text>
             <Text className="text-[11px] text-slate-500">
               {c.district} • {c.tanks?.[0]?.qrCode ?? '—'}
             </Text>

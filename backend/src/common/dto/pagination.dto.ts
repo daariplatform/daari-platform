@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 /**
  * Shared pagination contract for all list endpoints.
@@ -33,6 +33,29 @@ export class PaginationDto {
   @Min(1)
   @Max(200)
   pageSize: number = 50;
+
+  // ── Common list filters ──
+  // These are bound via the same `@Query() PaginationDto` object on list
+  // routes that ALSO read them through separate `@Query('x')` params. With
+  // the global ValidationPipe running `forbidNonWhitelisted: true`, any of
+  // these keys appearing in the query string would otherwise be rejected
+  // with HTTP 400 (breaking dashboard order/customer filters and the
+  // worker walk-in search). Declaring them here whitelists them; the actual
+  // filtering still happens via the controllers' typed `@Query('x')` reads.
+  @IsOptional() @IsString()
+  status?: string;
+
+  @IsOptional() @IsString()
+  search?: string;
+
+  @IsOptional() @IsString()
+  district?: string;
+
+  @IsOptional() @IsString()
+  driverId?: string;
+
+  @IsOptional() @IsString()
+  kind?: string;
 }
 
 export interface PaginatedResult<T> {

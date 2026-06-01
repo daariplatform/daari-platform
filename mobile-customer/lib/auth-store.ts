@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { api } from './api';
+import { api, setOnAuthFailure } from './api';
 import { clearTokens, getAccessToken, setTokens } from './tokens';
 import type { Capability, MeResponse } from './types';
 
@@ -97,3 +97,10 @@ export const useAuth = create<AuthState>((set) => ({
     set({ user: null, capabilities: [], demoMode: false });
   },
 }));
+
+// Let the API layer trigger a logout when a refresh-token round-trip fails
+// (dead session). Registered once at module load; api.ts stays decoupled
+// from the store (no require cycle).
+setOnAuthFailure(() => {
+  void useAuth.getState().logout();
+});

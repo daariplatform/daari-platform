@@ -45,8 +45,6 @@
       },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "نحتاج موقعك مرة واحدة فقط لتسجيل عنوان بيتك حتى يصلك الماء بدقة. لا نتتبّعك بعد ذلك.",
-        "NSCameraUsageDescription": "لإرفاق صورة (اختياري) مع طلب التعبئة.",
-        "NSPhotoLibraryUsageDescription": "لاختيار صورة (اختياري) لإرفاقها بطلبك.",
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
           "remote-notification"

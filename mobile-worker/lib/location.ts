@@ -1,137 +1,38 @@
 import * as Location from 'expo-location';
-import * as TaskManager from 'expo-task-manager';
 import { api } from './api';
 
-const LOCATION_TASK = 'maa-driver-location';
-
 /**
- * Background-location task. Reports the driver's coords to the backend
- * roughly every 30s while a shift is active. Stops cleanly when the
- * driver toggles off-duty (or logs out) so we're not burning battery
- * for nothing.
+ * FOREGROUND-ONLY driver tracking.
+ *
+ * We deliberately do NOT use background location (TaskManager /
+ * startLocationUpdatesAsync / ACCESS_BACKGROUND_LOCATION). Background
+ * location triggers Google Play's special "background location" review
+ * (declaration form + demo video, frequent rejections) and Apple "Always"
+ * scrutiny — heavy friction for what is really a while-on-shift need.
+ *
+ * The driver keeps the app open during the route, so a foreground watcher
+ * that pings the backend every ~30s is sufficient: the dashboard sees the
+ * live position, and tracking stops the moment the shift ends or the app
+ * is closed. If true background tracking is ever required, it can be added
+ * later in a dedicated EAS build with the proper store declarations.
  */
-TaskManager.defineTask(LOCATION_TASK, async ({ data, error }: any) => {
-  if (error) {
-    console.warn('[location] background task error:', error);
-    return;
-  }
-  const { locations } = (data ?? {}) as { locations: Location.LocationObject[] };
-  const latest = locations?.[locations.length - 1];
-  if (!latest) return;
-  try {
-    await api.post('/drivers/me/location', {
-      lng: latest.coords.longitude,
-      lat: latest.coords.latitude,
-    });
-    console.log('[location] bg ping ok', latest.coords.latitude, latest.coords.longitude);
-  } catch (e: any) {
-    // Swallow — next tick will retry. Don't crash the background task.
-    console.warn('[location] bg ping failed:', e?.message ?? e);
-  }
-});
 
-/**
- * Starts continuous GPS tracking for the driver. Also:
- *  1. Sends an IMMEDIATE one-shot ping so the dashboard sees the driver
- *     within seconds of login (instead of waiting 30s+ for the first
- *     background callback).
- *  2. Bumps status to AVAILABLE so the dashboard's inactivity flag and
- *     "on shift" filter work without the driver manually toggling.
- */
-export async function startShiftTracking(): Promise<boolean> {
-  // 1. Foreground permission — required even for background mode.
-  const fg = await Location.requestForegroundPermissionsAsync();
-  if (fg.status !== 'granted') {
-    console.warn('[location] foreground permission denied');
-    return false;
-  }
-
-  // 2. Mark driver AVAILABLE on the server so the dashboard's "inactive"
-  //    flag and "on shift" filter immediately recognise this driver.
-  try {
-    await api.post('/drivers/me/status', { status: 'AVAILABLE' });
-    console.log('[location] status set to AVAILABLE');
-  } catch (e: any) {
-    console.warn('[location] could not set AVAILABLE:', e?.message ?? e);
-  }
-
-  // 3. Immediate one-shot location ping so the marker appears now, not
-  //    in 30s. Don't block if the device returns no fix (simulator may).
-  try {
-    const fix = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    });
-    await api.post('/drivers/me/location', {
-      lng: fix.coords.longitude,
-      lat: fix.coords.latitude,
-    });
-    console.log('[location] immediate ping ok', fix.coords.latitude, fix.coords.longitude);
-  } catch (e: any) {
-    console.warn('[location] immediate ping failed (no fix?):', e?.message ?? e);
-  }
-
-  // 4. Always start the foreground polling — works in Expo Go + Simulator
-  //    + standalone. This is the reliable path; background is bonus.
-  startForegroundWatcher();
-
-  // 5. Try background permission + real background updates. In Expo Go
-  //    these APIs don't have the necessary entitlements and will throw;
-  //    that's fine — the foreground watcher above already handles things
-  //    while the app is open, and the user can switch to a dev/EAS build
-  //    later for real background tracking.
-  try {
-    const bg = await Location.requestBackgroundPermissionsAsync();
-    if (bg.status !== 'granted') {
-      console.warn('[location] background permission denied — fg-only mode');
-      return true;
-    }
-    const alreadyRunning = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK);
-    if (!alreadyRunning) {
-      await Location.startLocationUpdatesAsync(LOCATION_TASK, {
-        accuracy: Location.Accuracy.Balanced,
-        timeInterval: 30_000,
-        distanceInterval: 50,
-        pausesUpdatesAutomatically: false,
-        showsBackgroundLocationIndicator: false,
-        foregroundService: {
-          notificationTitle: 'وردية عمل ماء نشطة',
-          notificationBody: 'نسجّل موقعك أثناء جولة التعبئات.',
-          notificationColor: '#0284c7',
-        },
-      });
-      console.log('[location] background updates started');
-    }
-  } catch (e: any) {
-    // Expo Go / unsupported environment — keep going with foreground only.
-    console.warn('[location] background mode unavailable (Expo Go?):', e?.message ?? e);
-  }
-
-  return true;
-}
-
-// Foreground polling — every 30s explicitly fetch current position and
-// POST to the backend. We prefer this over watchPositionAsync because:
-//  - iOS Simulator's `simctl location set` doesn't reliably fire Core
-//    Location change events to JS in our experience.
-//  - setInterval+getCurrentPositionAsync gives deterministic, periodic
-//    pings even if the GPS hasn't moved (so the dashboard "last seen"
-//    keeps refreshing and the inactivity flag stays clear).
-// On a real device + real driver in motion this is identical user-facing
-// behavior; the device's location is already updating in the background.
 let fgInterval: ReturnType<typeof setInterval> | null = null;
+
+async function pingOnce(accuracy: Location.Accuracy = Location.Accuracy.Balanced) {
+  const fix = await Location.getCurrentPositionAsync({ accuracy });
+  await api.post('/drivers/me/location', {
+    lng: fix.coords.longitude,
+    lat: fix.coords.latitude,
+  });
+  return fix;
+}
 
 function startForegroundWatcher() {
   if (fgInterval) return;
   const tick = async () => {
     try {
-      const fix = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      await api.post('/drivers/me/location', {
-        lng: fix.coords.longitude,
-        lat: fix.coords.latitude,
-      });
-      console.log('[location] fg tick ok', fix.coords.latitude, fix.coords.longitude);
+      await pingOnce();
     } catch (e: any) {
       console.warn('[location] fg tick failed:', e?.message ?? e);
     }
@@ -139,20 +40,44 @@ function startForegroundWatcher() {
   fgInterval = setInterval(tick, 30_000);
 }
 
+/**
+ * Start while-on-shift tracking. Requests foreground location only, marks
+ * the driver AVAILABLE, sends an immediate ping (so the dashboard marker
+ * appears at once), then polls every 30s while the app is open.
+ */
+export async function startShiftTracking(): Promise<boolean> {
+  const fg = await Location.requestForegroundPermissionsAsync();
+  if (fg.status !== 'granted') {
+    console.warn('[location] foreground permission denied');
+    return false;
+  }
+
+  try {
+    await api.post('/drivers/me/status', { status: 'AVAILABLE' });
+  } catch (e: any) {
+    console.warn('[location] could not set AVAILABLE:', e?.message ?? e);
+  }
+
+  // Immediate one-shot ping so the marker shows now, not in 30s.
+  try {
+    await pingOnce();
+  } catch (e: any) {
+    console.warn('[location] immediate ping failed (no fix?):', e?.message ?? e);
+  }
+
+  startForegroundWatcher();
+  return true;
+}
+
 export async function stopShiftTracking() {
-  // Stop foreground polling
   if (fgInterval) {
     clearInterval(fgInterval);
     fgInterval = null;
   }
-  // Stop background task if running
-  const running = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK);
-  if (running) await Location.stopLocationUpdatesAsync(LOCATION_TASK);
-  // Mark driver offline on the server
   try {
     await api.post('/drivers/me/status', { status: 'OFFLINE' });
   } catch {
-    // ignore — best effort
+    // best effort
   }
 }
 
@@ -167,7 +92,7 @@ export async function getCurrentCoords() {
   return { lng: loc.coords.longitude, lat: loc.coords.latitude };
 }
 
-/** Haversine distance in metres — used for offline GPS arrival check. */
+/** Haversine distance in metres — used for the GPS arrival check. */
 export function distanceMetres(
   a: { lng: number; lat: number },
   b: { lng: number; lat: number },

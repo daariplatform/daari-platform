@@ -64,9 +64,16 @@ api.interceptors.response.use(
       !original.url?.includes('/auth/')
     ) {
       original._retry = true;
-      refreshInflight = refreshInflight ?? refreshAccess();
+      // Single-flight refresh: all concurrent 401s share ONE refresh promise,
+      // cleared only in `.finally` (after the rotated, one-time-use refresh
+      // token is persisted). Prevents a racing second refresh from spending an
+      // already-consumed token → 401 → spurious logout.
+      refreshInflight =
+        refreshInflight ??
+        refreshAccess().finally(() => {
+          refreshInflight = null;
+        });
       const newToken = await refreshInflight;
-      refreshInflight = null;
       if (newToken) {
         original.headers.Authorization = `Bearer ${newToken}`;
         return api.request(original);

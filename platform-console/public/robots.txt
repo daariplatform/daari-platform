@@ -1,0 +1,11 @@
+# Search-engine crawlers — block all authenticated areas so plant data
+# never gets indexed. Public-facing surfaces (the marketing/legal
+# pages) stay crawlable; everything under /dashboard requires a token
+# and renders nothing useful to a crawler anyway.
+
+User-agent: *
+Disallow: /dashboard/
+Disallow: /login
+Disallow: /api/
+
+Sitemap: https://daari-admin.phi-bit.com/sitemap.xml

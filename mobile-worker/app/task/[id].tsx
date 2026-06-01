@@ -10,8 +10,10 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialIcons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import MapView, { Marker, type Region } from 'react-native-maps';
 import { usePostHog } from 'posthog-react-native';
@@ -19,13 +21,13 @@ import {
   useMyTodayTasks,
   useCompleteOrder,
   useReclaimTank,
-  useUploadProofPhoto,
   useStartOrder,
 } from '@/lib/queries';
 import { getCurrentCoords, distanceMetres } from '@/lib/location';
 import { enqueue } from '@/lib/offline-queue';
 import { iqd } from '@/lib/format';
 import { track } from '@/lib/posthog';
+import { api } from '@/lib/api';
 
 const RECLAIM_REASONS = [
   { id: 'NON_COMPLIANCE',     label: 'عدم التزام بتعليمات الشركة', emoji: '⚠️' },
@@ -45,11 +47,13 @@ export default function TaskDetail() {
   const { data: tasks } = useMyTodayTasks();
   const completeOrder = useCompleteOrder();
   const reclaim = useReclaimTank();
-  const uploadProof = useUploadProofPhoto();
   const startOrder = useStartOrder();
   const [reclaimReason, setReclaimReason] =
     useState<typeof RECLAIM_REASONS[number]['id'] | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Payment is cash-only by request — no picker. The completion body sends
+  // paymentMethod:'CASH' directly.
 
   // Local-only driver position for the in-screen map. Refreshes every 10s
   // while this screen is open. The OS-level background tracker in
@@ -99,32 +103,6 @@ export default function TaskDetail() {
     );
   }
 
-  async function captureProofPhoto(): Promise<string | null> {
-    // Production path: real device camera. Falls back to the photo library
-    // when (a) the iOS Simulator throws "Camera not available", or (b) the
-    // user denies the camera permission. Letting them pick from the library
-    // is better than blocking the whole flow.
-    try {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (perm.status !== 'granted') {
-        throw new Error('camera-permission-denied');
-      }
-      const r = await ImagePicker.launchCameraAsync({ quality: 0.6, base64: false });
-      if (r.canceled) return null;
-      return r.assets[0].uri;
-    } catch (cameraErr: any) {
-      console.warn('[task] camera unavailable, falling back to library:', cameraErr?.message);
-      const libPerm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (libPerm.status !== 'granted') {
-        Alert.alert('لا يوجد إذن', 'فعّل الكاميرا أو معرض الصور لإثبات التعبئة');
-        return null;
-      }
-      const r = await ImagePicker.launchImageLibraryAsync({ quality: 0.6, base64: false });
-      if (r.canceled) return null;
-      return r.assets[0].uri;
-    }
-  }
-
   async function verifyArrivalGPS(): Promise<{ lng: number; lat: number } | null> {
     const coords = await getCurrentCoords();
     if (!coords) {
@@ -147,36 +125,18 @@ export default function TaskDetail() {
     return coords;
   }
 
-  /**
-   * يرفع الصورة من المحاكي/الجهاز للـ backend عبر /uploads/proof،
-   * ويرجع URL دائم يصلح ليُحفَظ على الطلب. لو الإنترنت فشل، نرجع URI
-   * المحلي كـ fallback (الـ offline queue سيُعيد المحاولة لاحقاً).
-   */
-  async function captureAndUploadProof(): Promise<string | null> {
-    const localUri = await captureProofPhoto();
-    if (!localUri) return null;
-    try {
-      const remoteUrl = await uploadProof.mutateAsync(localUri);
-      return remoteUrl;
-    } catch (err) {
-      // Offline أو خطأ سيرفر — نحتفظ بالـ URI المحلي ونعتمد على الـ
-      // offline queue إعادة الإرسال لاحقاً (متى ما يتصل بالإنترنت).
-      return localUri;
-    }
-  }
 
   async function onCompleteRefill() {
     setSubmitting(true);
     try {
       const coords = await verifyArrivalGPS();
       if (!coords) return setSubmitting(false);
-      const photo = await captureAndUploadProof();
-      if (!photo) return setSubmitting(false);
-
+      // Photo proof + payment-method picker were removed by request: every
+      // sale is cash, and the tank photo was dropped to save device storage
+      // and upload bandwidth. GPS arrival stays as the completion evidence.
       const body = {
         paymentMethod: 'CASH' as const,
         paidAmountIqd: task!.priceIqd,
-        proofPhotoUrl: photo,
         completionLng: coords.lng,
         completionLat: coords.lat,
       };
@@ -217,6 +177,30 @@ export default function TaskDetail() {
   }
 
   /**
+   * Cancel the current task with a driver-side reason. Backend
+   * /orders/:id/cancel accepts the driver capability and a `reason`
+   * string; the service-layer ensures the driver can only cancel
+   * their own ASSIGNED/EN_ROUTE order. Used for "no customer at door"
+   * / "wrong address" / "customer refused" cases.
+   */
+  async function cancelWithReason(reason: string) {
+    if (!task) return;
+    setSubmitting(true);
+    try {
+      await api.post(`/orders/${task.id}/cancel`, { reason });
+      track(ph, 'order_cancelled_by_driver', { orderId: task.id, reason });
+      Alert.alert('تم', 'تم إلغاء الطلب. أبلغ المعمل بالتفاصيل إذا لزم.');
+      router.back();
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.message ?? 'تعذّر الإلغاء — حاول لاحقاً.';
+      Alert.alert('خطأ', msg);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  /**
    * "ابدأ الجولة" — ASSIGNED → EN_ROUTE. Optional step that lets the customer
    * see "السائق متجه إليك" in their app. If the driver skips it and goes
    * straight to "أكّد التعبئة", the backend's complete() will gracefully
@@ -247,13 +231,11 @@ export default function TaskDetail() {
     try {
       const coords = await verifyArrivalGPS();
       if (!coords) return setSubmitting(false);
-      const photo = await captureAndUploadProof();
-      if (!photo) return setSubmitting(false);
-
+      // Photo proof removed (storage/bandwidth). Reclaim still records the
+      // mandatory reason for the plant's audit trail.
       const body = {
         paymentMethod: 'CASH' as const,
         paidAmountIqd: 0,
-        proofPhotoUrl: photo,
         completionLng: coords.lng,
         completionLat: coords.lat,
         reclaimReason,
@@ -305,63 +287,329 @@ export default function TaskDetail() {
     );
   }
 
+  // ── Presentational derivations (pure JS, run during render only) ──────────
+  const customer = task.customer ?? null;
+  const status = task.status;
+  const isAssigned = status === 'ASSIGNED';
+  const isEnRoute = status === 'EN_ROUTE';
+  const isArrivedLike = status === 'EN_ROUTE'; // driver has started; green "arrival" theme
+  const isDone = status === 'COMPLETED';
+  const isReclaim = task.kind === 'TANK_RECLAIM';
+  const kindLabel =
+    task.kind === 'REFILL'
+      ? 'مهمة تعبئة'
+      : task.kind === 'TANK_DELIVERY'
+        ? 'مهمة توصيل'
+        : 'سحب خزان';
+  const completeVerb = task.kind === 'TANK_DELIVERY' ? 'التوصيل' : 'التعبئة';
+
+  // Status pill text shown on the gradient header.
+  const statusPill = isDone
+    ? 'مكتمل'
+    : isEnRoute
+      ? 'في الطريق'
+      : isAssigned
+        ? 'مقبول'
+        : status === 'CANCELLED'
+          ? 'ملغي'
+          : status === 'FAILED'
+            ? 'فشل'
+            : 'قيد الانتظار';
+
+  // Green theme once the driver is en-route / arrived (or done), aqua otherwise.
+  const greenTheme = isEnRoute || isDone;
+  const headerColors: [string, string] = greenTheme
+    ? ['#047857', '#10b981']
+    : ['#0e7490', '#06b6d4'];
+
+  // Avatar initial — guarded so a null/empty name never crashes.
+  const avatarInitial = customer?.fullName?.[0] ?? '؟';
+
+  // Real distance/ETA from the live driver fix + customer GPS. Only shown
+  // when BOTH coordinates exist — otherwise we fall back to the address text,
+  // never a fabricated number. distanceMetres is a plain JS helper invoked in
+  // render (not inside any worklet).
+  const hasCustomerCoord =
+    customer?.locationLat != null && customer?.locationLng != null;
+  let distanceText: string | null = null;
+  let etaText: string | null = null;
+  if (hasCustomerCoord && driverCoord) {
+    const metres = distanceMetres(
+      { lat: driverCoord.lat, lng: driverCoord.lng },
+      { lat: customer!.locationLat!, lng: customer!.locationLng! },
+    );
+    const km = metres / 1000;
+    distanceText = km >= 1 ? `${km.toFixed(1)} كم` : `${Math.round(metres)} م`;
+    // ETA estimate from straight-line distance at ~22 km/h city driving.
+    const mins = Math.max(1, Math.round((km / 22) * 60));
+    etaText = `${mins} دقيقة`;
+  }
+
+  // Step tracker state. Pure presentational mapping from order status.
+  // قبول → في الطريق → وصلت → تعبئة → تأكيد
+  // ASSIGNED: step 0 done, step 1 current. EN_ROUTE: steps 0-1 done, step 2 current.
+  const stepCurrentIndex = isDone ? 5 : isEnRoute ? 2 : 1;
+  const steps = ['قبول', 'في الطريق', 'وصلت', 'تعبئة', 'تأكيد'];
+
   return (
-    <SafeAreaView className="flex-1 bg-slate-50">
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
-        <Pressable onPress={() => router.back()} className="self-start mb-3">
-          <Text className="text-aqua-700">→ رجوع</Text>
-        </Pressable>
-
-        <View className="bg-white rounded-2xl shadow-sm p-4">
-          <Text className="text-xs text-slate-500">
-            {task.kind === 'REFILL' ? 'تعبئة' : task.kind === 'TANK_DELIVERY' ? 'توصيل خزان' : 'سحب خزان'}
-          </Text>
-          <Text className="font-bold text-lg mt-0.5">{task.customer.fullName}</Text>
-          <Text className="text-xs text-slate-500 mt-1">{task.customer.addressLine}</Text>
-          <Text className="text-xs text-slate-500">{task.customer.district}</Text>
-          {task.tank && (
-            <Text className="text-[11px] text-slate-400 mt-2 font-mono">
-              QR: {task.tank.qrCode}
-            </Text>
-          )}
-          {/* In-app map preview — customer pin + driver's current location.
-              Tappable, but the big navigation button below does the real
-              work via Apple/Google Maps. */}
-          {(task.customer.locationLat != null && task.customer.locationLng != null) && (
-            <View style={{ height: 180, borderRadius: 14, overflow: 'hidden', marginTop: 12 }}>
-              <TaskMap
-                customer={{ lat: task.customer.locationLat, lng: task.customer.locationLng }}
-                driver={driverCoord}
-              />
-            </View>
-          )}
-
-          {/* زر الملاحة — يفتح Google Maps / Apple Maps بالـ GPS الدقيق إن وُجد */}
-          <Pressable
-            onPress={openNavigation}
-            className="mt-3 bg-aqua-600 rounded-xl py-4 px-3 flex-row-reverse items-center justify-between"
+    <View className="flex-1" style={{ backgroundColor: '#f6f8fa' }}>
+      {/* ── Gradient header — back arrow, title, status pill, customer name + address + QR ── */}
+      <LinearGradient
+        colors={headerColors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{
+          paddingHorizontal: 16,
+          paddingBottom: 26,
+          borderBottomLeftRadius: 26,
+          borderBottomRightRadius: 26,
+        }}
+      >
+        <SafeAreaView edges={['top']}>
+          <View
+            className="flex-row-reverse items-center justify-between"
+            style={{ paddingTop: 4 }}
           >
-            <View className="flex-row-reverse items-center gap-2">
-              <Text className="text-lg">🗺️</Text>
-              <Text className="text-white font-bold text-base">افتح الخرائط للملاحة</Text>
-            </View>
-            <Text className="text-white text-xs">›</Text>
-          </Pressable>
-        </View>
+            <Pressable
+              onPress={() => router.back()}
+              hitSlop={10}
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 13,
+                backgroundColor: 'rgba(255,255,255,0.18)',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <MaterialIcons name="arrow-forward" size={20} color="#fff" />
+            </Pressable>
 
-        {task.kind === 'TANK_RECLAIM' ? (
-          <View className="mt-4">
-            <Text className="font-bold text-sm mb-2">اختر سبب السحب:</Text>
+            <Text className="text-white font-bold text-[17px]">{kindLabel}</Text>
+
+            <View
+              className="flex-row-reverse items-center gap-1.5 px-3 py-1.5 rounded-full"
+              style={{ backgroundColor: 'rgba(255,255,255,0.22)' }}
+            >
+              <View
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: 4,
+                  backgroundColor: '#fff',
+                }}
+              />
+              <Text className="text-white text-[11.5px] font-bold">{statusPill}</Text>
+            </View>
+          </View>
+
+          <View className="mt-3.5" style={{ alignItems: 'flex-end' }}>
+            <Text className="text-white font-black text-[21px]">
+              {customer?.fullName ?? '—'}
+            </Text>
+            <Text className="text-white text-[12.5px] mt-1" style={{ opacity: 0.9 }}>
+              {(customer?.addressLine ?? '') +
+                (customer?.district ? ` · ${customer.district}` : '') +
+                (task.tank?.qrCode ? ` · QR ${task.tank.qrCode}` : '')}
+            </Text>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Map with floating glass overlay (distance + ETA or destination) + compact nav button ── */}
+        <Animated.View
+          entering={FadeInDown.duration(380)}
+          style={{
+            height: 168,
+            borderRadius: 20,
+            overflow: 'hidden',
+            marginTop: -14,
+            shadowColor: '#0f172a',
+            shadowOpacity: 0.1,
+            shadowRadius: 18,
+            shadowOffset: { width: 0, height: 10 },
+            elevation: 6,
+            backgroundColor: '#eaf0f4',
+          }}
+        >
+          {hasCustomerCoord ? (
+            <TaskMap
+              customer={{ lat: customer!.locationLat!, lng: customer!.locationLng! }}
+              driver={driverCoord}
+            />
+          ) : (
+            <View
+              style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <MaterialIcons name="location-off" size={28} color="#94a3b8" />
+              <Text className="text-slate-400 text-[12px] mt-1">
+                لا يوجد موقع GPS — استعمل العنوان
+              </Text>
+            </View>
+          )}
+
+          {/* Glass overlay */}
+          <View
+            style={{
+              position: 'absolute',
+              left: 10,
+              right: 10,
+              bottom: 10,
+              backgroundColor: 'rgba(255,255,255,0.9)',
+              borderRadius: 14,
+              paddingHorizontal: 12,
+              paddingVertical: 9,
+              flexDirection: 'row-reverse',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              shadowColor: '#0f172a',
+              shadowOpacity: 0.12,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 4,
+            }}
+          >
+            <View className="flex-row-reverse" style={{ gap: 16, flex: 1 }}>
+              {distanceText ? (
+                <>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text className="text-slate-600 text-[11px] font-bold">المسافة</Text>
+                    <Text style={{ color: '#0f172a' }} className="text-[15px] font-black">
+                      {distanceText}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text className="text-slate-600 text-[11px] font-bold">الوصول</Text>
+                    <Text style={{ color: '#0f172a' }} className="text-[15px] font-black">
+                      {etaText}
+                    </Text>
+                  </View>
+                </>
+              ) : (
+                <View style={{ alignItems: 'flex-end', flex: 1 }}>
+                  <Text className="text-slate-600 text-[11px] font-bold">الوجهة</Text>
+                  <Text
+                    style={{ color: '#0f172a' }}
+                    className="text-[13px] font-black"
+                    numberOfLines={1}
+                  >
+                    {customer?.addressLine ?? customer?.district ?? '—'}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <Pressable
+              onPress={openNavigation}
+              className="flex-row-reverse items-center gap-1.5"
+              style={{
+                backgroundColor: greenTheme ? '#059669' : '#0891b2',
+                borderRadius: 11,
+                paddingHorizontal: 12,
+                paddingVertical: 9,
+              }}
+            >
+              <MaterialIcons name="navigation" size={15} color="#fff" />
+              <Text className="text-white text-[12.5px] font-bold">الملاحة</Text>
+            </Pressable>
+          </View>
+        </Animated.View>
+
+        {/* ── Customer card: avatar + name + phone + compact circular call/whatsapp buttons ── */}
+        <Animated.View
+          entering={FadeInDown.duration(380).delay(60)}
+          className="bg-white"
+          style={{
+            borderRadius: 22,
+            padding: 13,
+            marginTop: 14,
+            shadowColor: '#0f172a',
+            shadowOpacity: 0.06,
+            shadowRadius: 8,
+            shadowOffset: { width: 0, height: 2 },
+            elevation: 2,
+          }}
+        >
+          <View className="flex-row-reverse items-center" style={{ gap: 11 }}>
+            <LinearGradient
+              colors={['#22d3ee', '#0e7490']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                width: 46,
+                height: 46,
+                borderRadius: 15,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text className="text-white font-black text-[18px]">{avatarInitial}</Text>
+            </LinearGradient>
+
+            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+              <Text className="font-bold text-[15px] text-slate-900">
+                {customer?.fullName ?? '—'}
+              </Text>
+              <Text className="text-[11.5px] text-slate-400 mt-0.5">
+                {customer?.phone ?? 'لا يوجد رقم'}
+              </Text>
+            </View>
+
+            {customer?.phone ? (
+              <View className="flex-row-reverse" style={{ gap: 8 }}>
+                <Pressable
+                  onPress={() => Linking.openURL(`tel:${customer.phone}`)}
+                  style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: 15,
+                    backgroundColor: '#10b981',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <MaterialIcons name="call" size={20} color="#fff" />
+                </Pressable>
+                <Pressable
+                  onPress={() =>
+                    Linking.openURL(
+                      `https://wa.me/${customer.phone.replace(/^0/, '964')}`,
+                    )
+                  }
+                  style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: 15,
+                    backgroundColor: '#25D366',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <MaterialIcons name="chat" size={20} color="#fff" />
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        </Animated.View>
+
+        {isReclaim ? (
+          /* ── TANK_RECLAIM branch — unchanged logic, restyled container ── */
+          <Animated.View entering={FadeInDown.duration(380).delay(120)} className="mt-4">
+            <Text className="font-bold text-sm mb-2 text-right">اختر سبب السحب:</Text>
             {RECLAIM_REASONS.map((r) => (
               <Pressable
                 key={r.id}
                 onPress={() => setReclaimReason(r.id)}
-                className={`bg-white rounded-xl p-3 mb-2 flex-row items-center gap-3 border-2 ${
+                className={`bg-white rounded-2xl p-3 mb-2 flex-row-reverse items-center gap-3 border-2 ${
                   reclaimReason === r.id ? 'border-danger-500' : 'border-transparent'
                 }`}
               >
                 <Text className="text-xl">{r.emoji}</Text>
-                <Text className="flex-1 font-bold text-sm">{r.label}</Text>
+                <Text className="flex-1 font-bold text-sm text-right">{r.label}</Text>
                 <View
                   className={`w-5 h-5 rounded-full border-2 ${
                     reclaimReason === r.id
@@ -378,98 +626,227 @@ export default function TaskDetail() {
             <Pressable
               onPress={onCompleteReclaim}
               disabled={submitting || !reclaimReason}
-              className={`rounded-xl py-4 mt-3 items-center ${
+              className={`rounded-2xl py-4 mt-3 items-center ${
                 submitting || !reclaimReason ? 'bg-slate-300' : 'bg-danger-500'
               }`}
             >
               {submitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text className="text-white font-bold">📷 صوّر وأكّد السحب</Text>
+                <Text className="text-white font-bold">✓ أكّد السحب</Text>
               )}
             </Pressable>
-          </View>
+          </Animated.View>
         ) : (
-          <View className="mt-4">
-            {/* Status badge — يعرض المرحلة الحالية للسائق + للزبون
-                (الزبون يستلم نفس الحالة عبر تحديث الـ polling) */}
-            <View
-              className="rounded-xl p-3 mb-3 flex-row-reverse items-center gap-2"
-              style={{
-                backgroundColor: task.status === 'EN_ROUTE' ? '#ecfeff' : '#f1f5f9',
-                borderWidth: 1,
-                borderColor: task.status === 'EN_ROUTE' ? '#67e8f9' : '#e2e8f0',
-              }}
+          <>
+            {/* ── Step tracker (horizontal): قبول ✓ → في الطريق → وصلت → تعبئة → تأكيد ── */}
+            <Animated.View
+              entering={FadeInDown.duration(380).delay(120)}
+              className="flex-row-reverse items-start justify-between"
+              style={{ marginTop: 16, marginBottom: 6, paddingHorizontal: 4 }}
             >
-              <View
+              {steps.map((label, i) => {
+                const done = i < stepCurrentIndex;
+                const current = i === stepCurrentIndex;
+                const circleBg = done ? '#10b981' : current ? '#0891b2' : '#e2e8f0';
+                const circleColor = done || current ? '#fff' : '#94a3b8';
+                return (
+                  <View key={label} style={{ flex: 1, alignItems: 'center' }}>
+                    {/* connector line to the previous (visually right) step */}
+                    {i < steps.length - 1 && (
+                      <View
+                        style={{
+                          position: 'absolute',
+                          top: 14,
+                          right: '-50%',
+                          width: '100%',
+                          height: 3,
+                          backgroundColor: i < stepCurrentIndex ? '#34d399' : '#e2e8f0',
+                        }}
+                      />
+                    )}
+                    <View
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 15,
+                        backgroundColor: circleBg,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 2,
+                        ...(current
+                          ? {
+                              shadowColor: '#0891b2',
+                              shadowOpacity: 0.4,
+                              shadowRadius: 6,
+                              shadowOffset: { width: 0, height: 0 },
+                            }
+                          : null),
+                      }}
+                    >
+                      <Text style={{ color: circleColor }} className="text-[12px] font-bold">
+                        {done ? '✓' : current ? '●' : String(i + 1)}
+                      </Text>
+                    </View>
+                    <Text
+                      className="text-[10px] font-bold mt-1.5 text-center"
+                      style={{ color: done || current ? '#0f172a' : '#94a3b8' }}
+                    >
+                      {label}
+                    </Text>
+                  </View>
+                );
+              })}
+            </Animated.View>
+
+            {/* ── Cash card (gradient): تُحصّل نقداً عند التسليم + big price ── */}
+            <Animated.View entering={FadeInDown.duration(380).delay(180)}>
+              <LinearGradient
+                colors={['#0e7490', '#0891b2']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
                 style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 8,
-                  backgroundColor: task.status === 'EN_ROUTE' ? '#0891b2' : '#94a3b8',
+                  borderRadius: 20,
+                  padding: 16,
+                  marginTop: 12,
+                  marginBottom: 14,
+                  flexDirection: 'row-reverse',
                   alignItems: 'center',
-                  justifyContent: 'center',
+                  justifyContent: 'space-between',
+                  shadowColor: '#0891b2',
+                  shadowOpacity: 0.28,
+                  shadowRadius: 16,
+                  shadowOffset: { width: 0, height: 12 },
+                  elevation: 5,
                 }}
               >
-                <Text className="text-white text-xs">
-                  {task.status === 'EN_ROUTE' ? '🚐' : '📋'}
-                </Text>
-              </View>
-              <Text className="flex-1 text-xs font-bold text-slate-800 text-right">
-                {task.status === 'EN_ROUTE'
-                  ? 'أنت في الطريق — الزبون يرى موقعك'
-                  : task.status === 'ASSIGNED'
-                    ? 'الطلب مُسند لك — ابدأ الجولة لإخبار الزبون'
-                    : 'حالة الطلب: ' + task.status}
-              </Text>
-            </View>
-
-            {/* Step 1: ابدأ الجولة (visible only when ASSIGNED) */}
-            {task.status === 'ASSIGNED' && (
-              <Pressable
-                onPress={onStartTrip}
-                disabled={submitting}
-                className={`rounded-xl py-4 items-center mb-3 ${
-                  submitting ? 'bg-slate-300' : 'bg-sky-600'
-                }`}
-              >
-                {submitting ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text className="text-white font-bold">
-                    🚐 ابدأ الجولة (إخبار الزبون)
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text className="text-white text-[12px] font-bold" style={{ opacity: 0.9 }}>
+                    تُحصّل نقداً عند التسليم
                   </Text>
-                )}
-              </Pressable>
-            )}
+                  <Text className="text-white font-black text-[26px] mt-0.5">
+                    {iqd(task.priceIqd ?? 0)}
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 15,
+                    backgroundColor: 'rgba(255,255,255,0.18)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <MaterialIcons name="payments" size={24} color="#fff" />
+                </View>
+              </LinearGradient>
+            </Animated.View>
 
-            <View className="bg-slate-50 rounded-xl p-3 mb-3">
-              <Text className="text-[11px] text-slate-600 leading-5 text-right">
+            {/* checklist (kept from original — informational) */}
+            <View
+              className="bg-white rounded-2xl p-3 mb-3"
+              style={{ borderWidth: 1, borderColor: '#e2e8f0' }}
+            >
+              <Text className="text-[11.5px] text-slate-600 leading-6 text-right">
                 ✓ سيُؤخذ GPS تلقائياً للتحقق من وصولك للعنوان{'\n'}
-                ✓ صورة الخزان إلزامية كدليل{'\n'}
+                ✓ الدفع نقدي عند التسليم{'\n'}
                 ✓ الزبون سيستلم تأكيد عبر WhatsApp تلقائياً
               </Text>
             </View>
-            <Pressable
-              onPress={onCompleteRefill}
-              disabled={submitting}
-              className={`rounded-xl py-4 items-center ${
-                submitting ? 'bg-slate-300' : 'bg-aqua-600'
-              }`}
-            >
-              {submitting ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text className="text-white font-bold">
-                  ✓ تم {task.kind === 'TANK_DELIVERY' ? 'التوصيل' : 'التعبئة'} — أكّد الآن (
-                  {iqd(task.priceIqd)})
+
+            {/* ── ONE primary action button — changes with status, same handlers ── */}
+            {isAssigned ? (
+              <Pressable onPress={onStartTrip} disabled={submitting}>
+                <LinearGradient
+                  colors={submitting ? ['#cbd5e1', '#94a3b8'] : ['#06b6d4', '#0e7490']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{
+                    borderRadius: 16,
+                    paddingVertical: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    shadowColor: '#0891b2',
+                    shadowOpacity: 0.3,
+                    shadowRadius: 14,
+                    shadowOffset: { width: 0, height: 8 },
+                    elevation: 5,
+                  }}
+                >
+                  {submitting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text className="text-white font-bold text-[16px]">▶ ابدأ التوصيل</Text>
+                  )}
+                </LinearGradient>
+              </Pressable>
+            ) : (
+              <Pressable onPress={onCompleteRefill} disabled={submitting}>
+                <LinearGradient
+                  colors={submitting ? ['#cbd5e1', '#94a3b8'] : ['#10b981', '#059669']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{
+                    borderRadius: 16,
+                    paddingVertical: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    shadowColor: '#059669',
+                    shadowOpacity: 0.3,
+                    shadowRadius: 14,
+                    shadowOffset: { width: 0, height: 8 },
+                    elevation: 5,
+                  }}
+                >
+                  {submitting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text className="text-white font-bold text-[16px]">
+                      ✓ تأكيد {completeVerb} والتحصيل
+                    </Text>
+                  )}
+                </LinearGradient>
+              </Pressable>
+            )}
+
+            {/* ── Subtle secondary: تعذّر التسليم (fail path) — unchanged handler ── */}
+            {(isAssigned || isEnRoute) && (
+              <Pressable
+                onPress={() => {
+                  Alert.alert(
+                    'تعذّر التسليم',
+                    'اختر السبب',
+                    [
+                      { text: 'إلغاء', style: 'cancel' },
+                      {
+                        text: 'الزبون غير متواجد',
+                        onPress: () => cancelWithReason('الزبون غير متواجد'),
+                      },
+                      {
+                        text: 'العنوان خاطئ',
+                        onPress: () => cancelWithReason('العنوان خاطئ'),
+                      },
+                      {
+                        text: 'رفض الزبون',
+                        onPress: () => cancelWithReason('رفض الزبون'),
+                      },
+                    ],
+                  );
+                }}
+                disabled={submitting}
+                className="mt-2.5 rounded-2xl py-3 items-center bg-white"
+                style={{ borderWidth: 1.5, borderColor: '#fecaca' }}
+              >
+                <Text className="text-danger-500 font-bold text-[13.5px]">
+                  ✕ تعذّر التسليم
                 </Text>
-              )}
-            </Pressable>
-          </View>
+              </Pressable>
+            )}
+          </>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -485,15 +862,28 @@ function TaskMap({
   customer: { lat: number; lng: number };
   driver: { lat: number; lng: number } | null;
 }) {
+  // MapKit's setRegion: raises an uncatchable NSException (crashes the whole
+  // app) on a non-finite coordinate or a span beyond its valid range. So we
+  // require finite customer coords, only use the driver pin when it's finite
+  // AND plausibly near (< ~1.5° ≈ 160 km — a far/garbage GPS fix is ignored),
+  // and clamp the region span.
+  const fin = (n: any): n is number => typeof n === 'number' && Number.isFinite(n);
+  const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
+
+  if (!fin(customer?.lat) || !fin(customer?.lng)) return null;
+  const nearDriver =
+    driver && fin(driver.lat) && fin(driver.lng) &&
+    Math.abs(customer.lat - driver.lat) < 1.5 && Math.abs(customer.lng - driver.lng) < 1.5
+      ? driver
+      : null;
+
   let region: Region;
-  if (driver) {
-    const midLat = (customer.lat + driver.lat) / 2;
-    const midLng = (customer.lng + driver.lng) / 2;
+  if (nearDriver) {
     region = {
-      latitude: midLat,
-      longitude: midLng,
-      latitudeDelta: Math.abs(customer.lat - driver.lat) * 2.4 + 0.005,
-      longitudeDelta: Math.abs(customer.lng - driver.lng) * 2.4 + 0.005,
+      latitude: (customer.lat + nearDriver.lat) / 2,
+      longitude: (customer.lng + nearDriver.lng) / 2,
+      latitudeDelta: clamp(Math.abs(customer.lat - nearDriver.lat) * 2.4 + 0.01, 0.005, 1.5),
+      longitudeDelta: clamp(Math.abs(customer.lng - nearDriver.lng) * 2.4 + 0.01, 0.005, 1.5),
     };
   } else {
     region = {
@@ -511,9 +901,9 @@ function TaskMap({
         title="الزبون"
         pinColor="#0891b2"
       />
-      {driver && (
+      {nearDriver && (
         <Marker
-          coordinate={{ latitude: driver.lat, longitude: driver.lng }}
+          coordinate={{ latitude: nearDriver.lat, longitude: nearDriver.lng }}
           title="موقعي"
           pinColor="#16a34a"
         />

@@ -43,7 +43,7 @@ const BAGHDAD_FALLBACK = { latitude: 33.3152, longitude: 44.3661 };
 
 export default function MapPicker() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ lat?: string; lng?: string }>();
+  const params = useLocalSearchParams<{ lat?: string; lng?: string; returnTo?: string }>();
   const mapRef = useRef<MapView | null>(null);
 
   const initialLat = params.lat ? Number(params.lat) : null;
@@ -104,10 +104,11 @@ export default function MapPicker() {
     } finally {
       setReverseLoading(false);
     }
-    // Pass back via replace so back-button on the signup screen doesn't
-    // reopen the picker. The signup component reads these on focus.
+    // Pass back via replace so back-button on the caller doesn't reopen
+    // the picker. The caller reads these params on focus. Defaults to the
+    // signup wizard, but any screen can pass `returnTo` (e.g. /addresses).
     router.replace({
-      pathname: '/(auth)/signup',
+      pathname: (params.returnTo as any) ?? '/(auth)/signup',
       params: {
         pickedLat: String(coord.latitude),
         pickedLng: String(coord.longitude),

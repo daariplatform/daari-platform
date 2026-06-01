@@ -1,10 +1,21 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { fmtDate, iqd } from '@/lib/format';
-import { Truck, UserCheck, X, Phone, MapPin, Clock, ChevronDown } from 'lucide-react';
+import {
+  Truck,
+  UserCheck,
+  X,
+  Phone,
+  MapPin,
+  Clock,
+  ChevronDown,
+  Eye,
+  XCircle,
+} from 'lucide-react';
 
 interface Order {
   id: string;
@@ -189,20 +200,27 @@ export default function OrdersPage() {
 function OrderCard({ order, onAssign }: { order: Order; onAssign: () => void }) {
   return (
     <div className="bg-white rounded-xl p-3 shadow-sm border border-slate-100">
-      <div className="flex items-start justify-between mb-2">
-        <p className="font-bold text-sm">{buyerName(order)}</p>
-        <p className="text-sm font-bold text-aqua-700">{iqd(order.priceIqd)}</p>
-      </div>
-      <div className="flex items-center gap-1 text-xs text-slate-500 mb-1">
-        <MapPin size={11} /> {buyerDistrict(order)}
-      </div>
-      <div className="flex items-center gap-1 text-xs text-slate-500 mb-2">
-        <Phone size={11} />{' '}
-        <span dir="ltr">{order.customer?.phone ?? order.walkinBuyerPhone ?? '—'}</span>
-      </div>
-      <div className="flex items-center gap-1 text-xs text-slate-400 mb-3">
-        <Clock size={11} /> {fmtDate(order.requestedAt)}
-      </div>
+      <Link
+        href={`/dashboard/orders/${order.id}` as any}
+        className="block hover:opacity-80"
+      >
+        <div className="flex items-start justify-between mb-2">
+          <p className="font-bold text-sm">{buyerName(order)}</p>
+          <p className="text-sm font-bold text-aqua-700">{iqd(order.priceIqd)}</p>
+        </div>
+        <div className="flex items-center gap-1 text-xs text-slate-500 mb-1">
+          <MapPin size={11} /> {buyerDistrict(order)}
+        </div>
+        <div className="flex items-center gap-1 text-xs text-slate-500 mb-2">
+          <Phone size={11} />{' '}
+          <span dir="ltr">
+            {order.customer?.phone ?? order.walkinBuyerPhone ?? '—'}
+          </span>
+        </div>
+        <div className="flex items-center gap-1 text-xs text-slate-400 mb-3">
+          <Clock size={11} /> {fmtDate(order.requestedAt)}
+        </div>
+      </Link>
       {order.driver ? (
         <div className="bg-blue-50 rounded-lg p-2 flex items-center gap-2">
           <Truck size={14} className="text-blue-600" />
@@ -221,6 +239,23 @@ function OrderCard({ order, onAssign }: { order: Order; onAssign: () => void }) 
 }
 
 function OrdersTable({ orders, onAssign }: { orders?: Order[]; onAssign: (o: Order) => void }) {
+  const qc = useQueryClient();
+  // Inline cancel — reuses the backend `/orders/:id/cancel` route that
+  // already gates by capability. Prompts for a reason so the customer
+  // sees something better than "تم الإلغاء". Keeps the row in place
+  // so the plant can audit; row re-rendering pulls the new status.
+  const cancelMutation = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) =>
+      (await api.post(`/orders/${id}/cancel`, { reason })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['orders'] }),
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? 'تعذّر الإلغاء';
+      alert(msg);
+    },
+  });
+
   return (
     <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
       <table className="w-full text-sm">
@@ -236,38 +271,71 @@ function OrdersTable({ orders, onAssign }: { orders?: Order[]; onAssign: (o: Ord
           </tr>
         </thead>
         <tbody>
-          {orders?.map((o) => (
-            <tr key={o.id} className="border-t hover:bg-slate-50">
-              <td className="px-4 py-3 font-medium">{buyerName(o)}</td>
-              <td className="px-4 py-3">{buyerDistrict(o)}</td>
-              <td className="px-4 py-3 text-slate-600">
-                {o.driver?.user.fullName ?? <span className="text-slate-400">—</span>}
-              </td>
-              <td className="px-4 py-3">
-                <span
-                  className={`px-2 py-1 rounded-full text-xs ring-1 ${
-                    STATUS[o.status]?.klass ?? ''
-                  }`}
-                >
-                  {STATUS[o.status]?.label ?? o.status}
-                </span>
-              </td>
-              <td className="px-4 py-3 font-bold">{iqd(o.priceIqd)}</td>
-              <td className="px-4 py-3 text-slate-500 text-xs">
-                {fmtDate(o.completedAt ?? o.requestedAt)}
-              </td>
-              <td className="px-4 py-3">
-                {!o.driver && o.status === 'PENDING' && (
-                  <button
-                    onClick={() => onAssign(o)}
-                    className="text-xs text-aqua-700 hover:text-aqua-900 font-medium"
+          {orders?.map((o) => {
+            const canCancel = o.status !== 'COMPLETED' && o.status !== 'CANCELLED';
+            return (
+              <tr key={o.id} className="border-t hover:bg-slate-50">
+                <td className="px-4 py-3 font-medium">{buyerName(o)}</td>
+                <td className="px-4 py-3">{buyerDistrict(o)}</td>
+                <td className="px-4 py-3 text-slate-600">
+                  {o.driver?.user.fullName ?? <span className="text-slate-400">—</span>}
+                </td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs ring-1 ${
+                      STATUS[o.status]?.klass ?? ''
+                    }`}
                   >
-                    تعيين سائق
-                  </button>
-                )}
-              </td>
-            </tr>
-          ))}
+                    {STATUS[o.status]?.label ?? o.status}
+                  </span>
+                </td>
+                <td className="px-4 py-3 font-bold">{iqd(o.priceIqd)}</td>
+                <td className="px-4 py-3 text-slate-500 text-xs">
+                  {fmtDate(o.completedAt ?? o.requestedAt)}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    {/* Detail page — wired through the new
+                        /dashboard/orders/[id] route. Was previously a
+                        404 because the page didn't exist. */}
+                    <Link
+                      href={`/dashboard/orders/${o.id}` as any}
+                      className="text-xs text-aqua-700 hover:text-aqua-900 font-medium flex items-center gap-1"
+                    >
+                      <Eye size={13} /> تفاصيل
+                    </Link>
+                    {!o.driver && o.status === 'PENDING' && (
+                      <button
+                        onClick={() => onAssign(o)}
+                        className="text-xs text-blue-700 hover:text-blue-900 font-medium"
+                      >
+                        تعيين سائق
+                      </button>
+                    )}
+                    {canCancel && (
+                      <button
+                        onClick={() => {
+                          const reason = window.prompt(
+                            'سبب الإلغاء؟',
+                            'تم الإلغاء من قِبَل المعمل',
+                          );
+                          if (reason === null) return;
+                          cancelMutation.mutate({
+                            id: o.id,
+                            reason: reason || 'تم الإلغاء من قِبَل المعمل',
+                          });
+                        }}
+                        disabled={cancelMutation.isPending}
+                        className="text-xs text-red-600 hover:text-red-800 font-medium flex items-center gap-1 disabled:opacity-50"
+                      >
+                        <XCircle size={13} /> إلغاء
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
