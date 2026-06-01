@@ -1,0 +1,28 @@
+# Dart / Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+.pub-cache/
+.pub/
+
+# يُلتزَم pubspec.lock للتطبيقات فقط، ويُتجاهَل للحزم
+packages/**/pubspec.lock
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# نظام التشغيل
+**/.DS_Store
+Thumbs.db
+
+# أسرار البناء (لا تلتزمها)
+**/google-services.json
+**/GoogleService-Info.plist
+**/key.properties
+**/*.keystore
+**/*.jks
+.env

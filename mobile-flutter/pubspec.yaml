@@ -1,0 +1,16 @@
+# جذر الـ Dart pub workspace (يتطلّب Flutter 3.27+ / Dart 3.6+).
+# يجمع الحزمة المشتركة وتطبيقَي الزبون والسائق في حلٍّ واحد للاعتماديات.
+#
+# الأوامر من هذا المجلد:
+#   flutter pub get          ← يحلّ كل الحزم دفعة واحدة
+#   flutter analyze          ← يفحص الكل
+name: daari_flutter_workspace
+publish_to: none
+
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+
+workspace:
+  - packages/daari_core
+  - apps/customer
+  - apps/driver
