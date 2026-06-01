@@ -71,7 +71,13 @@ deploy_api() {
 set -euo pipefail
 cd /var/www/daari-water-api
 npm ci --omit=dev
-npx prisma migrate deploy
+# This project syncs the schema with `prisma db push`, NOT migrations (there is
+# no prisma/migrations folder — see README §9). `db push` also regenerates the
+# client by default, so a fresh DB gets its tables and the app boots cleanly.
+# (Previously this ran `prisma migrate deploy`, which on a migration-less repo
+# creates ZERO tables and crashes the API on first query.)
+npx prisma db push --skip-generate
+npx prisma generate
 mkdir -p /var/log/daari-water
 chown -R daari-water:daari-water /var/log/daari-water /var/www/daari-water-api
 systemctl restart daari-water-api

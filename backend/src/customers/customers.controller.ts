@@ -331,7 +331,13 @@ export class CustomersController {
     @Param('id') id: string,
     @Body() dto: MoveDto,
   ) {
-    return this.customers.startMove(user.tenantId!, id, dto.newLng, dto.newLat);
+    // A plant admin may relocate any customer in their tenant; a plain customer
+    // may relocate ONLY their own record. Pass the requester's userId in the
+    // customer case so the service scopes the lookup to { userId } — closing the
+    // IDOR where any authenticated customer could move another customer's home
+    // by guessing/iterating the :id path param.
+    const ownerUserId = user.capabilities.includes('plant_admin') ? undefined : user.id;
+    return this.customers.startMove(user.tenantId!, id, dto.newLng, dto.newLat, ownerUserId);
   }
 
   /**

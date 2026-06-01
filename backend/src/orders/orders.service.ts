@@ -21,6 +21,7 @@ import {
   RefillOrderKind,
   RefillOrderStatus,
   TankStatus,
+  TenantStatus,
 } from '@prisma/client';
 import { paginated, type PaginatedResult } from '../common/dto/pagination.dto';
 
@@ -362,8 +363,19 @@ export class OrdersService {
   private async assertWithinPlanLimit(tenantId: string) {
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { plan: true },
+      select: { plan: true, status: true },
     });
+    // Operational enforcement of plant suspension. The platform console promises
+    // a suspended plant "cannot process new orders until reactivated" — this is
+    // where that promise is kept. Every order-creation path funnels through here.
+    if (
+      tenant?.status === TenantStatus.SUSPENDED ||
+      tenant?.status === TenantStatus.CANCELLED
+    ) {
+      throw new ForbiddenException(
+        'هذا المعمل موقوف مؤقتاً ولا يستقبل طلبات جديدة. يرجى التواصل مع إدارة المنصّة.',
+      );
+    }
     const TIER_OPS: Record<string, number> = {
       STARTER: 300,
       PRO: 1500,
@@ -581,6 +593,12 @@ export class OrdersService {
     if (!order.customer) {
       throw new BadRequestException('Order has no associated customer (data integrity issue)');
     }
+    // Idempotent: a duplicate or offline-queue-replayed completion that arrives
+    // after the order is already COMPLETED returns the existing order instead of
+    // re-charging the customer / re-decrementing stock / re-charging the promo wallet.
+    if (order.status === RefillOrderStatus.COMPLETED) {
+      return order;
+    }
     if (order.status !== RefillOrderStatus.EN_ROUTE && order.status !== RefillOrderStatus.ASSIGNED) {
       throw new BadRequestException(`Order is ${order.status}, cannot complete`);
     }
@@ -695,8 +713,17 @@ export class OrdersService {
       order.kind === RefillOrderKind.TANK_RECLAIM ? (tenant?.reclaimBonusIqd ?? 0) : 0;
 
     const result = await this.prisma.$transaction(async (tx) => {
-      const completed = await tx.refillOrder.update({
-        where: { id: orderId },
+      // Atomic transition guard (mirrors claim()): only ONE request can flip
+      // EN_ROUTE/ASSIGNED → COMPLETED. Without this, two concurrent completes —
+      // or an offline-queue replay landing while the first is still in flight —
+      // would both pass the pre-check above and run the balance / stock / promo
+      // side effects twice, double-charging real money. updateMany returns a
+      // count so we abort the loser before any side effect.
+      const transition = await tx.refillOrder.updateMany({
+        where: {
+          id: orderId,
+          status: { in: [RefillOrderStatus.EN_ROUTE, RefillOrderStatus.ASSIGNED] },
+        },
         data: {
           status: RefillOrderStatus.COMPLETED,
           completedAt: new Date(),
@@ -712,6 +739,11 @@ export class OrdersService {
           bonusIqd,
         },
       });
+      if (transition.count === 0) {
+        // Lost the race — another request already finalised this order. Bail
+        // out before side effects; the caller resolves it idempotently below.
+        return null;
+      }
 
       const balanceDelta = input.paidAmountIqd - order.priceIqd; // negative = owes plant
 
@@ -786,8 +818,22 @@ export class OrdersService {
         );
       }
 
-      return completed;
+      return tx.refillOrder.findUniqueOrThrow({ where: { id: orderId } });
     });
+
+    // Idempotent fallback: the transaction returned null because a concurrent /
+    // duplicate request already finalised this order. Return the completed row
+    // without re-running notifications, receipts, or any side effect.
+    if (!result) {
+      const current = await this.prisma.refillOrder.findFirst({
+        where: { id: orderId },
+        include: { tank: { include: { tenant: true } }, customer: true },
+      });
+      if (current && current.status === RefillOrderStatus.COMPLETED) {
+        return current;
+      }
+      throw new BadRequestException('تعذّر إكمال الطلب — ربما أُنهي مسبقاً.');
+    }
 
     // Push notification to customer (outside transaction so a push failure
     // doesn't roll back the completed order). Customer.user might be null

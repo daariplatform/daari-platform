@@ -136,12 +136,10 @@ export class TenantsController {
     return this.tenants.getSubscriptionStatus(user.tenantId!);
   }
 
-  /** Plant owner renews their own subscription (vs platform admin doing it). */
-  @RequireCapability('plant_admin')
-  @Post('me/renew')
-  selfRenew(@CurrentUser() user: AuthUser, @Body() dto: RenewSubscriptionDto) {
-    return this.tenants.renewSubscription(user.tenantId!, dto.plan);
-  }
+  // NOTE: the former POST /tenants/me/renew (plant self-renew) was REMOVED.
+  // It activated a paid subscription with zero payment gate — any plant owner
+  // could renew themselves free, forever, bypassing the cash-to-platform model.
+  // Renewal is a platform-admin action only: POST /tenants/:id/renew below.
 
   // ─── Platform admin (you, the SaaS owner) ─────────────────────────
 

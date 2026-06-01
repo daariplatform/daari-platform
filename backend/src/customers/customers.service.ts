@@ -687,8 +687,23 @@ export class CustomersService {
    * The plant approves and adds a delivery / reclaim job to the driver's
    * route for the new house.
    */
-  async startMove(tenantId: string, customerId: string, newLng: number, newLat: number) {
-    const c = await this.prisma.customer.findFirst({ where: { id: customerId, tenantId } });
+  async startMove(
+    tenantId: string,
+    customerId: string,
+    newLng: number,
+    newLat: number,
+    ownerUserId?: string,
+  ) {
+    // When [ownerUserId] is provided (request came from a plain customer, not a
+    // plant admin) the lookup is additionally scoped to that user — so a
+    // customer can ONLY move their own record, never another customer's by id.
+    const c = await this.prisma.customer.findFirst({
+      where: {
+        id: customerId,
+        tenantId,
+        ...(ownerUserId ? { userId: ownerUserId } : {}),
+      },
+    });
     if (!c) throw new NotFoundException('Customer not found');
     const updated = await this.prisma.customer.update({
       where: { id: customerId },

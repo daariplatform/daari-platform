@@ -7,6 +7,27 @@ const prisma = new PrismaClient();
 async function main() {
   const passwordHash = await argon2.hash('password123');
 
+  // Platform owner (Ahmed) — the ONLY account that can reach platform-console
+  // and every /platform/* route (all guarded by @Roles(PLATFORM_ADMIN)).
+  // Without this row, the owner console is unusable right after a fresh seed.
+  // tenantId is null (the platform admin spans all plants, belongs to none).
+  // Credentials are overridable via env so production never ships a known default.
+  const platformAdminPhone = process.env.PLATFORM_ADMIN_PHONE ?? '07752222558';
+  const platformAdminHash = await argon2.hash(
+    process.env.PLATFORM_ADMIN_PASSWORD ?? 'DaariOwner@2026',
+  );
+  const platformAdmin = await prisma.user.upsert({
+    where: { phone: platformAdminPhone },
+    update: { role: UserRole.PLATFORM_ADMIN },
+    create: {
+      phone: platformAdminPhone,
+      passwordHash: platformAdminHash,
+      fullName: 'مالك المنصّة',
+      role: UserRole.PLATFORM_ADMIN,
+      tenantId: null,
+    },
+  });
+
   const tenant = await prisma.tenant.upsert({
     where: { id: 'demo-tenant' },
     update: {},
@@ -119,7 +140,11 @@ async function main() {
     });
   }
 
-  console.log('Seed complete:', { tenant: tenant.name, owner: owner.phone });
+  console.log('Seed complete:', {
+    tenant: tenant.name,
+    owner: owner.phone,
+    platformAdmin: platformAdmin.phone,
+  });
 }
 
 main()
