@@ -29,6 +29,7 @@ class CashScreen extends ConsumerWidget {
             AsyncView<CashSummary>(
               value: summary,
               onRetry: () => ref.invalidate(cashSummaryProvider),
+              skeleton: const SkeletonList(padding: EdgeInsets.zero),
               data: (s) => _SummarySection(summary: s),
             ),
             const SizedBox(height: 20),
@@ -68,7 +69,7 @@ class _SummarySection extends StatelessWidget {
               child: _StatCard(
                 icon: Icons.account_balance_wallet,
                 label: 'محصّل اليوم',
-                value: Fmt.iqd(summary.collectedTodayIqd),
+                value: summary.collectedTodayIqd,
                 color: AppColors.success,
               ),
             ),
@@ -77,7 +78,7 @@ class _SummarySection extends StatelessWidget {
               child: _StatCard(
                 icon: Icons.upload,
                 label: 'سُلّم اليوم',
-                value: Fmt.iqd(summary.handedOverTodayIqd),
+                value: summary.handedOverTodayIqd,
                 color: AppColors.water600,
               ),
             ),
@@ -87,7 +88,7 @@ class _SummarySection extends StatelessWidget {
         _StatCard(
           icon: Icons.savings,
           label: 'المتبقّي بانتظار التسليم',
-          value: Fmt.iqd(pending),
+          value: pending,
           color: pending > 0 ? AppColors.warn600 : AppColors.success,
           wide: true,
         ),
@@ -122,12 +123,25 @@ class _StatCard extends StatelessWidget {
 
   final IconData icon;
   final String label;
-  final String value;
+
+  /// المبلغ بالدينار — يُعرَض بعدّاد تصاعدي (AnimatedCounter) لا نصّاً ثابتاً.
+  final int value;
   final Color color;
   final bool wide;
 
   @override
   Widget build(BuildContext context) {
+    final labelStyle = const TextStyle(
+        fontSize: 12, color: AppColors.muted, fontWeight: FontWeight.w600);
+    final valueWidget = AnimatedCounter(
+      value: value,
+      format: (n) => Fmt.iqd(n.round()),
+      style: TextStyle(
+        fontSize: wide ? 20 : 17,
+        fontWeight: FontWeight.w900,
+        color: color,
+      ),
+    );
     return SectionCard(
       padding: const EdgeInsets.all(14),
       child: wide
@@ -139,17 +153,9 @@ class _StatCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(label,
-                          style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.muted,
-                              fontWeight: FontWeight.w600)),
+                      Text(label, style: labelStyle),
                       const SizedBox(height: 4),
-                      Text(value,
-                          style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                              color: color)),
+                      valueWidget,
                     ],
                   ),
                 ),
@@ -160,15 +166,9 @@ class _StatCard extends StatelessWidget {
               children: [
                 _IconBadge(icon: icon, color: color),
                 const SizedBox(height: 10),
-                Text(label,
-                    style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.muted,
-                        fontWeight: FontWeight.w600)),
+                Text(label, style: labelStyle),
                 const SizedBox(height: 4),
-                Text(value,
-                    style: TextStyle(
-                        fontSize: 17, fontWeight: FontWeight.w900, color: color)),
+                valueWidget,
               ],
             ),
     );
@@ -306,6 +306,7 @@ class _HandoversSection extends StatelessWidget {
     return AsyncView<List<CashHandover>>(
       value: handovers,
       onRetry: () => ref.invalidate(cashHandoversProvider),
+      skeleton: const SkeletonList(count: 2, padding: EdgeInsets.zero),
       data: (items) {
         if (items.isEmpty) {
           return const EmptyState(

@@ -154,8 +154,9 @@ class _TotalHero extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Text(
-            Fmt.iqd(total),
+          AnimatedCounter(
+            value: total,
+            format: (n) => Fmt.iqd(n.round()),
             style: const TextStyle(
               color: Colors.white,
               fontSize: 30,
@@ -168,13 +169,21 @@ class _TotalHero extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _MiniTotal(label: 'عمولات', value: Fmt.iqd(commission)),
+                child: _MiniTotal(
+                  label: 'عمولات',
+                  value: commission,
+                  format: (n) => Fmt.iqd(n.round()),
+                ),
               ),
               Expanded(
-                child: _MiniTotal(label: 'بونص', value: Fmt.iqd(bonus)),
+                child: _MiniTotal(
+                  label: 'بونص',
+                  value: bonus,
+                  format: (n) => Fmt.iqd(n.round()),
+                ),
               ),
               Expanded(
-                child: _MiniTotal(label: 'مهام', value: '$orders'),
+                child: _MiniTotal(label: 'مهام', value: orders),
               ),
             ],
           ),
@@ -185,10 +194,11 @@ class _TotalHero extends StatelessWidget {
 }
 
 class _MiniTotal extends StatelessWidget {
-  const _MiniTotal({required this.label, required this.value});
+  const _MiniTotal({required this.label, required this.value, this.format});
 
   final String label;
-  final String value;
+  final num value;
+  final String Function(num value)? format;
 
   @override
   Widget build(BuildContext context) {
@@ -204,8 +214,9 @@ class _MiniTotal extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 3),
-        Text(
-          value,
+        AnimatedCounter(
+          value: value,
+          format: format,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(

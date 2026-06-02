@@ -19,6 +19,8 @@ class _VanInventoryScreenState extends ConsumerState<VanInventoryScreen> {
   int _empty = 0;
   bool _hydrated = false;
   bool _saving = false;
+  // بعد أوّل تعديل يدوي نوقف تحريك الإجمالي كي يلاحق أزرار +/− فوراً.
+  bool _userEdited = false;
 
   /// بذر العدّادَين من قيم الخادم مرّة واحدة عند وصول الملفّ.
   void _hydrate(DriverProfile driver) {
@@ -63,7 +65,7 @@ class _VanInventoryScreenState extends ConsumerState<VanInventoryScreen> {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
             children: [
-              _TotalCard(total: total),
+              _TotalCard(total: total, instant: _userEdited),
               const SizedBox(height: 14),
               _StepperCard(
                 label: 'خزانات ممتلئة',
@@ -71,7 +73,10 @@ class _VanInventoryScreenState extends ConsumerState<VanInventoryScreen> {
                 icon: Icons.water_drop,
                 tint: AppColors.water600,
                 value: _full,
-                onChanged: (v) => setState(() => _full = v),
+                onChanged: (v) => setState(() {
+                  _full = v;
+                  _userEdited = true;
+                }),
               ),
               const SizedBox(height: 14),
               _StepperCard(
@@ -80,7 +85,10 @@ class _VanInventoryScreenState extends ConsumerState<VanInventoryScreen> {
                 icon: Icons.opacity,
                 tint: AppColors.slate,
                 value: _empty,
-                onChanged: (v) => setState(() => _empty = v),
+                onChanged: (v) => setState(() {
+                  _empty = v;
+                  _userEdited = true;
+                }),
               ),
               const SizedBox(height: 24),
               LoadingButton(
@@ -99,9 +107,12 @@ class _VanInventoryScreenState extends ConsumerState<VanInventoryScreen> {
 
 /// بطاقة ملخّص: إجمالي الخزانات على الفان.
 class _TotalCard extends StatelessWidget {
-  const _TotalCard({required this.total});
+  const _TotalCard({required this.total, this.instant = false});
 
   final int total;
+
+  /// عند true يُعرَض الإجمالي فوراً (المستخدم يعدّل) بلا تحريك.
+  final bool instant;
 
   @override
   Widget build(BuildContext context) {
@@ -135,7 +146,12 @@ class _TotalCard extends StatelessWidget {
                         fontSize: 13,
                         fontWeight: FontWeight.w700)),
                 const SizedBox(height: 4),
-                Text('$total',
+                AnimatedCounter(
+                    value: total,
+                    // عَدّ تصاعدي عند أوّل ظهور؛ وفوريّ بعد بدء التعديل اليدوي كي
+                    // يبقى الإجمالي متطابقاً مع أزرار +/− بلا تأخّر أو رقم وسطيّ خاطئ.
+                    duration:
+                        instant ? Duration.zero : const Duration(milliseconds: 700),
                     style: const TextStyle(
                         color: Colors.white,
                         fontSize: 30,

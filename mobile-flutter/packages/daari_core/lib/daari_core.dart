@@ -42,6 +42,7 @@ export 'src/models/app_notification.dart';
 // طبقة الـ API
 export 'src/api/api_exception.dart';
 export 'src/api/api_client.dart';
+export 'src/api/response_cache.dart';
 export 'src/api/orders_repository.dart';
 export 'src/api/customer_repository.dart';
 export 'src/api/driver_repository.dart';
@@ -67,6 +68,7 @@ export 'src/services/analytics.dart';
 export 'src/widgets/animated_counter.dart';
 export 'src/widgets/rain_background.dart';
 export 'src/widgets/refill_status_strip.dart';
+export 'src/widgets/skeleton.dart';
 
 // المزوّدات
 export 'src/providers/core_providers.dart';

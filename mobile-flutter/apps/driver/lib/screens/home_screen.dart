@@ -148,6 +148,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   AsyncView<List<DriverTask>>(
                     value: availableAsync,
                     onRetry: () => ref.invalidate(availableOrdersProvider),
+                    skeleton: const SkeletonList(count: 2, padding: EdgeInsets.zero),
                     data: (orders) {
                       if (orders.isEmpty) {
                         return const EmptyState(
@@ -172,6 +173,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   AsyncView<List<DriverTask>>(
                     value: tasksAsync,
                     onRetry: () => ref.invalidate(todayTasksProvider),
+                    skeleton: const SkeletonList(count: 2, padding: EdgeInsets.zero),
                     data: (tasks) {
                       if (tasks.isEmpty) {
                         return const EmptyState(

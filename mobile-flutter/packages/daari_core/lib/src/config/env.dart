@@ -32,6 +32,10 @@ class Env {
   /// مهلة طلبات الشبكة (نفس قيمة axios الحالية: 12s).
   static const Duration httpTimeout = Duration(seconds: 12);
 
+  /// مدّة صلاحية كاش الإقلاع البارد: تُعرَض آخر بيانات GET معروفة عند انقطاع
+  /// الشبكة ضمن هذه المدّة (بديل TTL في `persist.ts` بـ Expo).
+  static const Duration cacheTtl = Duration(hours: 4);
+
   /// وضع العرض: يردّ بيانات وهمية دون خادم (لمراجعة المتجر/العروض).
   /// `flutter run --dart-define=DEMO_MODE=true`.
   static const bool demoMode = bool.fromEnvironment('DEMO_MODE');

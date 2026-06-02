@@ -12,6 +12,8 @@ class AnimatedCounter extends StatelessWidget {
     this.duration = const Duration(milliseconds: 900),
     this.style,
     this.textAlign,
+    this.maxLines,
+    this.overflow,
   });
 
   /// القيمة الهدف.
@@ -23,6 +25,8 @@ class AnimatedCounter extends StatelessWidget {
   final Duration duration;
   final TextStyle? style;
   final TextAlign? textAlign;
+  final int? maxLines;
+  final TextOverflow? overflow;
 
   @override
   Widget build(BuildContext context) {
@@ -31,8 +35,13 @@ class AnimatedCounter extends StatelessWidget {
       tween: Tween<double>(begin: 0, end: value.toDouble()),
       duration: duration,
       curve: Curves.easeOutCubic,
-      builder: (_, animated, __) =>
-          Text(fmt(animated), style: style, textAlign: textAlign),
+      builder: (_, animated, __) => Text(
+        fmt(animated),
+        style: style,
+        textAlign: textAlign,
+        maxLines: maxLines,
+        overflow: overflow,
+      ),
     );
   }
 }

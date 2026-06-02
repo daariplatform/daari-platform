@@ -91,6 +91,12 @@ class _ProfileBody extends ConsumerWidget {
                 child: AsyncView<DriverPerf>(
                   value: perfAsync,
                   onRetry: () => ref.invalidate(perfProvider('month')),
+                  // داخل بطاقة لها حشوتها — هيكل مدمج بلا حشوة مكرّرة.
+                  skeleton: const SkeletonList(
+                    count: 2,
+                    itemHeight: 60,
+                    padding: EdgeInsets.zero,
+                  ),
                   data: (perf) => Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -212,6 +218,8 @@ class _ProfileBody extends ConsumerWidget {
                 label: 'جرد خزانات الفان',
                 onTap: () => context.push('/van-inventory'),
               ),
+              const SizedBox(height: 10),
+              const _NotificationsRow(),
               const SizedBox(height: 10),
               _ActionRow(
                 icon: Icons.lock_outline,
@@ -544,6 +552,101 @@ class _CompRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── بند الإشعارات: يعرض الحالة ويفتح إعدادات النظام عند الضغط ──
+/// يُعيد فحص الحالة عند عودة التطبيق للمقدّمة كي تنعكس أيّ تغييرات فوراً.
+class _NotificationsRow extends ConsumerStatefulWidget {
+  const _NotificationsRow();
+
+  @override
+  ConsumerState<_NotificationsRow> createState() => _NotificationsRowState();
+}
+
+class _NotificationsRowState extends ConsumerState<_NotificationsRow>
+    with WidgetsBindingObserver {
+  bool? _enabled;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final enabled = await ref.read(pushServiceProvider).areNotificationsEnabled();
+    if (mounted) setState(() => _enabled = enabled);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = _enabled;
+    final statusText =
+        enabled == null ? '…' : (enabled ? 'مفعّلة' : 'معطّلة');
+    final statusColor = enabled == true ? AppColors.success : AppColors.muted;
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(AppTheme.radiusInput),
+      child: InkWell(
+        onTap: () => ref.read(pushServiceProvider).openNotificationSettings(),
+        borderRadius: BorderRadius.circular(AppTheme.radiusInput),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppTheme.radiusInput),
+            border: Border.all(color: AppColors.line),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.water100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.notifications_outlined,
+                    size: 20, color: AppColors.water600),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'الإشعارات',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink,
+                  ),
+                ),
+              ),
+              Text(
+                statusText,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  color: statusColor,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.chevron_left, size: 22, color: AppColors.muted),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

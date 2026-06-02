@@ -1,3 +1,4 @@
+import 'package:app_settings/app_settings.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -12,8 +13,18 @@ class PushService {
   PushService(this._notifications);
 
   final NotificationsRepository _notifications;
-  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _local = FlutterLocalNotificationsPlugin();
+
+  /// وصول كسول محميّ لـ FCM: `FirebaseMessaging.instance` يرمي إن لم تُهيّأ
+  /// Firebase (تهيئتها best-effort في main.dart — قد تفشل دون google-services).
+  /// نلتقط الخطأ ونرجع null كي لا ينهار بناء الخدمة ولا قراءتها من شاشة الإعدادات.
+  FirebaseMessaging? get _fcm {
+    try {
+      return FirebaseMessaging.instance;
+    } catch (_) {
+      return null;
+    }
+  }
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
     'default',
@@ -28,21 +39,53 @@ class PushService {
   /// تُستدعى بعد تسجيل الدخول. الفشل صامت (الإشعارات best-effort).
   Future<void> register() async {
     try {
-      final settings = await _fcm.requestPermission();
+      final fcm = _fcm;
+      if (fcm == null) return;
+      final settings = await fcm.requestPermission();
       if (settings.authorizationStatus == AuthorizationStatus.denied) return;
 
       await _initLocal();
 
-      final token = await _fcm.getToken();
+      final token = await fcm.getToken();
       if (token != null) {
         await _sendToken(token);
       }
-      _fcm.onTokenRefresh.listen(_sendToken);
+      fcm.onTokenRefresh.listen(_sendToken);
 
       FirebaseMessaging.onMessage.listen(_showForeground);
       _initialised = true;
     } catch (_) {
       // best effort — الإشعارات لا تعطّل التطبيق
+    }
+  }
+
+  /// هل إذن الإشعارات مفعّل حالياً على مستوى النظام؟ (لعرض الحالة في الإعدادات).
+  /// صامت عند الفشل — نعدّها «غير مفعّلة» كي لا نُظهر حالة كاذبة.
+  Future<bool> areNotificationsEnabled() async {
+    final fcm = _fcm;
+    if (fcm == null) return false;
+    try {
+      final settings = await fcm.getNotificationSettings();
+      switch (settings.authorizationStatus) {
+        case AuthorizationStatus.authorized:
+        case AuthorizationStatus.provisional:
+          return true;
+        case AuthorizationStatus.denied:
+        case AuthorizationStatus.notDetermined:
+          return false;
+      }
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// يفتح صفحة إعدادات إشعارات التطبيق في النظام كي يبدّل المستخدم الإذن.
+  /// (لا يمكن للتطبيق منح/سحب الإذن برمجياً بعد الرفض — يجب فتح الإعدادات.)
+  Future<void> openNotificationSettings() async {
+    try {
+      await AppSettings.openAppSettings(type: AppSettingsType.notification);
+    } catch (_) {
+      // best effort — قد لا تتوفّر صفحة الإعدادات على بعض الأجهزة
     }
   }
 

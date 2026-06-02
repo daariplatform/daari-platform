@@ -139,6 +139,7 @@ class _LookupTabState extends ConsumerState<_LookupTab> {
           AsyncView<List<CustomerProfile>>(
             value: results,
             onRetry: () => ref.invalidate(customerSearchProvider(_query)),
+            skeleton: const SkeletonList(count: 3, padding: EdgeInsets.zero),
             data: (list) {
               if (list.isEmpty) {
                 return const EmptyState(

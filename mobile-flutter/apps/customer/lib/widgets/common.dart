@@ -172,22 +172,27 @@ class EmptyState extends StatelessWidget {
 }
 
 /// عرض موحّد لـ AsyncValue: تحميل/خطأ/بيانات مع زر إعادة محاولة.
+/// حالة التحميل تعرض هيكلاً وامِضاً (Shimmer) بدل دوّار — يمكن تخصيصه عبر [skeleton].
 class AsyncView<T> extends StatelessWidget {
   const AsyncView({
     super.key,
     required this.value,
     required this.data,
     this.onRetry,
+    this.skeleton,
   });
 
   final AsyncValue<T> value;
   final Widget Function(T data) data;
   final VoidCallback? onRetry;
 
+  /// هيكل التحميل المخصّص؛ إن تُرك فارغاً نعرض [SkeletonList] الافتراضي.
+  final Widget? skeleton;
+
   @override
   Widget build(BuildContext context) {
     return value.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => skeleton ?? const SkeletonList(),
       error: (e, _) {
         final msg = e is ApiException ? e.message : 'حدث خطأ. حاول مجدداً.';
         final forbidden = e is ApiException && e.isForbidden;

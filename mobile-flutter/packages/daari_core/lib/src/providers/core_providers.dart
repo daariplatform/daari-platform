@@ -7,6 +7,7 @@ import '../api/customer_repository.dart';
 import '../api/driver_repository.dart';
 import '../api/notifications_repository.dart';
 import '../api/orders_repository.dart';
+import '../api/response_cache.dart';
 import '../api/tenants_repository.dart';
 import '../auth/auth_controller.dart';
 import '../auth/auth_repository.dart';
@@ -26,11 +27,17 @@ final tokenStorageProvider = Provider<TokenStorage>(
   (ref) => TokenStorage(),
 );
 
+/// كاش الإقلاع البارد (آخر استجابات GET) — يُحقَن في Dio ويُمسَح عند الخروج.
+final responseCacheProvider = Provider<ResponseCache>(
+  (ref) => ResponseCache(),
+);
+
 /// عميل الـ API (Dio + interceptors).
 final apiClientProvider = Provider<ApiClient>((ref) {
   final tokens = ref.watch(tokenStorageProvider);
   return ApiClient(
     tokens: tokens,
+    cache: ref.watch(responseCacheProvider),
     onAuthFailure: () async {
       // يُستدعى فقط وقت فشل تجديد التوكن
       await ref.read(authControllerProvider.notifier).onSessionExpired();

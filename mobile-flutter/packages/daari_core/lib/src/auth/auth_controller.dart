@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/api_exception.dart';
 import '../models/me_response.dart';
 import '../providers/core_providers.dart';
 import '../services/analytics.dart';
@@ -23,6 +24,16 @@ class AuthController extends Notifier<AuthState> {
       final me = await ref.read(authRepositoryProvider).me();
       state = AuthState(user: me, status: AuthStatus.authenticated);
       Analytics.identify(me.id, properties: {'role': me.role});
+    } on ApiException catch (e) {
+      // أوفلاين + انتهى كاش /auth/me (>4 ساعات): لا تمسح جلسةً سارية. أبقِ
+      // التوكنات كي تُستعاد الجلسة عند أوّل إقلاع بشبكة، بدل إجبار المستخدم
+      // على تسجيل دخول جديد لمجرّد فتحه التطبيق دون إنترنت.
+      if (e.isNetwork) {
+        state = const AuthState(status: AuthStatus.unauthenticated);
+        return;
+      }
+      await tokens.clear();
+      state = const AuthState(status: AuthStatus.unauthenticated);
     } catch (_) {
       await tokens.clear();
       state = const AuthState(status: AuthStatus.unauthenticated);
@@ -34,6 +45,10 @@ class AuthController extends Notifier<AuthState> {
     required String phone,
     required String password,
   }) async {
+    // امسح كاش الإقلاع البارد لمستخدمٍ سابق على نفس الجهاز قبل بدء جلسة جديدة
+    // — مفاتيح الكاش غير مرتبطة بالهوية (مثل GET /customers/me)، فلو لم يُسجّل
+    // الأوّل خروجاً (إغلاق قسري) قد تُخدَم بياناته للجديد عند انقطاع الشبكة.
+    await ref.read(responseCacheProvider).clear();
     final me = await ref
         .read(authRepositoryProvider)
         .login(phone: phone, password: password);
@@ -43,6 +58,8 @@ class AuthController extends Notifier<AuthState> {
 
   Future<void> logout() async {
     await ref.read(authRepositoryProvider).logout();
+    // امسح كاش الإقلاع البارد كي لا تتسرّب بيانات هذا المستخدم لمن يسجّل بعده.
+    await ref.read(responseCacheProvider).clear();
     state = const AuthState(status: AuthStatus.unauthenticated);
     Analytics.reset();
   }
@@ -50,6 +67,7 @@ class AuthController extends Notifier<AuthState> {
   /// يُستدعى من interceptor عند فشل تجديد التوكن (جلسة ميتة).
   Future<void> onSessionExpired() async {
     await ref.read(tokenStorageProvider).clear();
+    await ref.read(responseCacheProvider).clear();
     state = const AuthState(status: AuthStatus.unauthenticated);
     Analytics.reset();
   }

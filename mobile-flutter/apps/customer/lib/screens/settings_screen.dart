@@ -49,6 +49,7 @@ class SettingsScreen extends ConsumerWidget {
             chevron: true,
             onTap: () => showSnack(context, 'دعم الإنجليزية قريباً'),
           ),
+          const _NotificationsTile(),
           _Tile(
             icon: Icons.key_outlined,
             tint: AppColors.warn500,
@@ -367,6 +368,64 @@ class _Tile extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+// ═══════════════════════════ بند الإشعارات ═══════════════════════════
+/// يعرض حالة إذن الإشعارات («مفعّلة»/«معطّلة») وعند الضغط يفتح إعدادات النظام.
+/// يُعيد فحص الحالة عند عودة التطبيق للمقدّمة كي تنعكس أيّ تغييرات فوراً.
+class _NotificationsTile extends ConsumerStatefulWidget {
+  const _NotificationsTile();
+
+  @override
+  ConsumerState<_NotificationsTile> createState() => _NotificationsTileState();
+}
+
+class _NotificationsTileState extends ConsumerState<_NotificationsTile>
+    with WidgetsBindingObserver {
+  bool? _enabled;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // بعد العودة من إعدادات النظام، أعد قراءة الحالة.
+    if (state == AppLifecycleState.resumed) _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final enabled = await ref.read(pushServiceProvider).areNotificationsEnabled();
+    if (mounted) setState(() => _enabled = enabled);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = _enabled;
+    return _Tile(
+      icon: Icons.notifications_outlined,
+      tint: AppColors.water600,
+      title: 'الإشعارات',
+      trailing: Text(
+        enabled == null ? '…' : (enabled ? 'مفعّلة' : 'معطّلة'),
+        style: TextStyle(
+          color: enabled == true ? AppColors.success : AppColors.muted,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      chevron: true,
+      onTap: () => ref.read(pushServiceProvider).openNotificationSettings(),
     );
   }
 }
