@@ -20,7 +20,10 @@ Future<void> main() async {
     // لم تُضبط google-services بعد — الإشعارات معطّلة فقط.
   }
 
-  runApp(const ProviderScope(child: DaariCustomerApp()));
+  await runWithCrashReporting(
+    const ProviderScope(child: DaariCustomerApp()),
+    appId: 'daari-customer',
+  );
 }
 
 class DaariCustomerApp extends ConsumerWidget {

@@ -31,6 +31,15 @@ dependencies:
   # تخزين بسيط للأعلام والطابور الأوفلاين (بديل AsyncStorage)
   shared_preferences: ^2.3.2
 
+  # طابور الطفرات الأوفلاين (بديل expo-sqlite في worker/lib/offline-queue.ts)
+  sqflite: ^2.4.1
+
+  # كشف حالة الاتصال (شريط «غير متصل» + تصريف الطابور عند عودة الشبكة)
+  connectivity_plus: ^6.1.0
+
+  # رصد الأعطال (بديل @sentry/react-native في lib/sentry.ts)
+  sentry_flutter: ^8.12.0
+
   # التنسيق العربي + IQD (بديل date-fns + Intl)
   # نطاق واسع ليتوافق مع نسخة intl التي يثبّتها flutter_localizations
   intl: ">=0.18.0 <0.21.0"

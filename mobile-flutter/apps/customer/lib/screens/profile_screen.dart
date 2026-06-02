@@ -65,11 +65,14 @@ class ProfileScreen extends ConsumerWidget {
                                 value: '${profile.totalRefills}',
                               ),
                             ),
-                            Container(width: 1, height: 44, color: AppColors.line),
+                            Container(
+                                width: 1, height: 44, color: AppColors.line),
                             Expanded(
                               child: _StatTile(
                                 icon: Icons.account_balance_wallet_outlined,
-                                color: credit ? AppColors.success : AppColors.danger,
+                                color: credit
+                                    ? AppColors.success
+                                    : AppColors.danger,
                                 label: credit ? 'رصيدك' : 'عليك',
                                 value: Fmt.iqd(profile.balanceIqd.abs()),
                               ),
@@ -136,6 +139,12 @@ class ProfileScreen extends ConsumerWidget {
 
                       const SizedBox(height: 16),
                       OutlinedButton.icon(
+                        onPressed: () => _confirmMove(context, ref, profile.id),
+                        icon: const Icon(Icons.move_up),
+                        label: const Text('انتقلت لبيت جديد؟'),
+                      ),
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(
                         onPressed: () => _showChangePassword(context),
                         icon: const Icon(Icons.lock_outline),
                         label: const Text('تغيير كلمة السر'),
@@ -165,6 +174,50 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
+  /// «انتقلت لبيت جديد»: يؤكّد، يلتقط موقع الجهاز الحالي، ثم يحدّث منزل الزبون.
+  Future<void> _confirmMove(
+      BuildContext context, WidgetRef ref, String customerId) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('انتقلت لبيت جديد؟'),
+        content: const Text(
+          'سنحدّث موقع منزلك إلى مكانك الحالي. تأكّد أنك في البيت الجديد الآن.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('تحديث موقعي'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    if (!context.mounted) return;
+    showSnack(context, 'جارٍ تحديد موقعك…');
+    try {
+      final coords = await ref.read(locationServiceProvider).currentCoords();
+      if (coords == null) {
+        if (context.mounted) {
+          showSnack(context, 'تعذّر تحديد موقعك — فعّل خدمات الموقع',
+              error: true);
+        }
+        return;
+      }
+      await ref
+          .read(customerRepositoryProvider)
+          .move(customerId, lng: coords.lng, lat: coords.lat);
+      ref.invalidate(myProfileProvider);
+      if (context.mounted) showSnack(context, 'تم تحديث موقع منزلك بنجاح.');
+    } on ApiException catch (e) {
+      if (context.mounted) showSnack(context, e.message, error: true);
+    }
+  }
+
   Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -178,7 +231,8 @@ class ProfileScreen extends ConsumerWidget {
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('خروج', style: TextStyle(color: AppColors.danger)),
+            child:
+                const Text('خروج', style: TextStyle(color: AppColors.danger)),
           ),
         ],
       ),
@@ -194,7 +248,8 @@ class _ChangePasswordDialog extends ConsumerStatefulWidget {
   const _ChangePasswordDialog();
 
   @override
-  ConsumerState<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
+  ConsumerState<_ChangePasswordDialog> createState() =>
+      _ChangePasswordDialogState();
 }
 
 class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
@@ -267,7 +322,8 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
               ? const SizedBox(
                   height: 18,
                   width: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2.2, color: Colors.white),
                 )
               : const Text('حفظ'),
         ),
@@ -295,7 +351,8 @@ class _HeaderChip extends StatelessWidget {
           Icon(icon, color: Colors.white, size: 16),
           const SizedBox(width: 6),
           Text(label,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -322,7 +379,8 @@ class _StatTile extends StatelessWidget {
         Icon(icon, color: color, size: 26),
         const SizedBox(height: 8),
         Text(value,
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: color)),
+            style: TextStyle(
+                fontSize: 16, fontWeight: FontWeight.w900, color: color)),
         const SizedBox(height: 2),
         Text(label,
             style: const TextStyle(color: AppColors.slate, fontSize: 12)),
@@ -369,7 +427,8 @@ class _LinkDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Divider(height: 1, indent: 64, endIndent: 16, color: AppColors.line);
+    return const Divider(
+        height: 1, indent: 64, endIndent: 16, color: AppColors.line);
   }
 }
 
@@ -399,7 +458,8 @@ class _TermsBanner extends StatelessWidget {
                         color: AppColors.success, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 2),
                 Text('وقّعت شروط الخدمة في ${Fmt.arabicDate(at)}',
-                    style: const TextStyle(color: AppColors.slate, fontSize: 12)),
+                    style:
+                        const TextStyle(color: AppColors.slate, fontSize: 12)),
               ],
             ),
           ),

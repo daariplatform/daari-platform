@@ -41,12 +41,38 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   /// إكمال التسليم (أو استرجاع الخزان) مع تحصيل النقد وإحداثيات الإكمال.
   Future<void> _complete(DriverTask task) async {
     setState(() => _busy = true);
+    // نُجهّز جسم الطلب مسبقاً كي نحفظه في الطابور عند فشل الشبكة.
+    Map<String, dynamic>? pendingBody;
+    final completePath = '/orders/${widget.taskId}/complete';
     try {
       final coords = await ref.read(locationServiceProvider).currentCoords();
       if (coords == null) {
         if (!mounted) return;
-        showSnack(context, 'تعذّر تحديد موقعك — فعّل خدمات الموقع', error: true);
+        showSnack(context, 'تعذّر تحديد موقعك — فعّل خدمات الموقع',
+            error: true);
         return;
+      }
+
+      // حاجز الوصول: ارفض الإكمال إن كان السائق بعيداً عن منزل الزبون (مانع
+      // احتيال «التعبئة من آخر الشارع»). الباك إند يفرض نفس الحدّ عبر
+      // REFILL_GPS_MAX_DISTANCE_M؛ هذا الفحص العميلي يعطي رسالة فورية قبل الإرسال.
+      // يُطبَّق على التعبئة فقط (لا الاسترجاع) وعند توفّر إحداثيات الزبون.
+      const maxArrivalMetres = 50.0;
+      final cust = task.customer;
+      if (task.kind != RefillOrderKind.tankReclaim && cust.hasLocation) {
+        final metres = LocationService.distanceMetres(
+          coords,
+          Coords(lng: cust.locationLng!, lat: cust.locationLat!),
+        );
+        if (metres > maxArrivalMetres) {
+          if (!mounted) return;
+          showSnack(
+            context,
+            'أنت بعيد عن موقع الزبون (${metres.round()} م). اقترب أكثر لإتمام التسليم.',
+            error: true,
+          );
+          return;
+        }
       }
 
       final input = CompleteOrderInput(
@@ -55,13 +81,15 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         completionLng: coords.lng,
         completionLat: coords.lat,
       );
+      final isReclaim = task.kind == RefillOrderKind.tankReclaim;
+      final reclaimInput = isReclaim
+          ? ReclaimInput(complete: input, reason: _reclaimReason)
+          : null;
+      pendingBody = reclaimInput?.toJson() ?? input.toJson();
 
       final repo = ref.read(ordersRepositoryProvider);
-      if (task.kind == RefillOrderKind.tankReclaim) {
-        await repo.reclaim(
-          widget.taskId,
-          ReclaimInput(complete: input, reason: _reclaimReason),
-        );
+      if (reclaimInput != null) {
+        await repo.reclaim(widget.taskId, reclaimInput);
       } else {
         await repo.complete(widget.taskId, input);
       }
@@ -72,6 +100,18 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       showSnack(context, 'تم إتمام المهمة بنجاح');
       context.pop();
     } on ApiException catch (e) {
+      // فشل شبكة → احفظ العملية في الطابور لتُرسَل لاحقاً (لا تُفقَد).
+      if (e.isNetwork && pendingBody != null) {
+        await ref
+            .read(offlineQueueProvider)
+            .enqueue('POST', completePath, pendingBody);
+        ref.invalidate(todayTasksProvider);
+        if (!mounted) return;
+        showSnack(context,
+            'لا يوجد اتصال — حُفظت العملية وستُرسَل تلقائياً عند عودة الشبكة.');
+        context.pop();
+        return;
+      }
       if (!mounted) return;
       showSnack(context, e.message, error: true);
     } finally {
@@ -83,7 +123,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   Future<void> _cancelWithReason(String reason) async {
     setState(() => _busy = true);
     try {
-      await ref.read(ordersRepositoryProvider).cancel(widget.taskId, reason: reason);
+      await ref
+          .read(ordersRepositoryProvider)
+          .cancel(widget.taskId, reason: reason);
       ref.invalidate(todayTasksProvider);
       if (!mounted) return;
       showSnack(context, 'تم إلغاء المهمة — أبلغ المعمل بالتفاصيل');
@@ -101,7 +143,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       context: context,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.radiusCard)),
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(AppTheme.radiusCard)),
       ),
       builder: (sheetContext) {
         const reasons = <String>[
@@ -125,8 +168,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 const SizedBox(height: 12),
                 for (final r in reasons)
                   ListTile(
-                    title: Text(r, style: const TextStyle(fontWeight: FontWeight.w700)),
-                    trailing: const Icon(Icons.chevron_left, color: AppColors.muted),
+                    title: Text(r,
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    trailing:
+                        const Icon(Icons.chevron_left, color: AppColors.muted),
                     onTap: () => Navigator.of(sheetContext).pop(r),
                   ),
               ],
@@ -228,13 +273,15 @@ class _TaskBody extends StatelessWidget {
                 color: AppColors.navy50,
                 borderRadius: BorderRadius.circular(13),
               ),
-              child: Icon(orderKindIcon(task.kind), color: AppColors.navy600, size: 24),
+              child: Icon(orderKindIcon(task.kind),
+                  color: AppColors.navy600, size: 24),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 task.kind.label,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
               ),
             ),
             OrderStatusPill(status: task.status),
@@ -249,7 +296,8 @@ class _TaskBody extends StatelessWidget {
             children: [
               Text(
                 customer.fullName,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 8),
               _InfoRow(icon: Icons.phone, text: customer.phone),
@@ -319,12 +367,16 @@ class _TaskBody extends StatelessWidget {
               const Text(
                 'يُحصّل نقداً عند التسليم',
                 style: TextStyle(
-                    fontSize: 13, color: AppColors.slate, fontWeight: FontWeight.w700),
+                    fontSize: 13,
+                    color: AppColors.slate,
+                    fontWeight: FontWeight.w700),
               ),
               Text(
                 Fmt.iqd(task.priceIqd),
                 style: const TextStyle(
-                    fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.water600),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.water600),
               ),
             ],
           ),
@@ -356,7 +408,8 @@ class _TaskBody extends StatelessWidget {
                           activeColor: AppColors.danger,
                           contentPadding: EdgeInsets.zero,
                           title: Text(r.label,
-                              style: const TextStyle(fontWeight: FontWeight.w700)),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700)),
                         ),
                     ],
                   ),
@@ -378,7 +431,8 @@ class _TaskBody extends StatelessWidget {
           )
         else if (isEnRoute)
           LoadingButton(
-            label: isReclaim ? 'أكّد سحب الخزان' : 'إكمال $completeVerb والتحصيل',
+            label:
+                isReclaim ? 'أكّد سحب الخزان' : 'إكمال $completeVerb والتحصيل',
             icon: Icons.check_circle,
             color: isReclaim ? AppColors.danger : AppColors.success,
             loading: busy,
@@ -388,12 +442,14 @@ class _TaskBody extends StatelessWidget {
           SectionCard(
             child: Row(
               children: [
-                const Icon(Icons.info_outline, color: AppColors.muted, size: 20),
+                const Icon(Icons.info_outline,
+                    color: AppColors.muted, size: 20),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'هذه المهمة بحالة «${task.status.label}» ولا تتطلّب إجراءً الآن.',
-                    style: const TextStyle(color: AppColors.slate, fontSize: 13),
+                    style:
+                        const TextStyle(color: AppColors.slate, fontSize: 13),
                   ),
                 ),
               ],

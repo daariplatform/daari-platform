@@ -1,3 +1,4 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,6 +12,7 @@ import '../auth/auth_controller.dart';
 import '../auth/auth_repository.dart';
 import '../auth/token_storage.dart';
 import '../services/location_service.dart';
+import '../services/offline_queue.dart';
 import '../services/push_service.dart';
 
 /// مزوّدات البنية التحتية المشتركة (Dio، التخزين، المصادقة).
@@ -81,3 +83,18 @@ final locationServiceProvider = Provider<LocationService>((ref) {
 final pushServiceProvider = Provider<PushService>(
   (ref) => PushService(ref.watch(notificationsRepositoryProvider)),
 );
+
+/// طابور الطفرات الأوفلاين (السائق) — يشترك في نفس Dio المهيّأ.
+final offlineQueueProvider = Provider<OfflineQueue>(
+  (ref) => OfflineQueue(ref.watch(dioProvider)),
+);
+
+/// هل يوجد اتصال بالإنترنت؟ يبثّ القيمة الحالية ثم كل تغيّر.
+/// (نُرجِع bool فقط كي لا تحتاج التطبيقات استيراد connectivity_plus.)
+final isOnlineProvider = StreamProvider<bool>((ref) async* {
+  final connectivity = Connectivity();
+  bool online(List<ConnectivityResult> r) =>
+      r.any((x) => x != ConnectivityResult.none);
+  yield online(await connectivity.checkConnectivity());
+  yield* connectivity.onConnectivityChanged.map(online);
+});

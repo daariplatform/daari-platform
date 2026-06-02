@@ -58,6 +58,8 @@ export 'src/auth/auth_controller.dart';
 export 'src/services/location_service.dart';
 export 'src/services/push_service.dart';
 export 'src/services/launchers.dart';
+export 'src/services/offline_queue.dart';
+export 'src/services/crash_reporting.dart';
 
 // المزوّدات
 export 'src/providers/core_providers.dart';

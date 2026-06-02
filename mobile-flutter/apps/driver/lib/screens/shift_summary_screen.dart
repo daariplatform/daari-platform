@@ -1,6 +1,7 @@
 import 'package:daari_core/daari_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../providers.dart';
 import '../widgets/common.dart';
 import '../widgets/order_widgets.dart';
@@ -19,9 +20,7 @@ class ShiftSummaryScreen extends ConsumerWidget {
         value: summary,
         onRetry: () => ref.invalidate(shiftSummaryProvider),
         data: (data) {
-          final kinds = data.byKind.entries
-              .where((e) => e.value > 0)
-              .toList();
+          final kinds = data.byKind.entries.where((e) => e.value > 0).toList();
           return ListView(
             padding: const EdgeInsets.fromLTRB(14, 16, 14, 32),
             children: [
@@ -52,11 +51,52 @@ class ShiftSummaryScreen extends ConsumerWidget {
                   ),
                 ),
               ],
+              const SizedBox(height: 20),
+              LoadingButton(
+                label: 'أنهِ الوردية',
+                icon: Icons.stop_circle_outlined,
+                color: AppColors.danger,
+                onPressed: () => _endShift(context, ref),
+              ),
             ],
           );
         },
       ),
     );
+  }
+
+  /// إنهاء الوردية: يوقف تتبّع الموقع، يقلب الحالة OFFLINE، ويعود للرئيسية.
+  /// (كان موجوداً في Expo `shift-summary.tsx` وسقط في نقل Flutter.)
+  Future<void> _endShift(BuildContext context, WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('إنهاء الوردية'),
+        content:
+            const Text('سيتوقّف تتبّع موقعك ولن تصلك طلبات جديدة. متأكّد؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child:
+                const Text('إنهاء', style: TextStyle(color: AppColors.danger)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref.read(locationServiceProvider).stopShift();
+    } on ApiException catch (_) {
+      // best-effort — أوقفنا المؤقّت محلياً على أي حال.
+    }
+    ref.read(onShiftProvider.notifier).state = false;
+    if (!context.mounted) return;
+    showSnack(context, 'أُنهيت الوردية — عمل موفّق!');
+    context.go('/home');
   }
 }
 

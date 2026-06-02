@@ -40,7 +40,9 @@ class _WalkinScreenState extends ConsumerState<WalkinScreen>
           controller: _tab,
           tabs: const [
             Tab(icon: Icon(Icons.water_drop_outlined), text: 'تعبئة زبون'),
-            Tab(icon: Icon(Icons.person_add_alt_1_outlined), text: 'تسجيل جديد'),
+            Tab(
+                icon: Icon(Icons.person_add_alt_1_outlined),
+                text: 'تسجيل جديد'),
           ],
         ),
       ),
@@ -147,7 +149,8 @@ class _LookupTabState extends ConsumerState<_LookupTab> {
               }
               return Column(
                 children: [
-                  for (final c in list) _CustomerTile(customer: c, onTap: () => _pick(c)),
+                  for (final c in list)
+                    _CustomerTile(customer: c, onTap: () => _pick(c)),
                 ],
               );
             },
@@ -262,6 +265,7 @@ class _WalkinFormState extends ConsumerState<_WalkinForm> {
     }
 
     setState(() => _submitting = true);
+    Map<String, dynamic>? pendingBody;
     try {
       final coords = await ref.read(locationServiceProvider).currentCoords();
       if (!mounted) return;
@@ -278,6 +282,7 @@ class _WalkinFormState extends ConsumerState<_WalkinForm> {
         completionLat: coords.lat,
         walkinLiters: liters,
       );
+      pendingBody = input.toJson();
       await ref.read(ordersRepositoryProvider).walkinRefill(input);
       if (!mounted) return;
 
@@ -287,6 +292,18 @@ class _WalkinFormState extends ConsumerState<_WalkinForm> {
       showSnack(context, 'تمّت تعبئة ${widget.customer.fullName} بنجاح');
       widget.onBack();
     } on ApiException catch (e) {
+      // فشل شبكة → احفظ البيع في الطابور (لا يُفقَد).
+      if (e.isNetwork && pendingBody != null) {
+        await ref
+            .read(offlineQueueProvider)
+            .enqueue('POST', '/orders/walkin-refill', pendingBody);
+        if (!mounted) return;
+        ref.invalidate(historyProvider);
+        showSnack(context,
+            'لا يوجد اتصال — حُفظ البيع وسيُرسَل تلقائياً عند عودة الشبكة.');
+        widget.onBack();
+        return;
+      }
       if (mounted) showSnack(context, e.message, error: true);
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -314,7 +331,8 @@ class _WalkinFormState extends ConsumerState<_WalkinForm> {
             children: [
               Text(
                 c.fullName.isEmpty ? 'بدون اسم' : c.fullName,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 6),
               Text(
@@ -439,6 +457,7 @@ class _RegisterTabState extends ConsumerState<_RegisterTab> {
     }
 
     setState(() => _submitting = true);
+    Map<String, dynamic>? pendingBody;
     try {
       final coords = await ref.read(locationServiceProvider).currentCoords();
       if (!mounted) return;
@@ -455,6 +474,7 @@ class _RegisterTabState extends ConsumerState<_RegisterTab> {
         locationLng: coords.lng,
         locationLat: coords.lat,
       );
+      pendingBody = input.toJson();
       await ref.read(customerRepositoryProvider).registerByDriver(input);
       if (!mounted) return;
 
@@ -464,6 +484,20 @@ class _RegisterTabState extends ConsumerState<_RegisterTab> {
       _districtController.clear();
       _addressController.clear();
     } on ApiException catch (e) {
+      // فشل شبكة → احفظ التسجيل في الطابور (لا يُفقَد).
+      if (e.isNetwork && pendingBody != null) {
+        await ref
+            .read(offlineQueueProvider)
+            .enqueue('POST', '/customers/register-by-driver', pendingBody);
+        if (!mounted) return;
+        showSnack(context,
+            'لا يوجد اتصال — حُفظ التسجيل وسيُرسَل تلقائياً عند عودة الشبكة.');
+        _nameController.clear();
+        _phoneController.clear();
+        _districtController.clear();
+        _addressController.clear();
+        return;
+      }
       if (mounted) showSnack(context, e.message, error: true);
     } finally {
       if (mounted) setState(() => _submitting = false);

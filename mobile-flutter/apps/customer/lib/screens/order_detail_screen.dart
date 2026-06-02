@@ -1,6 +1,9 @@
+import 'dart:math' as math;
+
 import 'package:daari_core/daari_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../providers.dart';
 import '../widgets/common.dart';
 import '../widgets/order_widgets.dart';
@@ -41,6 +44,12 @@ class _OrderBody extends ConsumerWidget {
         _Header(order: order),
         const SizedBox(height: 16),
         _StatusCard(status: status),
+        if (status.isActive &&
+            order.deliveryLat != null &&
+            order.deliveryLng != null) ...[
+          const SizedBox(height: 12),
+          _TrackingMap(order: order),
+        ],
         if (order.etaMinutes != null) ...[
           const SizedBox(height: 12),
           _EtaCard(minutes: order.etaMinutes!),
@@ -148,9 +157,11 @@ class _Stage {
 }
 
 const _stages = <_Stage>[
-  _Stage(RefillOrderStatus.pending, 'تم استلام طلبك', Icons.description_outlined),
+  _Stage(
+      RefillOrderStatus.pending, 'تم استلام طلبك', Icons.description_outlined),
   _Stage(RefillOrderStatus.assigned, 'تم تعيين سائق', Icons.person_outline),
-  _Stage(RefillOrderStatus.enRoute, 'السائق في الطريق إليك', Icons.local_shipping_outlined),
+  _Stage(RefillOrderStatus.enRoute, 'السائق في الطريق إليك',
+      Icons.local_shipping_outlined),
   _Stage(RefillOrderStatus.completed, 'تم التسليم', Icons.check_circle_outline),
 ];
 
@@ -162,8 +173,8 @@ class _StatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cancelled =
-        status == RefillOrderStatus.cancelled || status == RefillOrderStatus.failed;
+    final cancelled = status == RefillOrderStatus.cancelled ||
+        status == RefillOrderStatus.failed;
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -269,7 +280,8 @@ class _TimelineRow extends StatelessWidget {
               ),
               if (!isLast)
                 Expanded(
-                  child: Container(width: 2, color: done ? color : AppColors.line),
+                  child:
+                      Container(width: 2, color: done ? color : AppColors.line),
                 ),
             ],
           ),
@@ -289,7 +301,8 @@ class _TimelineRow extends StatelessWidget {
                     const Padding(
                       padding: EdgeInsets.only(top: 2),
                       child: Text('جارٍ التحديث...',
-                          style: TextStyle(color: AppColors.slate, fontSize: 12)),
+                          style:
+                              TextStyle(color: AppColors.slate, fontSize: 12)),
                     ),
                 ],
               ),
@@ -302,6 +315,111 @@ class _TimelineRow extends StatelessWidget {
 }
 
 /// بطاقة تقدير الوصول.
+/// خريطة التتبّع الحيّ: علامة وجهة التوصيل (دائماً) + علامة السائق (عند توفّر
+/// موقعه)، تتحرّك كاميرتها لتشمل الاثنين. الطلب يُعاد جلبه كل ١٥ث (orderProvider)
+/// فتتحدّث علامة السائق تلقائياً أثناء `EN_ROUTE`. منقولة من خريطة Expo
+/// (order/[id].tsx OrderMap).
+class _TrackingMap extends StatefulWidget {
+  const _TrackingMap({required this.order});
+  final RefillOrder order;
+
+  @override
+  State<_TrackingMap> createState() => _TrackingMapState();
+}
+
+class _TrackingMapState extends State<_TrackingMap> {
+  GoogleMapController? _controller;
+
+  LatLng? get _delivery {
+    final lat = widget.order.deliveryLat, lng = widget.order.deliveryLng;
+    if (lat == null || lng == null) return null;
+    return LatLng(lat, lng);
+  }
+
+  LatLng? get _driver {
+    final d = widget.order.driver;
+    if (d == null || !d.hasLocation) return null;
+    return LatLng(d.currentLat!, d.currentLng!);
+  }
+
+  @override
+  void didUpdateWidget(covariant _TrackingMap old) {
+    super.didUpdateWidget(old);
+    _fitCamera();
+  }
+
+  /// يحرّك الكاميرا لتشمل الوجهة والسائق (أو يتمركز على الوجهة وحدها).
+  Future<void> _fitCamera() async {
+    final controller = _controller;
+    final delivery = _delivery;
+    if (controller == null || delivery == null) return;
+    final driver = _driver;
+    if (driver == null) {
+      await controller.animateCamera(CameraUpdate.newLatLngZoom(delivery, 15));
+      return;
+    }
+    final bounds = LatLngBounds(
+      southwest: LatLng(
+        math.min(delivery.latitude, driver.latitude),
+        math.min(delivery.longitude, driver.longitude),
+      ),
+      northeast: LatLng(
+        math.max(delivery.latitude, driver.latitude),
+        math.max(delivery.longitude, driver.longitude),
+      ),
+    );
+    await controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 64));
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final delivery = _delivery;
+    if (delivery == null) return const SizedBox.shrink();
+    final driver = _driver;
+    final markers = <Marker>{
+      Marker(
+        markerId: const MarkerId('delivery'),
+        position: delivery,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        infoWindow: const InfoWindow(title: 'عنوان التوصيل'),
+      ),
+      if (driver != null)
+        Marker(
+          markerId: const MarkerId('driver'),
+          position: driver,
+          icon:
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+          infoWindow: const InfoWindow(title: 'السائق'),
+        ),
+    };
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+      child: SizedBox(
+        height: 220,
+        child: GoogleMap(
+          initialCameraPosition:
+              CameraPosition(target: driver ?? delivery, zoom: 14),
+          markers: markers,
+          myLocationButtonEnabled: false,
+          zoomControlsEnabled: false,
+          compassEnabled: false,
+          mapToolbarEnabled: false,
+          onMapCreated: (controller) {
+            _controller = controller;
+            _fitCamera();
+          },
+        ),
+      ),
+    );
+  }
+}
+
 class _EtaCard extends StatelessWidget {
   const _EtaCard({required this.minutes});
 
@@ -377,8 +495,9 @@ class _DriverCard extends StatelessWidget {
                         fontWeight: FontWeight.w800, fontSize: 15)),
               ),
               IconButton.filledTonal(
-                onPressed:
-                    driver.hasPhone ? () => Launchers.call(driver.phone!) : null,
+                onPressed: driver.hasPhone
+                    ? () => Launchers.call(driver.phone!)
+                    : null,
                 icon: const Icon(Icons.call),
                 color: AppColors.water600,
                 tooltip: 'اتصال',
@@ -443,10 +562,12 @@ class _Row extends StatelessWidget {
             ),
       child: Row(
         children: [
-          Text(label, style: const TextStyle(color: AppColors.slate, fontSize: 13)),
+          Text(label,
+              style: const TextStyle(color: AppColors.slate, fontSize: 13)),
           const Spacer(),
           Text(value,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+              style:
+                  const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
         ],
       ),
     );
@@ -599,8 +720,7 @@ class _DisputeButtonState extends ConsumerState<_DisputeButton> {
             child: const Text('إلغاء'),
           ),
           TextButton(
-            onPressed: () =>
-                Navigator.pop(ctx, controller.text.trim()),
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
             child: const Text('إرسال'),
           ),
         ],
@@ -668,7 +788,9 @@ class _RatedCard extends StatelessWidget {
             children: [
               for (var i = 1; i <= 5; i++)
                 Icon(
-                  i <= rating.stars ? Icons.star_rounded : Icons.star_outline_rounded,
+                  i <= rating.stars
+                      ? Icons.star_rounded
+                      : Icons.star_outline_rounded,
                   color: AppColors.warning,
                   size: 30,
                 ),
@@ -773,7 +895,9 @@ class _RatingFormState extends ConsumerState<_RatingForm> {
                   padding: const EdgeInsets.symmetric(horizontal: 2),
                   constraints: const BoxConstraints(),
                   icon: Icon(
-                    i <= _stars ? Icons.star_rounded : Icons.star_outline_rounded,
+                    i <= _stars
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
                     color: AppColors.warning,
                   ),
                 ),

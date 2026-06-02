@@ -69,3 +69,10 @@ final customerSearchProvider =
 
 /// حالة الوردية (هل التتبّع يعمل) — يتحكّم بها السائق من الرئيسية.
 final onShiftProvider = StateProvider<bool>((ref) => false);
+
+/// عدد الطفرات المعلّقة في الطابور الأوفلاين — استقصاء كل 15 ثانية لتحديث الشارة.
+final pendingMutationsProvider = FutureProvider.autoDispose<int>((ref) async {
+  final count = await ref.watch(offlineQueueProvider).pendingCount();
+  _poll(ref, const Duration(seconds: 15));
+  return count;
+});

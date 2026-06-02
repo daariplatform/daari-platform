@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:daari_core/daari_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,14 +21,40 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _claiming = false;
+  Timer? _flushTimer;
 
   @override
   void initState() {
     super.initState();
-    // تسجيل توكن الإشعارات (best-effort).
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // تسجيل توكن الإشعارات + تصريف الطابور الأوفلاين (best-effort).
       ref.read(pushServiceProvider).register();
+      _flushQueue();
     });
+    // مؤقّت تصريف الطابور كل 60 ثانية (يطابق worker/_layout.tsx).
+    _flushTimer =
+        Timer.periodic(const Duration(seconds: 60), (_) => _flushQueue());
+  }
+
+  @override
+  void dispose() {
+    _flushTimer?.cancel();
+    super.dispose();
+  }
+
+  /// يصرّف الطفرات المعلّقة؛ عند نجاح أيٍّ منها يُعيد جلب البيانات المتأثّرة.
+  Future<void> _flushQueue() async {
+    try {
+      final res = await ref.read(offlineQueueProvider).flush();
+      if (res.ok > 0) {
+        ref.invalidate(todayTasksProvider);
+        ref.invalidate(historyProvider);
+        ref.invalidate(cashSummaryProvider);
+      }
+    } catch (_) {
+      // best-effort — سنحاول مجدداً في الدورة التالية.
+    }
+    if (mounted) ref.invalidate(pendingMutationsProvider);
   }
 
   Future<void> _toggleShift(bool value) async {
@@ -84,6 +112,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final tasksAsync = ref.watch(todayTasksProvider);
     final onShift = ref.watch(onShiftProvider);
 
+    // صرّف الطابور تلقائياً لحظة عودة الاتصال (لم يكن في Expo — كان مؤقّتاً فقط).
+    ref.listen<AsyncValue<bool>>(isOnlineProvider, (prev, next) {
+      if (prev?.value == false && next.value == true) _flushQueue();
+    });
+
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: () async {
@@ -104,6 +137,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  _syncBanner(),
                   _quickLinks(),
                   const SizedBox(height: 20),
                   _sectionTitle('طلبات متاحة', Icons.flash_on),
@@ -162,13 +196,72 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  /// شريط الحالة: «غير متصل» و/أو «N عملية بانتظار المزامنة». يختفي عند الاتصال
+  /// وخلوّ الطابور. يجمع وظيفتَي OfflineBanner و WorkerHeader-badge من Expo.
+  Widget _syncBanner() {
+    final online = ref.watch(isOnlineProvider).value ?? true;
+    final pending = ref.watch(pendingMutationsProvider).value ?? 0;
+    if (online && pending == 0) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        children: [
+          if (!online)
+            _banner(
+              color: AppColors.danger,
+              icon: Icons.wifi_off,
+              text: 'أنت غير متصل بالإنترنت — تعمل دون اتصال.',
+            ),
+          if (pending > 0) ...[
+            if (!online) const SizedBox(height: 8),
+            _banner(
+              color: AppColors.warn600,
+              icon: Icons.sync,
+              text: '$pending عملية بانتظار المزامنة — ستُرسَل تلقائياً.',
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _banner({
+    required Color color,
+    required IconData icon,
+    required String text,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                  color: color, fontWeight: FontWeight.w700, fontSize: 12.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _shiftSwitch(bool onShift) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           onShift ? 'متصل' : 'غير متصل',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          style:
+              const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
         ),
         const SizedBox(width: 6),
         Switch(
@@ -206,7 +299,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   color: AppColors.navy50,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(orderKindIcon(order.kind), color: AppColors.navy600),
+                child:
+                    Icon(orderKindIcon(order.kind), color: AppColors.navy600),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -219,7 +313,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     const SizedBox(height: 2),
                     Text(
                       '${order.customer.district} · ${order.kind.label}',
-                      style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
+                      style: const TextStyle(
+                          color: AppColors.muted, fontSize: 12.5),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -289,7 +384,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   const SizedBox(height: 2),
                   Text(
                     '${task.customer.district} · ${task.kind.label}',
-                    style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
+                    style:
+                        const TextStyle(color: AppColors.muted, fontSize: 12.5),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
