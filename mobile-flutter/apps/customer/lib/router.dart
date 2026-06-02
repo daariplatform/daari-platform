@@ -10,6 +10,7 @@ import 'screens/intro_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/map_picker_screen.dart';
 import 'screens/notifications_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'screens/order_detail_screen.dart';
 import 'screens/orders_screen.dart';
 import 'screens/profile_screen.dart';
@@ -84,6 +85,7 @@ final customerRouterProvider = Provider<GoRouter>((ref) {
         path: '/order/:id',
         builder: (_, state) => OrderDetailScreen(orderId: state.pathParameters['id']!),
       ),
+      GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
       GoRoute(path: '/addresses', builder: (_, __) => const AddressesScreen()),
       GoRoute(path: '/schedules', builder: (_, __) => const SchedulesScreen()),
       GoRoute(path: '/wallet', builder: (_, __) => const WalletScreen()),

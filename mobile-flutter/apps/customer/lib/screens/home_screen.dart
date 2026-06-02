@@ -23,9 +23,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // تسجيل توكن الإشعارات (best-effort).
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // تسجيل توكن الإشعارات (best-effort).
       ref.read(pushServiceProvider).register();
+      // أوّل دخول: حوّل لتدفّق الإعداد إن لم يكتمل بعد.
+      if (!await LocalFlags.hasSeenOnboarding() && mounted) {
+        if (context.mounted) context.go('/onboarding');
+      }
     });
   }
 

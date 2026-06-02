@@ -57,6 +57,26 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => _showChangePassword(context, ref),
           ),
 
+          // ── المساعدة والقانونية ──
+          _SectionLabel('المساعدة والقانونية'),
+          _Tile(
+            icon: Icons.description_outlined,
+            tint: AppColors.navy600,
+            title: 'شروط الخدمة',
+            chevron: true,
+            onTap: () =>
+                Launchers.openUrl('https://daari-admin.phi-bit.com/legal/terms'),
+          ),
+          _Tile(
+            icon: Icons.privacy_tip_outlined,
+            tint: AppColors.turquoise500,
+            title: 'سياسة الخصوصية',
+            chevron: true,
+            onTap: () => Launchers.openUrl(
+              'https://daari-admin.phi-bit.com/legal/privacy',
+            ),
+          ),
+
           // ── حول ──
           _SectionLabel('حول'),
           _Tile(

@@ -23,7 +23,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     if (!mounted) return;
     final auth = ref.read(authControllerProvider);
     if (auth.isAuthenticated) {
-      context.go('/home');
+      // أوّل دخول: أظهر تدفّق الإعداد مرّة واحدة قبل الرئيسية.
+      final onboarded = await LocalFlags.hasSeenOnboarding();
+      if (!mounted) return;
+      context.go(onboarded ? '/home' : '/onboarding');
     } else {
       final seen = await LocalFlags.hasSeenIntro();
       if (!mounted) return;

@@ -23,6 +23,9 @@ class Launchers {
     );
   }
 
+  /// فتح رابط خارجي عام (الشروط / الخصوصية / الأسئلة).
+  static Future<void> openUrl(String url) => _open(Uri.parse(url));
+
   static Future<void> _open(Uri uri) async {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);

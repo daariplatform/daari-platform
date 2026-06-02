@@ -6,6 +6,29 @@ import '../widgets/common.dart';
 import '../widgets/gradient_header.dart';
 import '../widgets/order_widgets.dart';
 
+const _arWeekdays = [
+  'الإثنين',
+  'الثلاثاء',
+  'الأربعاء',
+  'الخميس',
+  'الجمعة',
+  'السبت',
+  'الأحد',
+];
+
+/// تسمية قسم التاريخ: اليوم / أمس / اسم اليوم (خلال الأسبوع) / التاريخ.
+String _bucketLabel(DateTime? date) {
+  if (date == null) return 'غير مؤرّخ';
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final that = DateTime(date.year, date.month, date.day);
+  final diff = today.difference(that).inDays;
+  if (diff <= 0) return 'اليوم';
+  if (diff == 1) return 'أمس';
+  if (diff < 7) return _arWeekdays[date.weekday - 1];
+  return Fmt.arabicDate(date);
+}
+
 /// تبويب «السجلّ» — كل المهام التي أنجزها السائق مع التاريخ والمبلغ المحصّل.
 class HistoryScreen extends ConsumerWidget {
   const HistoryScreen({super.key});
@@ -35,22 +58,33 @@ class HistoryScreen extends ConsumerWidget {
                 (sum, o) => sum + (o.paidAmountIqd > 0 ? o.paidAmountIqd : 0),
               );
 
+              // تقسيم بالتاريخ: اليوم/أمس/اسم اليوم/التاريخ — مع عدّاد لكل قسم.
+              // (الطلبات تأتي مرتّبة تنازلياً من الباك إند.)
+              final counts = <String, int>{};
+              for (final o in orders) {
+                final b = _bucketLabel(o.completedAt ?? o.requestedAt);
+                counts[b] = (counts[b] ?? 0) + 1;
+              }
+
+              final items = <Widget>[
+                _SummaryStrip(count: orders.length, totalCash: totalCash),
+              ];
+              String? current;
+              for (final o in orders) {
+                final b = _bucketLabel(o.completedAt ?? o.requestedAt);
+                if (b != current) {
+                  current = b;
+                  items.add(_SectionHeader(label: b, count: counts[b] ?? 0));
+                }
+                items.add(_HistoryCard(order: o));
+              }
+
               return RefreshIndicator(
                 onRefresh: () async => ref.invalidate(historyProvider),
-                child: ListView.builder(
+                child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                  itemCount: orders.length + 1,
-                  itemBuilder: (context, index) {
-                    if (index == 0) {
-                      return _SummaryStrip(
-                        count: orders.length,
-                        totalCash: totalCash,
-                      );
-                    }
-                    final order = orders[index - 1];
-                    return _HistoryCard(order: order);
-                  },
+                  children: items,
                 ),
               );
             },
@@ -120,6 +154,49 @@ class _SummaryTile extends StatelessWidget {
           Text(value,
               style: TextStyle(
                   fontSize: 18, fontWeight: FontWeight.w900, color: color)),
+        ],
+      ),
+    );
+  }
+}
+
+/// رأس قسم تاريخي لاصق بصرياً: التسمية + عدد المهام في القسم.
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.label, required this.count});
+
+  final String label;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 6, 4, 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              color: AppColors.slate,
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppColors.navy50,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '$count',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: AppColors.navy600,
+              ),
+            ),
+          ),
         ],
       ),
     );

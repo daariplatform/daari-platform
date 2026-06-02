@@ -32,6 +32,10 @@ class Env {
   /// مهلة طلبات الشبكة (نفس قيمة axios الحالية: 12s).
   static const Duration httpTimeout = Duration(seconds: 12);
 
+  /// وضع العرض: يردّ بيانات وهمية دون خادم (لمراجعة المتجر/العروض).
+  /// `flutter run --dart-define=DEMO_MODE=true`.
+  static const bool demoMode = bool.fromEnvironment('DEMO_MODE');
+
   /// هل نحن على خادم الإنتاج؟
   static bool get isProduction => apiBaseUrl.contains('api.phi-bit.com');
 }

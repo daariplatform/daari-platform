@@ -48,6 +48,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  /// دخول تجريبي (وضع العرض): يعتمد على fixtures الـ DemoInterceptor.
+  Future<void> _demoLogin() async {
+    setState(() => _loading = true);
+    try {
+      await ref
+          .read(authControllerProvider.notifier)
+          .login(phone: '07710000001', password: 'demo');
+      if (mounted) context.go('/home');
+    } on ApiException catch (e) {
+      if (mounted) showSnack(context, e.message, error: true);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -100,6 +115,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 child: const Text('ليس لديك حساب؟ سجّل الآن'),
               ),
             ),
+            if (Env.demoMode) ...[
+              const SizedBox(height: 4),
+              OutlinedButton.icon(
+                onPressed: _loading ? null : _demoLogin,
+                icon: const Icon(Icons.play_circle_outline),
+                label: const Text('دخول تجريبي (بدون إنترنت)'),
+              ),
+            ],
           ],
         ),
       ),

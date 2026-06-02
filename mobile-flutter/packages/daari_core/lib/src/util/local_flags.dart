@@ -5,6 +5,7 @@ class LocalFlags {
   LocalFlags._();
 
   static const _introSeen = 'daari-intro-seen-v1';
+  static const _onboardingSeen = 'daari-onboarding-seen-v1';
 
   /// هل شوهدت شاشة التعريف؟ عند فشل التخزين نعدّها «شوهدت» لئلا نحبس المستخدم.
   static Future<bool> hasSeenIntro() async {
@@ -20,6 +21,25 @@ class LocalFlags {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_introSeen, true);
+    } catch (_) {
+      // best effort
+    }
+  }
+
+  /// هل أكمل المستخدم تدفّق الإعداد الأول (onboarding)؟
+  static Future<bool> hasSeenOnboarding() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_onboardingSeen) ?? false;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  static Future<void> markOnboardingSeen() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_onboardingSeen, true);
     } catch (_) {
       // best effort
     }
