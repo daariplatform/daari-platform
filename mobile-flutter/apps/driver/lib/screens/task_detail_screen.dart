@@ -27,6 +27,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     setState(() => _busy = true);
     try {
       await ref.read(ordersRepositoryProvider).start(widget.taskId);
+      Hap.press();
       ref.invalidate(todayTasksProvider);
       if (!mounted) return;
       showSnack(context, 'بدأت الجولة — الزبون يرى أنك في الطريق');
@@ -94,6 +95,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         await repo.complete(widget.taskId, input);
       }
 
+      Hap.success();
+      Analytics.capture('order_completed',
+          properties: {'orderId': widget.taskId, 'kind': task.kind.name});
       ref.invalidate(todayTasksProvider);
       ref.invalidate(historyProvider);
       if (!mounted) return;

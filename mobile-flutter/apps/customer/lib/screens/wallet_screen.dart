@@ -95,8 +95,9 @@ class _LoyaltyHero extends StatelessWidget {
                       style: TextStyle(color: Colors.white70, fontSize: 13),
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      '$clamped نقطة',
+                    AnimatedCounter(
+                      value: clamped,
+                      format: (n) => '${n.round()} نقطة',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 34,

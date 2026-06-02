@@ -7,6 +7,7 @@ import '../providers.dart';
 import '../widgets/common.dart';
 import '../widgets/gradient_header.dart';
 import '../widgets/order_widgets.dart';
+import '../widgets/recent_activity.dart';
 
 /// الشاشة الرئيسية للزبون: الرصيد + سعر التعبئة (أو حملة) + زر الطلب + الطلب النشط.
 class HomeScreen extends ConsumerStatefulWidget {
@@ -34,6 +35,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final order = await ref
           .read(ordersRepositoryProvider)
           .createRefill(customerId: profile.id);
+      Hap.success();
+      Analytics.capture('order_placed', properties: {'orderId': order.id});
       ref.invalidate(myOrdersProvider);
       ref.invalidate(myProfileProvider);
       if (mounted) {
@@ -41,6 +44,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         context.push('/order/${order.id}');
       }
     } on ApiException catch (e) {
+      Hap.error();
       if (mounted) showSnack(context, e.message, error: true);
     } finally {
       if (mounted) setState(() => _placing = false);
@@ -54,13 +58,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final ordersAsync = ref.watch(myOrdersProvider);
 
     return Scaffold(
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(myProfileProvider);
-          ref.invalidate(myOrdersProvider);
-          ref.invalidate(activePromoProvider);
-        },
-        child: AsyncView<CustomerProfile>(
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(myProfileProvider);
+              ref.invalidate(myOrdersProvider);
+              ref.invalidate(activePromoProvider);
+            },
+            child: AsyncView<CustomerProfile>(
           value: profileAsync,
           onRetry: () => ref.invalidate(myProfileProvider),
           data: (profile) {
@@ -93,15 +99,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     children: [
                       if (activeOrder != null) _activeOrderCard(activeOrder),
                       _orderCard(profile, promo, hasTank),
+                      const SizedBox(height: 14),
+                      RefillStatusStrip(lastRefillAt: profile.lastRefillAt),
                       const SizedBox(height: 16),
                       _quickLinks(),
+                      const SizedBox(height: 18),
+                      const RecentActivityList(),
                     ],
                   ),
                 ),
               ],
             );
           },
-        ),
+            ),
+          ),
+          const Positioned.fill(
+            child: RainBackground(density: RainDensity.light),
+          ),
+        ],
       ),
     );
   }

@@ -17,6 +17,9 @@ Future<void> main() async {
     // لم تُضبط google-services بعد — الإشعارات معطّلة فقط.
   }
 
+  // التحليلات (best-effort — صامتة إن لم يُضبط POSTHOG_KEY).
+  await Analytics.init(appId: 'daari-worker');
+
   await runWithCrashReporting(
     const ProviderScope(child: DaariDriverApp()),
     appId: 'daari-worker',

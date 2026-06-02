@@ -36,6 +36,7 @@ final customerRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/',
     refreshListenable: refresh,
+    observers: Analytics.navigatorObservers,
     redirect: (context, state) {
       final loc = state.matchedLocation;
       if (loc == '/') return null; // شاشة الإقلاع تقرّر الوجهة

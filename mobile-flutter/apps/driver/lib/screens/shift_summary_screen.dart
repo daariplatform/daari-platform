@@ -94,6 +94,8 @@ class ShiftSummaryScreen extends ConsumerWidget {
       // best-effort — أوقفنا المؤقّت محلياً على أي حال.
     }
     ref.read(onShiftProvider.notifier).state = false;
+    Hap.success();
+    Analytics.capture('shift_ended');
     if (!context.mounted) return;
     showSnack(context, 'أُنهيت الوردية — عمل موفّق!');
     context.go('/home');
@@ -149,8 +151,8 @@ class _HeroCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          Text(
-            '$completedOrders',
+          AnimatedCounter(
+            value: completedOrders,
             style: const TextStyle(
               fontSize: 44,
               fontWeight: FontWeight.w800,
@@ -197,8 +199,9 @@ class _CashCard extends StatelessWidget {
                   style: TextStyle(fontSize: 11, color: AppColors.slate),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  Fmt.iqd(collectedCashIqd),
+                AnimatedCounter(
+                  value: collectedCashIqd,
+                  format: (n) => Fmt.iqd(n.round()),
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,

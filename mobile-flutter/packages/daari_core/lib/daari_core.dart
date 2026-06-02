@@ -60,6 +60,13 @@ export 'src/services/push_service.dart';
 export 'src/services/launchers.dart';
 export 'src/services/offline_queue.dart';
 export 'src/services/crash_reporting.dart';
+export 'src/services/haptics.dart';
+export 'src/services/analytics.dart';
+
+// عناصر واجهة مشتركة
+export 'src/widgets/animated_counter.dart';
+export 'src/widgets/rain_background.dart';
+export 'src/widgets/refill_status_strip.dart';
 
 // المزوّدات
 export 'src/providers/core_providers.dart';

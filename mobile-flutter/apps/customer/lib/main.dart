@@ -20,6 +20,9 @@ Future<void> main() async {
     // لم تُضبط google-services بعد — الإشعارات معطّلة فقط.
   }
 
+  // التحليلات (best-effort — صامتة إن لم يُضبط POSTHOG_KEY).
+  await Analytics.init(appId: 'daari-customer');
+
   await runWithCrashReporting(
     const ProviderScope(child: DaariCustomerApp()),
     appId: 'daari-customer',

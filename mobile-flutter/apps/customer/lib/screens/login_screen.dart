@@ -52,7 +52,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('تسجيل الدخول')),
-      body: SafeArea(
+      body: Stack(
+        children: [
+          const Positioned.fill(
+            child: RainBackground(
+              density: RainDensity.light,
+              color: AppColors.navy300,
+            ),
+          ),
+          SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
@@ -94,6 +102,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ],
         ),
+      ),
+        ],
       ),
     );
   }

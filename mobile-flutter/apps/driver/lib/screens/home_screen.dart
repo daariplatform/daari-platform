@@ -85,6 +85,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     setState(() => _claiming = true);
     try {
       await ref.read(ordersRepositoryProvider).claim(task.id);
+      Hap.success();
+      Analytics.capture('order_claimed', properties: {'orderId': task.id});
       ref.invalidate(availableOrdersProvider);
       ref.invalidate(todayTasksProvider);
       if (mounted) {
@@ -92,6 +94,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         context.push('/task/${task.id}');
       }
     } on ApiException catch (e) {
+      Hap.error();
       ref.invalidate(availableOrdersProvider);
       if (mounted) {
         showSnack(

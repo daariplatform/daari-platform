@@ -20,6 +20,12 @@ class Env {
   /// مفتاح PostHog (اختياري — إن تُرك فارغاً يُعطَّل التتبّع).
   static const String posthogKey = String.fromEnvironment('POSTHOG_KEY');
 
+  /// مضيف PostHog (الافتراضي سحابة US، نفس قيمة Expo).
+  static const String posthogHost = String.fromEnvironment(
+    'POSTHOG_HOST',
+    defaultValue: 'https://us.i.posthog.com',
+  );
+
   /// Sentry DSN (اختياري).
   static const String sentryDsn = String.fromEnvironment('SENTRY_DSN');
 
