@@ -17,12 +17,15 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.phibit.daari_customer"
-    compileSdk = flutter.compileSdkVersion
+    // androidx الحديثة (fragment 1.7 / activity 1.8 / window 1.2) تتطلّب 34+.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // مطلوب لـ flutter_local_notifications (يستعمل واجهات Java 8+ time API).
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -66,4 +69,10 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // مكتبة إزالة السكّر (desugaring) لدعم Java 8 time API على أندرويد القديم
+    // — يتطلّبها flutter_local_notifications.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

@@ -38,10 +38,14 @@ dependencies:
   connectivity_plus: ^6.1.0
 
   # رصد الأعطال (بديل @sentry/react-native في lib/sentry.ts)
-  sentry_flutter: ^8.12.0
+  # 9.x يستعمل Kotlin Gradle Plugin حديثاً (8.x كان يفشل البناء على مترجم Kotlin
+  # الجديد — Language version 1.6). الـ API المستعمَل (init/configureScope/setTag) ثابت.
+  sentry_flutter: ^9.0.0
 
   # التحليلات + تتبّع المسارات (بديل posthog-react-native في lib/posthog.ts)
-  posthog_flutter: ^4.10.0
+  # 5.x يستعمل Kotlin Gradle Plugin حديثاً — 4.x كان يفشل البناء على مترجم
+  # Kotlin الجديد (Language version 1.6 no longer supported).
+  posthog_flutter: ^5.0.0
 
   # التنسيق العربي + IQD (بديل date-fns + Intl)
   # نطاق واسع ليتوافق مع نسخة intl التي يثبّتها flutter_localizations
@@ -62,7 +66,8 @@ dependencies:
   flutter_local_notifications: ^18.0.1
 
   # فتح إعدادات الإشعارات في النظام (تبديل الإذن من داخل التطبيق)
-  app_settings: ^5.1.1
+  # 6.x+ يُجمَّع على compileSdk حديث (5.x كان على 33 فيرفضه AGP 9 مع androidx).
+  app_settings: ^6.1.1
 
 dev_dependencies:
   flutter_lints: ^5.0.0
