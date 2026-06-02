@@ -142,13 +142,21 @@ class CustomerRepository {
   // ── السائق: البحث + تسجيل زبون ────────────────────────────────────────────
 
   /// بحث الزبائن (للسائق — للبيع الفوري). يرجع صفوفاً خام (CustomerProfile).
+  ///
+  /// الباك إند يرجع غلافاً مُصفَّحاً `{ items: [...], total, page, ... }`؛ كان
+  /// الكود يطلب `List` فيفشل القَسر وتعود القائمة فارغة دائماً. نقرأ `items`
+  /// (وندعم المصفوفة العارية احتياطاً لو تغيّر الشكل مستقبلاً).
   Future<List<CustomerProfile>> search(String query) async {
     try {
-      final res = await _dio.get<List<dynamic>>(
+      final res = await _dio.get<dynamic>(
         '/customers',
         queryParameters: {'search': query},
       );
-      return (res.data ?? const [])
+      final data = res.data;
+      final rows = data is Map<String, dynamic>
+          ? (data['items'] as List<dynamic>? ?? const [])
+          : (data is List ? data : const <dynamic>[]);
+      return rows
           .whereType<Map<String, dynamic>>()
           .map(CustomerProfile.fromJson)
           .toList();

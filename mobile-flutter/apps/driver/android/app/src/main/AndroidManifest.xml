@@ -1,8 +1,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- الشبكة (مطلوبة لكل اتصالات Dio — كانت غائبة عن بناء الإصدار) -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- الموقع (تتبّع GPS الحيّ أثناء الوردية + إكمال التسليم) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- إشعارات أندرويد 13+ (طلبات جديدة في البركة) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
     <application
         android:label="daari_driver"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- مفتاح خرائط جوجل — يُحقَن من manifestPlaceholders (gradle property MAPS_API_KEY).
+             يبقى فارغاً في التطوير (الخريطة رمادية بلا تعطّل) ويُضبط للإنتاج. -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${MAPS_API_KEY}"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"

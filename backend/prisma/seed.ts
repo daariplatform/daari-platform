@@ -5,6 +5,18 @@ import { randomUUID } from 'crypto';
 const prisma = new PrismaClient();
 
 async function main() {
+  // أمان: لا تثبّت كلمة سرّ مالك المنصّة الافتراضية في الإنتاج. إن لم تُضبط
+  // PLATFORM_ADMIN_PASSWORD صراحةً، أوقِف الـ seed بدل شحن اعتماد معروف في git.
+  if (
+    process.env.NODE_ENV === 'production' &&
+    !process.env.PLATFORM_ADMIN_PASSWORD
+  ) {
+    throw new Error(
+      'PLATFORM_ADMIN_PASSWORD must be set before seeding in production ' +
+        '(refusing to ship the default platform-owner credential).',
+    );
+  }
+
   const passwordHash = await argon2.hash('password123');
 
   // Platform owner (Ahmed) — the ONLY account that can reach platform-console

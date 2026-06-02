@@ -103,6 +103,17 @@ export class OrdersService {
     }
   }
 
+  /// يُرجِع مُعرّف سجلّ الزبون المرتبط بحساب المستخدم — لاشتقاق customerId من
+  /// الهوية بدل الوثوق بما يرسله العميل (إغلاق IDOR في إنشاء الطلب).
+  async resolveOwnCustomerId(userId: string, tenantId: string): Promise<string> {
+    const customer = await this.prisma.customer.findFirst({
+      where: { userId, tenantId },
+      select: { id: true },
+    });
+    if (!customer) throw new NotFoundException('Customer profile not found');
+    return customer.id;
+  }
+
   async create(tenantId: string, input: CreateOrderInput) {
     // Subscription gate — block new orders if the plant has blown past
     // its monthly operations limit AND hasn't upgraded. We compute the

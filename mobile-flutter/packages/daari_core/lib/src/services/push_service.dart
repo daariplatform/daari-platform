@@ -5,6 +5,14 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../api/notifications_repository.dart';
 
+/// معالِج رسائل الخلفية (data-only) — يجب أن يكون دالّة علوية المستوى ومعلَّمة
+/// `vm:entry-point` كي يستدعيها محرّك Flutter في عزلة منفصلة. النظام يعرض
+/// الإشعار تلقائياً؛ والتنقّل عند النقر يُعالَج عبر onMessageOpenedApp/getInitialMessage.
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // لا عمل إضافي مطلوب هنا حالياً.
+}
+
 /// خدمة الإشعارات (FCM) — بديل `push.ts` (Expo Notifications).
 ///
 /// تطلب الصلاحية، تجلب توكن FCM، ترسله للخادم عبر POST /notifications/push-token،
@@ -37,7 +45,12 @@ class PushService {
 
   /// تهيئة كاملة: صلاحية + قناة أندرويد + جلب التوكن + المستمعات.
   /// تُستدعى بعد تسجيل الدخول. الفشل صامت (الإشعارات best-effort).
-  Future<void> register() async {
+  /// [onOpenNotification] يُستدعى حين يفتح المستخدم التطبيق بالنقر على إشعار
+  /// (سواء كان في الخلفية أو مغلقاً تماماً) — يمرّر `orderId` و`type` من حمولة
+  /// البيانات كي يوجّه التطبيق المستخدم لشاشة الطلب/المهمة المناسبة (deep-link).
+  Future<void> register({
+    void Function(String? orderId, String? type)? onOpenNotification,
+  }) async {
     try {
       final fcm = _fcm;
       if (fcm == null) return;
@@ -53,10 +66,31 @@ class PushService {
       fcm.onTokenRefresh.listen(_sendToken);
 
       FirebaseMessaging.onMessage.listen(_showForeground);
+
+      // فتح التطبيق بالنقر على إشعار والتطبيق في الخلفية.
+      FirebaseMessaging.onMessageOpenedApp
+          .listen((m) => _handleOpen(m, onOpenNotification));
+      // فتح التطبيق من إشعار وهو مغلق تماماً (cold start).
+      final initial = await fcm.getInitialMessage();
+      if (initial != null) _handleOpen(initial, onOpenNotification);
+      // رسائل الخلفية (data-only).
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
       _initialised = true;
     } catch (_) {
       // best effort — الإشعارات لا تعطّل التطبيق
     }
+  }
+
+  void _handleOpen(
+    RemoteMessage message,
+    void Function(String? orderId, String? type)? cb,
+  ) {
+    if (cb == null) return;
+    final data = message.data;
+    final orderId = data['orderId'] as String?;
+    final type = (data['type'] ?? data['kind']) as String?;
+    cb(orderId, type);
   }
 
   /// هل إذن الإشعارات مفعّل حالياً على مستوى النظام؟ (لعرض الحالة في الإعدادات).

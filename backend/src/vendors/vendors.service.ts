@@ -144,13 +144,17 @@ export class VendorsService {
         data: { status: DeliveryOrderStatus.DELIVERED, deliveredAt: new Date() },
       });
 
-      const earning = order.priceIqd - order.commissionIqd;
+      // قيد مزدوج صحيح: سطر كسب بالقيمة الإجمالية ثم سطر عمولة منصّة بالسالب،
+      // فمجموعهما = الصافي. الرصيد يزداد بالصافي مرّة واحدة فقط.
+      // (الخطأ السابق: سطر الكسب كان صافياً ثم خُصمت العمولة ثانيةً في الزيادة
+      //  = price − 2×commission، فيُحرَم البائع العمولة مرّتين.)
+      const net = order.priceIqd - order.commissionIqd;
 
       await tx.vendorWalletEntry.create({
         data: {
           vendorId: vendor.id,
           kind: WalletEntryKind.EARNING,
-          amountIqd: earning,
+          amountIqd: order.priceIqd,
           reference: order.id,
           note: `Delivery ${order.liters}L`,
         },
@@ -167,7 +171,7 @@ export class VendorsService {
       await tx.vendor.update({
         where: { id: vendor.id },
         data: {
-          walletBalanceIqd: { increment: earning - order.commissionIqd },
+          walletBalanceIqd: { increment: net },
           totalDeliveries: { increment: 1 },
         },
       });

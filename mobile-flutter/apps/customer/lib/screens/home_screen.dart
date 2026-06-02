@@ -24,8 +24,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // تسجيل توكن الإشعارات (best-effort).
-      ref.read(pushServiceProvider).register();
+      // تسجيل توكن الإشعارات (best-effort) + فتح شاشة الطلب عند النقر على إشعار.
+      ref.read(pushServiceProvider).register(
+        onOpenNotification: (orderId, type) {
+          if (orderId != null && orderId.isNotEmpty && context.mounted) {
+            context.push('/order/$orderId');
+          }
+        },
+      );
       // أوّل دخول: حوّل لتدفّق الإعداد إن لم يكتمل بعد.
       if (!await LocalFlags.hasSeenOnboarding() && mounted) {
         if (context.mounted) context.go('/onboarding');

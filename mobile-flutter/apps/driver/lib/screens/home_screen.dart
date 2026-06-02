@@ -27,8 +27,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // تسجيل توكن الإشعارات + تصريف الطابور الأوفلاين (best-effort).
-      ref.read(pushServiceProvider).register();
+      // تسجيل توكن الإشعارات + فتح المهمة عند النقر على إشعار + تصريف الطابور.
+      ref.read(pushServiceProvider).register(
+        onOpenNotification: (orderId, type) {
+          if (orderId != null && orderId.isNotEmpty && context.mounted) {
+            context.push('/task/$orderId');
+          }
+        },
+      );
       _flushQueue();
     });
     // مؤقّت تصريف الطابور كل 60 ثانية (يطابق worker/_layout.tsx).

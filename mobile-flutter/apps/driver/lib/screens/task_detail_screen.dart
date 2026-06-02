@@ -28,8 +28,17 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     try {
       await ref.read(ordersRepositoryProvider).start(widget.taskId);
       Hap.press();
-      ref.invalidate(todayTasksProvider);
+      // تأكّد أن بثّ الموقع يعمل أثناء EN_ROUTE كي يظهر السائق على خريطة الزبون،
+      // حتى إن لم يُفعّل السائق مفتاح الوردية يدوياً (best-effort — لا يُفشِل بدء الجولة).
+      final loc = ref.read(locationServiceProvider);
+      if (!loc.isTracking) {
+        final started = await loc.startShift();
+        if (started && mounted) {
+          ref.read(onShiftProvider.notifier).state = true;
+        }
+      }
       if (!mounted) return;
+      ref.invalidate(todayTasksProvider);
       showSnack(context, 'بدأت الجولة — الزبون يرى أنك في الطريق');
     } on ApiException catch (e) {
       if (!mounted) return;

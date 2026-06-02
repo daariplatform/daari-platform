@@ -144,9 +144,15 @@ export class OrdersController {
 
   @RequireCapability('plant_admin', 'customer')
   @Post()
-  create(@CurrentUser() user: AuthUser, @Body() dto: CreateOrderDto) {
+  async create(@CurrentUser() user: AuthUser, @Body() dto: CreateOrderDto) {
+    // إغلاق IDOR: الزبون لا يُحدّد customerId — يُشتقّ من حسابه، فلا يُنشئ طلباً
+    // نيابةً عن زبون آخر. فقط plant_admin يجوز له تمرير customerId لزبون داخل معمله.
+    const customerId = user.capabilities.includes('plant_admin')
+      ? dto.customerId
+      : await this.orders.resolveOwnCustomerId(user.id, user.tenantId!);
     return this.orders.create(user.tenantId!, {
       ...dto,
+      customerId,
       scheduledFor: dto.scheduledFor ? new Date(dto.scheduledFor) : undefined,
     });
   }

@@ -170,7 +170,12 @@ export class DriversService {
   }
 
   async getMyDriverProfile(userId: string) {
-    const driver = await this.prisma.driver.findUnique({ where: { userId } });
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId },
+      // ضمّ علاقة المستخدم كي يصل اسم السائق للتطبيق (DriverProfile.fromJson
+      // يقرأ user.fullName)؛ كانت غائبة فيظهر الاسم فارغاً في كل تطبيق السائق.
+      include: { user: { select: { fullName: true, phone: true } } },
+    });
     if (!driver) throw new NotFoundException('Driver profile not found');
     return driver;
   }
@@ -448,6 +453,8 @@ export class DriversService {
     return {
       driverId,
       driverName: driver.user.fullName,
+      // تطبيق السائق يقرأ fullName؛ نُبقي driverName للوحة المعمل.
+      fullName: driver.user.fullName,
       period,
       from,
       to: now,

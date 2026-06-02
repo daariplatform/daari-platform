@@ -251,8 +251,8 @@ class _WalkinFormState extends ConsumerState<_WalkinForm> {
   Future<void> _confirm() async {
     FocusScope.of(context).unfocus();
     final amount = int.tryParse(_amountController.text.trim());
-    if (amount == null || amount < 0) {
-      showSnack(context, 'أدخل مبلغاً صحيحاً', error: true);
+    if (amount == null || amount <= 0) {
+      showSnack(context, 'أدخل مبلغاً أكبر من صفر', error: true);
       return;
     }
     int? liters;
@@ -348,21 +348,25 @@ class _WalkinFormState extends ConsumerState<_WalkinForm> {
                   style: const TextStyle(fontSize: 13, color: AppColors.slate),
                 ),
               ],
-              const SizedBox(height: 12),
-              const Divider(height: 1, color: AppColors.line),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('السعر الافتراضي',
-                      style: TextStyle(fontSize: 13, color: AppColors.slate)),
-                  Text(Fmt.iqd(c.refillPriceIqd),
-                      style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
-                          color: AppColors.water600)),
-                ],
-              ),
+              // نتائج البحث لا تحمل سعر المعمل (refillPriceIqd خاصّ بـ /customers/me)،
+              // فلا نعرض «0 د.ع» مضلِّلاً — نُظهر الصفّ فقط حين يتوفّر سعر فعلي.
+              if (c.refillPriceIqd > 0) ...[
+                const SizedBox(height: 12),
+                const Divider(height: 1, color: AppColors.line),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('السعر الافتراضي',
+                        style: TextStyle(fontSize: 13, color: AppColors.slate)),
+                    Text(Fmt.iqd(c.refillPriceIqd),
+                        style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.water600)),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

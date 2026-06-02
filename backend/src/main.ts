@@ -33,6 +33,11 @@ async function bootstrap() {
   });
   app.useLogger(app.get(Logger));
 
+  // نحن خلف nginx (الاستماع على 127.0.0.1) — اجعل Express يثق بترويسة الوكيل
+  // كي يصير req.ip عنوان العميل الحقيقي. بدونها ينهار ThrottlerGuard إلى دلو
+  // واحد مشترك (loopback) يُبطِل حماية brute-force على login/OTP.
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
+
   // Catch any exception NestJS doesn't already handle so Sentry sees it.
   // SentryGlobalFilter forwards to the default exception filter after
   // capturing, so this is purely additive.

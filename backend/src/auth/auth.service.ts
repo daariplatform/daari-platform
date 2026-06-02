@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
@@ -238,22 +243,19 @@ export class AuthService {
    * VENDOR capability is added after login through /vendors/me/register,
    * and DRIVER accounts can only be created by a plant from the dashboard.
    *
-   * Stub: accepts any 6-digit code matching the phone's last 6 digits.
-   * Wire to a real SMS provider before launch.
+   * SECURITY: the previous stub accepted any code equal to the phone's last 6
+   * digits — a backdoor that let anyone impersonate any phone number the moment
+   * OTP_SELF_SIGNUP_ENABLED was flipped on. That logic is removed. There is no
+   * real OTP verification store for login yet, so this path is hard-disabled:
+   * wire a real SMS provider + verified-code store before re-enabling it.
    */
   async loginWithOtp(phone: string, otp: string, fullName?: string) {
-    const expected = phone.slice(-6);
-    if (otp !== expected) throw new UnauthorizedException('Invalid OTP');
-
-    let user = await this.prisma.user.findUnique({ where: { phone } });
-    if (!user) {
-      if (!fullName) throw new BadRequestException('fullName required for first login');
-      user = await this.prisma.user.create({
-        data: { phone, fullName, role: UserRole.CUSTOMER },
-      });
-    }
-
-    return this.issueTokens(user.id, user.phone, user.role, user.tenantId);
+    void phone;
+    void otp;
+    void fullName;
+    throw new ServiceUnavailableException(
+      'تسجيل الدخول عبر رمز التحقق غير مفعّل بعد.',
+    );
   }
 
   /**
