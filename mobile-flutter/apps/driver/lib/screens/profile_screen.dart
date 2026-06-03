@@ -237,11 +237,55 @@ class _ProfileBody extends ConsumerWidget {
                 danger: true,
                 onTap: () => _confirmLogout(context, ref),
               ),
+              const SizedBox(height: 10),
+              _ActionRow(
+                icon: Icons.delete_forever,
+                iconBg: const Color(0xFFFEE2E2),
+                iconFg: AppColors.danger,
+                label: 'حذف الحساب نهائياً',
+                danger: true,
+                onTap: () => _confirmDelete(context, ref),
+              ),
             ],
           ),
         ),
       ],
     );
+  }
+
+  // ── حذف الحساب نهائياً (شرط متجر Apple/Google): إيقاف التتبّع ثم الحذف ──
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حذف الحساب'),
+        content: const Text(
+          'سيُحذف حسابك وبياناتك نهائياً ولا يمكن استرجاعها. متابعة؟',
+          style: TextStyle(height: 1.6),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+            child: const Text('حذف نهائي'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    try {
+      await ref.read(locationServiceProvider).stopShift();
+      await ref.read(authRepositoryProvider).deleteAccount();
+      await ref.read(authControllerProvider.notifier).logout();
+      // الراوتر يعيد التوجيه لشاشة الدخول تلقائياً عند تبدّل حالة المصادقة.
+    } on ApiException catch (e) {
+      if (context.mounted) showSnack(context, e.message, error: true);
+    }
   }
 
   // ── تسجيل الخروج: إيقاف التتبّع ثم تسجيل الخروج ──

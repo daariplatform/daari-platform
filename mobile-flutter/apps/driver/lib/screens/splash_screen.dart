@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../providers.dart';
+
 /// شاشة إقلاع السائق: تستعيد الجلسة ثم توجّه (الرئيسية / الدخول).
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -22,7 +24,23 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     await ref.read(authControllerProvider.notifier).hydrate();
     if (!mounted) return;
     final auth = ref.read(authControllerProvider);
-    context.go(auth.isAuthenticated ? '/home' : '/login');
+    if (auth.isAuthenticated) {
+      // استئناف تتبّع GPS تلقائياً لأي سائق مسجَّل عند الإقلاع (مطابقة Expo
+      // _layout). نلتقط مزوّدات التطبيق (تبقى حيّة بعد إغلاق هذه الشاشة) ثم
+      // نطلق المهمة دون انتظار كي لا نحبس التنقّل على جلب الموقع.
+      final location = ref.read(locationServiceProvider);
+      final shift = ref.read(onShiftProvider.notifier);
+      () async {
+        try {
+          if (await location.startShift()) shift.state = true;
+        } catch (_) {
+          // أُنكِر إذن الموقع أو تعذّر — يبقى المفتاح يدويّاً من الرئيسية.
+        }
+      }();
+      context.go('/home');
+    } else {
+      context.go('/login');
+    }
   }
 
   @override
