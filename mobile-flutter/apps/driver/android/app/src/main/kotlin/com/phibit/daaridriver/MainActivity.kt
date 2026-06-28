@@ -1,4 +1,4 @@
-package com.phibit.daari_driver
+package com.phibit.daaridriver
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -6,6 +6,11 @@
 
 > هذا الملف هو **المرجع الوحيد** لهيكلية المشروع العامة.
 
+> **تحديث التوجّه (2026-06):** اعتُمِدت تطبيقات **Flutter** (`mobile-flutter/`) كواجهة الجوّال **الرسمية**.
+> تطبيقات **Expo/React Native** (`mobile-customer` · `mobile-worker` · `mobile-admin`) أصبحت **قديمة (legacy)
+> قيد الإيقاف التدريجي**. الخادم يبقى **NestJS** بلا إعادة كتابة، ولوحات الويب تبقى **Next.js**. الإشعارات على
+> الخادم تحوّلت إلى **FCM (firebase-admin)**. تفاصيل ما أُنجِز والمتبقّي في **[`PROGRESS.md`](PROGRESS.md)**.
+
 ---
 
 ## المعمارية العامة
@@ -61,7 +66,7 @@
 - **نقطة الدخول:** `src/main.ts` (بادئة `/api/v1`، المنفذ 3000).
 - **النطاقات (modules):** `auth`, `tenants`, `tanks`, `customers`, `drivers`, `orders`, `ratings`,
   `customer-address`, `scheduled-orders`, `cash-handover`, `accounting`, `platform-admin`, `ai`,
-  `vendors`, `uploads`, `health`, `notifications` (SMS/WhatsApp/Push)، و `plant/` (العروض + المحفظة +
+  `vendors`, `uploads`, `health`, `notifications` (SMS/WhatsApp + Push عبر **FCM/firebase-admin**)، و `plant/` (العروض + المحفظة +
   الإعداد + التقارير + الفريق).
 - **قاعدة البيانات:** `prisma/schema.prisma` (≈37 نموذجاً) — تُطبَّق عبر `prisma db push`؛ بذور أولية `prisma/seed.ts`.
 - **الاختبارات:** `test/` — Jest e2e (مصادقة، طلبات، عزل المستأجِرين، رفع…).
@@ -98,7 +103,11 @@ src/
 
 ---
 
-## 3) تطبيقات الجوّال — Expo / React Native
+## 3) تطبيقات الجوّال — Expo / React Native (قديمة · قيد الإيقاف)
+
+> ⚠️ هذه التطبيقات **يجري استبدالها بـ Flutter** (القسم 4) وستُحذف بعد اكتمال التحويل. تبقى حتى ذلك الحين
+> **مرجعاً وظيفياً** — خصوصاً `mobile-admin` كمخطّط للوحة الإدارة بـ Flutter (غير المبنية بعد). الإشعارات
+> على الخادم لم تعد تمرّ عبر Expo Push بل عبر **FCM** مباشرةً.
 
 ثلاثة تطبيقات بـ **Expo SDK 54 / React Native 0.81 / expo-router**، تبني وتُنشر عبر EAS:
 
@@ -125,16 +134,18 @@ mobile-flutter/
 │   └── lib/src/  (config · theme · format · models · api+interceptors ·
 │                  auth · services · widgets · providers)
 └── apps/
-    ├── customer/   ← تطبيق الزبون (17 شاشة)  · com.phibit.daari_customer
-    └── driver/     ← تطبيق السائق (12 شاشة)  · com.phibit.daari_driver
+    ├── customer/   ← تطبيق الزبون (17 شاشة)  · com.phibit.daaricustomer
+    └── driver/     ← تطبيق السائق (12 شاشة)  · com.phibit.daaridriver
 ```
 
 - **الحالة:** Riverpod. **التوجيه:** go_router (مع حارس مصادقة). **الشبكة:** Dio + interceptors
   (تحديث الرمز single-flight + تخزين مؤقّت).
 - **التشغيل:** من داخل مجلّد التطبيق `flutter run --dart-define=API_URL=...`.
 
-> **علاقة الجيلين:** تطبيقات `mobile-customer` و `mobile-worker` هي الأصل (Expo)، و `mobile-flutter`
-> إعادة بناء موازية لها بـ Flutter مع الحفاظ على التكافؤ الوظيفي (parity). لا يوجد بعد مكافئ Flutter لتطبيق الإدارة.
+> **التوجّه المعتمَد:** تطبيقات Flutter هي **الواجهة الرسمية** للجوّال؛ وتطبيقات Expo
+> (`mobile-customer/worker/admin`) **قديمة قيد الإيقاف** وتُحذف بعد اكتمال التحويل. الزبون والسائق قرب
+> التكافؤ الكامل، أمّا **لوحة الإدارة بـ Flutter (`com.phibit.daariadmin`) فما تزال قيد البناء** على
+> `daari_core` (ينقصها repository لنطاق `plant/`). الحالة التفصيلية والمتبقّي في **[`PROGRESS.md`](PROGRESS.md)**.
 
 ---
 

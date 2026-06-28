@@ -16,7 +16,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.phibit.daari_customer"
+    namespace = "com.phibit.daaricustomer"
     // androidx الحديثة (fragment 1.7 / activity 1.8 / window 1.2) تتطلّب 34+.
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
@@ -29,7 +29,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.phibit.daari_customer"
+        applicationId = "com.phibit.daaricustomer"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

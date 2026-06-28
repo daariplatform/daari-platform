@@ -1,4 +1,4 @@
-package com.phibit.daari_customer
+package com.phibit.daaricustomer
 
 import io.flutter.embedding.android.FlutterActivity
 

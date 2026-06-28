@@ -53,7 +53,7 @@ export class NotificationsController {
   /**
    * Any signed-in user (customer / driver / admin) registers their device
    * push token. Mobile calls this after first login + whenever the token
-   * is refreshed (Expo can rotate tokens on app reinstall).
+   * is refreshed (FCM can rotate tokens on app reinstall / restore).
    */
   @Post('push-token')
   registerPushToken(@CurrentUser() user: AuthUser, @Body() dto: RegisterPushTokenDto) {

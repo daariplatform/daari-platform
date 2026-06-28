@@ -1,24 +1,66 @@
 import { Injectable, Logger } from '@nestjs/common';
+import * as admin from 'firebase-admin';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
- * Sends push notifications via the Expo Push API (free, handles APNs +
- * FCM for us). We don't need a server-side Expo SDK — a simple fetch to
- * the public endpoint works and avoids the heavy `expo-server-sdk` dep.
+ * Sends push notifications via Firebase Cloud Messaging (FCM) using the
+ * firebase-admin SDK. The mobile apps (Flutter) register raw FCM device
+ * tokens via POST /notifications/register-token; we store one PushToken
+ * row per device and fan a message out to all of a user's tokens.
  *
- * Token storage: each User can have N PushToken rows (one per device).
- * When sending, we look up all tokens for the user and dispatch in batch.
+ * Credentials: a Firebase service account is read once at first use from
+ *   FIREBASE_SERVICE_ACCOUNT_JSON                  (inline JSON), or
+ *   FIREBASE_SERVICE_ACCOUNT_PATH / GOOGLE_APPLICATION_CREDENTIALS (file path).
+ * If none is configured the service degrades gracefully to a no-op (so dev
+ * environments run without Firebase). Every send is best-effort — callers
+ * MUST NOT block on the result.
  *
- * Failure handling: Expo returns per-message status. If a token is
- * permanently invalid ("DeviceNotRegistered") we drop it from DB so we
- * don't keep retrying.
+ * Failure handling: FCM returns a per-token result. A permanently invalid
+ * token ("messaging/registration-token-not-registered") is pruned from the
+ * DB so future sends don't keep wasting calls.
  */
 @Injectable()
 export class PushService {
   private readonly logger = new Logger(PushService.name);
-  private readonly endpoint = 'https://exp.host/--/api/v2/push/send';
+  private messaging: admin.messaging.Messaging | null = null;
+  private initTried = false;
 
   constructor(private prisma: PrismaService) {}
+
+  /**
+   * Lazily resolve an FCM messaging client from a service-account credential.
+   * Returns null (warned once) when Firebase isn't configured.
+   */
+  private getMessaging(): admin.messaging.Messaging | null {
+    if (this.messaging) return this.messaging;
+    if (this.initTried) return null;
+    this.initTried = true;
+
+    try {
+      const inline = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+      const path =
+        process.env.FIREBASE_SERVICE_ACCOUNT_PATH ??
+        process.env.GOOGLE_APPLICATION_CREDENTIALS;
+
+      let credential: admin.credential.Credential | null = null;
+      if (inline) credential = admin.credential.cert(JSON.parse(inline));
+      else if (path) credential = admin.credential.cert(path);
+
+      if (!credential) {
+        this.logger.warn(
+          'Firebase not configured (FIREBASE_SERVICE_ACCOUNT_JSON / _PATH) — push disabled',
+        );
+        return null;
+      }
+
+      const app = admin.apps.length ? admin.app() : admin.initializeApp({ credential });
+      this.messaging = app.messaging();
+      return this.messaging;
+    } catch (err: any) {
+      this.logger.error(`Firebase init failed: ${err?.message ?? err}`);
+      return null;
+    }
+  }
 
   /** Register / upsert a push token for a user. Called from mobile after login. */
   async registerToken(userId: string, token: string, platform: 'ios' | 'android') {
@@ -111,53 +153,50 @@ export class PushService {
     body: string,
     data: Record<string, unknown>,
   ): Promise<{ sent: number; failed: number }> {
-    // Expo accepts up to 100 messages per request — chunk to stay safe.
+    const messaging = this.getMessaging();
+    if (!messaging) return { sent: 0, failed: tokens.length };
+
+    // FCM data payloads must be string→string. Coerce every value so the
+    // mobile app can still read e.g. data.orderId / data.kind on tap.
+    const stringData: Record<string, string> = {};
+    for (const [k, v] of Object.entries(data)) {
+      stringData[k] = typeof v === 'string' ? v : JSON.stringify(v);
+    }
+
+    // sendEachForMulticast accepts up to 500 tokens per call — chunk to stay safe.
     const chunks: string[][] = [];
-    for (let i = 0; i < tokens.length; i += 100) chunks.push(tokens.slice(i, i + 100));
+    for (let i = 0; i < tokens.length; i += 500) chunks.push(tokens.slice(i, i + 500));
 
     let sent = 0;
     let failed = 0;
     const invalidTokens: string[] = [];
 
     for (const chunk of chunks) {
-      const messages = chunk.map((token) => ({
-        to: token,
-        sound: 'default',
-        title,
-        body,
-        data,
-        // Arabic-aware priority — orders should arrive without delay.
-        priority: 'high' as const,
-      }));
       try {
-        const res = await fetch(this.endpoint, {
-          method: 'POST',
-          headers: {
-            Accept: 'application/json',
-            'Accept-Encoding': 'gzip, deflate',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(messages),
+        const res = await messaging.sendEachForMulticast({
+          tokens: chunk,
+          notification: { title, body },
+          data: stringData,
+          // Orders should arrive without delay on both platforms.
+          android: { priority: 'high' },
+          apns: { headers: { 'apns-priority': '10' } },
         });
-        if (!res.ok) {
-          this.logger.warn(`Expo push HTTP ${res.status}`);
-          failed += chunk.length;
-          continue;
-        }
-        const payload = (await res.json()) as { data?: Array<{ status: string; details?: { error?: string } }> };
-        payload.data?.forEach((r, idx) => {
-          if (r.status === 'ok') sent++;
-          else {
-            failed++;
-            // DeviceNotRegistered → the user uninstalled or revoked perms.
-            // Drop the token from DB so future sends don't waste API calls.
-            if (r.details?.error === 'DeviceNotRegistered') {
-              invalidTokens.push(chunk[idx]);
-            }
+        sent += res.successCount;
+        failed += res.failureCount;
+        res.responses.forEach((r, idx) => {
+          const code = r.error?.code;
+          // Token no longer valid (app uninstalled / token rotated) → prune
+          // so future sends don't keep wasting calls. Other errors (transient
+          // / payload) are left alone — we don't drop a possibly-good token.
+          if (
+            code === 'messaging/registration-token-not-registered' ||
+            code === 'messaging/invalid-registration-token'
+          ) {
+            invalidTokens.push(chunk[idx]);
           }
         });
       } catch (err: any) {
-        this.logger.error(`Expo push network error: ${err?.message ?? err}`);
+        this.logger.error(`FCM send error: ${err?.message ?? err}`);
         failed += chunk.length;
       }
     }
