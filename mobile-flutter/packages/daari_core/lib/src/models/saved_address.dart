@@ -95,7 +95,9 @@ class AddressInput {
     final body = <String, dynamic>{
       'label': cleanTitle.isNotEmpty ? cleanTitle : label.text,
       'addressLine': addressLine,
-      'district': (district?.trim().isNotEmpty ?? false) ? district!.trim() : 'غير محدد',
+      'district': (district?.trim().isNotEmpty ?? false)
+          ? district!.trim()
+          : 'غير محدد',
     };
     if (lng != null) body['lng'] = lng;
     if (lat != null) body['lat'] = lat;

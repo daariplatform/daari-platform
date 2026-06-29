@@ -35,9 +35,23 @@ export 'src/models/refill_schedule.dart';
 export 'src/models/nearest_plant.dart';
 export 'src/models/driver_profile.dart';
 export 'src/models/driver_task.dart';
+export 'src/models/live_driver.dart';
 export 'src/models/cash.dart';
 export 'src/models/earnings.dart';
 export 'src/models/app_notification.dart';
+// نماذج الإدارة (لوحة المعمل)
+export 'src/models/paged_result.dart';
+export 'src/models/plant_kpis.dart';
+export 'src/models/water_stock.dart';
+export 'src/models/plant_usage.dart';
+export 'src/models/audit_log.dart';
+export 'src/models/driver_performance.dart';
+export 'src/models/activity_event.dart';
+export 'src/models/promo_notification.dart';
+export 'src/models/promo_campaign.dart';
+export 'src/models/plant_reports.dart';
+export 'src/models/team_member.dart';
+export 'src/models/onboarding_status.dart';
 
 // طبقة الـ API
 export 'src/api/api_exception.dart';
@@ -48,6 +62,12 @@ export 'src/api/customer_repository.dart';
 export 'src/api/driver_repository.dart';
 export 'src/api/tenants_repository.dart';
 export 'src/api/notifications_repository.dart';
+// repositories الإدارة (لوحة المعمل)
+export 'src/api/plant_repository.dart';
+export 'src/api/promo_repository.dart';
+export 'src/api/reports_repository.dart';
+export 'src/api/team_repository.dart';
+export 'src/api/onboarding_repository.dart';
 
 // المصادقة
 export 'src/auth/token_storage.dart';

@@ -62,12 +62,18 @@ class DriverProfile {
       status: DriverStatus.fromValue(json['status'] as String?),
       isActive: json['isActive'] != false,
       vehiclePlate: json['vehiclePlate'] as String?,
-      baseSalaryIqd: json['baseSalaryIqd'] == null ? null : P.intv(json['baseSalaryIqd']),
-      commissionPerRefillIqd:
-          json['commissionPerRefillIqd'] == null ? null : P.intv(json['commissionPerRefillIqd']),
+      baseSalaryIqd:
+          json['baseSalaryIqd'] == null ? null : P.intv(json['baseSalaryIqd']),
+      commissionPerRefillIqd: json['commissionPerRefillIqd'] == null
+          ? null
+          : P.intv(json['commissionPerRefillIqd']),
       joinDate: P.date(json['joinDate']),
-      tanksFullOnVan: json['tanksFullOnVan'] == null ? null : P.intv(json['tanksFullOnVan']),
-      tanksEmptyOnVan: json['tanksEmptyOnVan'] == null ? null : P.intv(json['tanksEmptyOnVan']),
+      tanksFullOnVan: json['tanksFullOnVan'] == null
+          ? null
+          : P.intv(json['tanksFullOnVan']),
+      tanksEmptyOnVan: json['tanksEmptyOnVan'] == null
+          ? null
+          : P.intv(json['tanksEmptyOnVan']),
       fullName: (user?['fullName'] ?? json['fullName']) as String?,
     );
   }
@@ -98,9 +104,11 @@ class DriverPerf {
       revenueIqd: P.intv(json['revenueIqd']),
       bonusIqd: P.intv(json['bonusIqd']),
       fullName: P.str(json['fullName']),
-      avgCompletionMin:
-          json['avgCompletionMin'] == null ? null : P.dbl(json['avgCompletionMin']),
-      customerRating: json['customerRating'] == null ? null : P.dbl(json['customerRating']),
+      avgCompletionMin: json['avgCompletionMin'] == null
+          ? null
+          : P.dbl(json['avgCompletionMin']),
+      customerRating:
+          json['customerRating'] == null ? null : P.dbl(json['customerRating']),
     );
   }
 }

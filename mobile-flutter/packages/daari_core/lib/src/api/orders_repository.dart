@@ -81,11 +81,13 @@ class OrdersRepository {
   }
 
   /// تقييم نجمي بعد التوصيل.
-  Future<OrderRating> rate(String id, {required int stars, String? comment}) async {
+  Future<OrderRating> rate(String id,
+      {required int stars, String? comment}) async {
     try {
       final body = <String, dynamic>{'stars': stars};
       if (comment != null && comment.isNotEmpty) body['comment'] = comment;
-      final res = await _dio.post<Map<String, dynamic>>('/orders/$id/rate', data: body);
+      final res =
+          await _dio.post<Map<String, dynamic>>('/orders/$id/rate', data: body);
       return OrderRating.fromJson(res.data ?? const {});
     } on DioException catch (e) {
       throw ApiException.fromDio(e);

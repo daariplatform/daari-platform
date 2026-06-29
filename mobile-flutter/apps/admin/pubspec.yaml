@@ -1,0 +1,41 @@
+name: daari_admin
+description: تطبيق الإدارة «داري» — لوحة المعمل (المؤشّرات + التقارير + الفريق + العروض) (Flutter).
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+  flutter: ">=3.27.0"
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # الحزمة المشتركة (النماذج + API + المصادقة + التصميم + الخدمات + طبقة الإدارة /plant/*)
+  daari_core:
+    path: ../../packages/daari_core
+
+  # إدارة الحالة
+  flutter_riverpod: ^2.6.1
+
+  # تهيئة تنسيق التواريخ العربية + Firebase للإشعارات (يُستعملان في main.dart)
+  intl: ">=0.18.0 <0.21.0"
+  firebase_core: ^3.6.0
+
+  # التوجيه
+  go_router: ^14.6.1
+
+  # الخريطة الحيّة لأسطول السائقين (لوحة المعمل)
+  google_maps_flutter: ^2.9.0
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true

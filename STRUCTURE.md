@@ -45,7 +45,7 @@
 | `mobile-customer/` | Expo / React Native | تطبيق الزبون (الأصل) — `maa-customer` |
 | `mobile-worker/` | Expo / React Native | تطبيق السائق/العامل — `maa-worker` |
 | `mobile-admin/` | Expo / React Native | تطبيق الإدارة — `daari-admin` |
-| `mobile-flutter/` | Flutter (Dart) | إعادة بناء تطبيقَي الزبون + السائق بـ Flutter |
+| `mobile-flutter/` | Flutter (Dart) | إعادة بناء تطبيقات الزبون + السائق + الإدارة بـ Flutter |
 | `deploy/` | سكربتات + إعدادات | النشر على VPS (nginx, systemd, logrotate) |
 | `scripts/` | سكربتات مساعدة | نسخ احتياطي DB، بناء EAS، توليد أيقونات… |
 | `legal/` | مستندات | سياسات الخصوصية والشروط وقوائم متجر Play |
@@ -124,18 +124,26 @@ zod، zustand، expo-secure-store، expo-notifications، react-native-maps.
 
 ## 4) إعادة البناء بـ Flutter — `mobile-flutter/`
 
-إعادة بناء تطبيقَي **الزبون + السائق** بـ **Flutter**، تستهلك نفس الـ API دون أي تغيير في الخادم.
+إعادة بناء تطبيقات **الزبون + السائق + الإدارة** بـ **Flutter**، تستهلك نفس الـ API دون أي تغيير في الخادم.
 بنية **Dart pub workspace**:
 
 ```
 mobile-flutter/
-├── pubspec.yaml                 ← جذر الـ workspace
+├── pubspec.yaml                 ← جذر الـ workspace (يضمّ admin)
 ├── packages/daari_core/         ← القلب المشترك (barrel: lib/daari_core.dart)
 │   └── lib/src/  (config · theme · format · models · api+interceptors ·
 │                  auth · services · widgets · providers)
+│      └── api/ + models/ تشمل أيضاً **طبقة الإدارة** `/plant/*`:
+│         {plant,promo,reports,team,onboarding}_repository + نماذجها
 └── apps/
     ├── customer/   ← تطبيق الزبون (17 شاشة)  · com.phibit.daaricustomer
-    └── driver/     ← تطبيق السائق (12 شاشة)  · com.phibit.daaridriver
+    ├── driver/     ← تطبيق السائق (12 شاشة)  · com.phibit.daaridriver
+    └── admin/      ← تطبيق الإدارة (11 شاشة)  · com.phibit.daariadmin
+        # lib/: main · router (حارس مصادقة) · providers · widgets/{common,home_shell}
+        #       screens/: splash · login · home(KPIs) · reports · team(دعوة/تعديل/حذف) ·
+        #                 more · stock · promos(حملات+بثّ) · advanced_reports · onboarding ·
+        #                 fleet_map(خريطة سائقين حيّة عبر GET /drivers/live + google_maps_flutter)
+        #       تبويبات: الرئيسية · التقارير · الفريق · المزيد (المتبقّي: بصمة local_auth)
 ```
 
 - **الحالة:** Riverpod. **التوجيه:** go_router (مع حارس مصادقة). **الشبكة:** Dio + interceptors
@@ -144,8 +152,9 @@ mobile-flutter/
 
 > **التوجّه المعتمَد:** تطبيقات Flutter هي **الواجهة الرسمية** للجوّال؛ وتطبيقات Expo
 > (`mobile-customer/worker/admin`) **قديمة قيد الإيقاف** وتُحذف بعد اكتمال التحويل. الزبون والسائق قرب
-> التكافؤ الكامل، أمّا **لوحة الإدارة بـ Flutter (`com.phibit.daariadmin`) فما تزال قيد البناء** على
-> `daari_core` (ينقصها repository لنطاق `plant/`). الحالة التفصيلية والمتبقّي في **[`PROGRESS.md`](PROGRESS.md)**.
+> التكافؤ الكامل، أمّا **لوحة الإدارة بـ Flutter (`com.phibit.daariadmin`)** فتطبيق `apps/admin` **يعمل بـ 11 شاشة**
+> (مصادقة + لوحة مؤشّرات حيّة + التقارير الأساسية والمتقدّمة + الفريق بإجراءاته + العروض + المخزون + تهيئة المعمل + **خريطة أسطول حيّة**)،
+> والمتبقّي **بصمة (`local_auth`)** ولمسات تكافؤ (مفتاح خرائط للإنتاج). الحالة التفصيلية في **[`PROGRESS.md`](PROGRESS.md)**.
 
 ---
 

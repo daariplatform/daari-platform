@@ -30,15 +30,18 @@ class TaskCustomer {
       phone: P.str(json['phone']),
       district: P.str(json['district']),
       addressLine: P.str(json['addressLine']),
-      locationLng: json['locationLng'] == null ? null : P.dbl(json['locationLng']),
-      locationLat: json['locationLat'] == null ? null : P.dbl(json['locationLat']),
+      locationLng:
+          json['locationLng'] == null ? null : P.dbl(json['locationLng']),
+      locationLat:
+          json['locationLat'] == null ? null : P.dbl(json['locationLat']),
     );
   }
 }
 
 /// خزان مضمَّن داخل المهمة (للمسح/التحقّق).
 class TaskTank {
-  const TaskTank({required this.id, required this.qrCode, required this.capacity});
+  const TaskTank(
+      {required this.id, required this.qrCode, required this.capacity});
 
   final String id;
   final String qrCode;

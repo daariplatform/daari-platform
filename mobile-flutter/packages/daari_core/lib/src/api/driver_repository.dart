@@ -3,14 +3,29 @@ import 'package:dio/dio.dart';
 import '../models/cash.dart';
 import '../models/driver_profile.dart';
 import '../models/earnings.dart';
+import '../models/live_driver.dart';
 import 'api_exception.dart';
 
 /// نقاط نهاية السائق: الملفّ، الأداء، النقد، الأرباح، الوردية، جرد الفان،
-/// الموقع الحيّ، وتغيير الحالة.
+/// الموقع الحيّ، وتغيير الحالة. ويضمّ نقطة الإدارة للتتبّع الحيّ للأسطول.
 class DriverRepository {
   DriverRepository(this._dio);
 
   final Dio _dio;
+
+  /// كل سائقي المعمل مع آخر موقع (للوحة الإدارة) — `GET /drivers/live`.
+  /// تتطلّب دور OWNER/MANAGER/ACCOUNTANT (يُفرَض على الخادم).
+  Future<List<LiveDriver>> liveDrivers() async {
+    try {
+      final res = await _dio.get<List<dynamic>>('/drivers/live');
+      return (res.data ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(LiveDriver.fromJson)
+          .toList();
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
 
   Future<DriverProfile> me() async {
     try {
@@ -35,7 +50,8 @@ class DriverRepository {
 
   Future<CashSummary> cashSummary() async {
     try {
-      final res = await _dio.get<Map<String, dynamic>>('/drivers/me/cash-summary');
+      final res =
+          await _dio.get<Map<String, dynamic>>('/drivers/me/cash-summary');
       return CashSummary.fromJson(res.data ?? const {});
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
@@ -81,7 +97,8 @@ class DriverRepository {
 
   Future<ShiftSummary> shiftSummary() async {
     try {
-      final res = await _dio.get<Map<String, dynamic>>('/drivers/me/shift-summary');
+      final res =
+          await _dio.get<Map<String, dynamic>>('/drivers/me/shift-summary');
       return ShiftSummary.fromJson(res.data ?? const {});
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
@@ -95,7 +112,10 @@ class DriverRepository {
     try {
       await _dio.post<void>(
         '/drivers/me/van-inventory',
-        data: {'tanksFullOnVan': tanksFullOnVan, 'tanksEmptyOnVan': tanksEmptyOnVan},
+        data: {
+          'tanksFullOnVan': tanksFullOnVan,
+          'tanksEmptyOnVan': tanksEmptyOnVan
+        },
       );
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
@@ -105,7 +125,8 @@ class DriverRepository {
   /// بثّ الموقع الحيّ (كل ~30 ثانية أثناء الوردية).
   Future<void> pushLocation({required double lng, required double lat}) async {
     try {
-      await _dio.post<void>('/drivers/me/location', data: {'lng': lng, 'lat': lat});
+      await _dio
+          .post<void>('/drivers/me/location', data: {'lng': lng, 'lat': lat});
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -114,7 +135,8 @@ class DriverRepository {
   /// تغيير حالة السائق (AVAILABLE عند بدء الوردية، OFFLINE عند إنهائها).
   Future<void> setStatus(DriverStatus status) async {
     try {
-      await _dio.post<void>('/drivers/me/status', data: {'status': status.value});
+      await _dio
+          .post<void>('/drivers/me/status', data: {'status': status.value});
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }

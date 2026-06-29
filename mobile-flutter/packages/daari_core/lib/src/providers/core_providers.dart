@@ -6,8 +6,13 @@ import '../api/api_client.dart';
 import '../api/customer_repository.dart';
 import '../api/driver_repository.dart';
 import '../api/notifications_repository.dart';
+import '../api/onboarding_repository.dart';
 import '../api/orders_repository.dart';
+import '../api/plant_repository.dart';
+import '../api/promo_repository.dart';
+import '../api/reports_repository.dart';
 import '../api/response_cache.dart';
+import '../api/team_repository.dart';
 import '../api/tenants_repository.dart';
 import '../auth/auth_controller.dart';
 import '../auth/auth_repository.dart';
@@ -77,6 +82,33 @@ final tenantsRepositoryProvider = Provider<TenantsRepository>(
 
 final notificationsRepositoryProvider = Provider<NotificationsRepository>(
   (ref) => NotificationsRepository(ref.watch(dioProvider)),
+);
+
+// ── طبقة الإدارة (لوحة المعمل بـ Flutter) — نقاط /plant/* ──────────────────
+
+/// المؤشّرات + المخزون + الاستهلاك + سجلّ التدقيق + أداء السائقين + خطّ النشاط.
+final plantRepositoryProvider = Provider<PlantRepository>(
+  (ref) => PlantRepository(ref.watch(dioProvider)),
+);
+
+/// البثّ الترويجي (إشعار/واتساب) + حملات التخفيض المموّلة من المحفظة.
+final promoRepositoryProvider = Provider<PromoRepository>(
+  (ref) => PromoRepository(ref.watch(dioProvider)),
+);
+
+/// التقارير (الإيراد، المتصدّرون، الأفواج، الخريطة الحرارية، الاستغلال، التصدير).
+final reportsRepositoryProvider = Provider<ReportsRepository>(
+  (ref) => ReportsRepository(ref.watch(dioProvider)),
+);
+
+/// إدارة فريق المعمل (عرض/دعوة/تعديل/حذف).
+final teamRepositoryProvider = Provider<TeamRepository>(
+  (ref) => TeamRepository(ref.watch(dioProvider)),
+);
+
+/// تهيئة المعمل (حالة قائمة الخطوات + تخطّيها).
+final onboardingRepositoryProvider = Provider<OnboardingRepository>(
+  (ref) => OnboardingRepository(ref.watch(dioProvider)),
 );
 
 /// خدمة تتبّع الموقع (السائق).
