@@ -8,6 +8,8 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>Daari Admin</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>نستخدم التعرّف على الوجه لفتح لوحة إدارة داري بأمان.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

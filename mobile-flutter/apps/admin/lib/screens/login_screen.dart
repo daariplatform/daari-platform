@@ -1,8 +1,8 @@
 import 'package:daari_core/daari_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
+import '../router.dart';
 import '../widgets/common.dart';
 
 /// تسجيل دخول الإدارة بالهاتف + كلمة السر (حساب المالك/المدير/المحاسب).
@@ -40,12 +40,45 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await ref
           .read(authControllerProvider.notifier)
           .login(phone: phone, password: _password.text);
-      if (mounted) context.go('/home');
+      // حارس الراوتر ينقلنا إلى /home تلقائياً عند تغيّر حالة المصادقة؛
+      // ثم نعرض تفعيل البصمة فوق الـ Navigator الجذر.
+      await _offerBiometricEnrolment();
     } on ApiException catch (e) {
       if (mounted) showSnack(context, e.message, error: true);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// بعد أوّل دخول ناجح: اعرض تفعيل قفل البصمة (إن كان متاحاً ولم يُفعَّل بعد).
+  /// نؤكّد بمسحةٍ واحدة الآن لنضمن أنّ البصمة تعمل قبل تخزين العلَم. يُعرض الحوار
+  /// فوق الـ Navigator الجذر لأنّ الحارس ربّما نقلنا إلى /home بالفعل (فيُفكَّك
+  /// سياق هذه الشاشة).
+  Future<void> _offerBiometricEnrolment() async {
+    if (await LocalFlags.biometricEnabled()) return;
+    if (!await BiometricService.isAvailable()) return;
+    final label = await BiometricService.label();
+    final navContext = adminRootNavigatorKey.currentContext;
+    if (navContext == null || !navContext.mounted) return;
+    final enable = await showDialog<bool>(
+      context: navContext,
+      builder: (ctx) => AlertDialog(
+        title: Text('تفعيل $label؟'),
+        content: const Text(
+            'فعّله لتفتح لوحة الإدارة بسرعة دون كلمة السر في المرّات القادمة.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('لاحقاً')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('تفعيل')),
+        ],
+      ),
+    );
+    if (enable != true) return;
+    final ok = await BiometricService.authenticate('أكّد هويتك لتفعيل القفل');
+    if (ok) await LocalFlags.setBiometricEnabled(true);
   }
 
   @override

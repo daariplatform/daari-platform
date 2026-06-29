@@ -76,6 +76,7 @@ export 'src/auth/auth_state.dart';
 export 'src/auth/auth_controller.dart';
 
 // الخدمات
+export 'src/services/biometric_service.dart';
 export 'src/services/location_service.dart';
 export 'src/services/push_service.dart';
 export 'src/services/launchers.dart';

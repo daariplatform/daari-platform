@@ -22,7 +22,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     await ref.read(authControllerProvider.notifier).hydrate();
     if (!mounted) return;
     final auth = ref.read(authControllerProvider);
-    context.go(auth.isAuthenticated ? '/home' : '/login');
+    if (!auth.isAuthenticated) {
+      context.go('/login');
+      return;
+    }
+    // جلسة سارية: إن فعّل المستخدم قفل البصمة وكان متاحاً، مُرّ عبر شاشة القفل.
+    final locked = await LocalFlags.biometricEnabled() &&
+        await BiometricService.isAvailable();
+    if (!mounted) return;
+    context.go(locked ? '/lock' : '/home');
   }
 
   @override

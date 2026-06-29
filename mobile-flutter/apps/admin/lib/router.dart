@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'screens/advanced_reports_screen.dart';
 import 'screens/fleet_map_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/lock_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/more_screen.dart';
 import 'screens/onboarding_screen.dart';
@@ -18,6 +19,10 @@ import 'widgets/home_shell.dart';
 
 const _authRoutes = {'/login'};
 
+/// مفتاح الـ Navigator الجذر — لعرض حوارات فوق أيّ شاشة حتى بعد أن ينقلنا
+/// الحارس (مثل عرض تفعيل البصمة بعد الدخول، حين يصير المستخدم على /home).
+final adminRootNavigatorKey = GlobalKey<NavigatorState>();
+
 /// راوتر تطبيق الإدارة — go_router مع حارس مصادقة (نفس نمط customer/driver).
 final adminRouterProvider = Provider<GoRouter>((ref) {
   // جسر بين Riverpod و go_router: نُعلِم الراوتر عند تغيّر حالة المصادقة.
@@ -28,6 +33,7 @@ final adminRouterProvider = Provider<GoRouter>((ref) {
   final shellKey = GlobalKey<NavigatorState>();
 
   return GoRouter(
+    navigatorKey: adminRootNavigatorKey,
     initialLocation: '/',
     refreshListenable: refresh,
     observers: Analytics.navigatorObservers,
@@ -52,6 +58,8 @@ final adminRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/', builder: (_, __) => const SplashScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      // بوّابة قفل البصمة عند الإقلاع البارد (جلسة سارية تنتظر تأكيد الهوية).
+      GoRoute(path: '/lock', builder: (_, __) => const LockScreen()),
 
       // قشرة التبويبات (الرئيسية / التقارير / الفريق / المزيد)
       ShellRoute(

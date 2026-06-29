@@ -27,6 +27,8 @@ class MoreScreen extends ConsumerWidget {
       ),
     );
     if (ok != true) return;
+    // امسح علَم قفل البصمة كي لا يُطالَب المستخدم التالي على نفس الجهاز.
+    await LocalFlags.setBiometricEnabled(false);
     await ref.read(authControllerProvider.notifier).logout();
     if (context.mounted) context.go('/login');
   }
@@ -91,6 +93,14 @@ class MoreScreen extends ConsumerWidget {
                 ],
               ),
             ),
+          ),
+          const SizedBox(height: 20),
+          const Text('الأمان',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 10),
+          const SectionCard(
+            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: _BiometricLockTile(),
           ),
           const SizedBox(height: 20),
           const Text('الإدارة',
@@ -163,6 +173,85 @@ class _Row extends StatelessWidget {
                 style: const TextStyle(color: AppColors.slate, fontSize: 13))),
         Text(value, style: const TextStyle(fontWeight: FontWeight.w800)),
       ],
+    );
+  }
+}
+
+/// مفتاح تفعيل/إلغاء قفل الدخول بالبصمة (يُؤكَّد بمسحةٍ عند التفعيل).
+class _BiometricLockTile extends ConsumerStatefulWidget {
+  const _BiometricLockTile();
+
+  @override
+  ConsumerState<_BiometricLockTile> createState() => _BiometricLockTileState();
+}
+
+class _BiometricLockTileState extends ConsumerState<_BiometricLockTile> {
+  bool _available = false;
+  bool _enabled = false;
+  bool _loading = true;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final available = await BiometricService.isAvailable();
+    final enabled = await LocalFlags.biometricEnabled();
+    if (!mounted) return;
+    setState(() {
+      _available = available;
+      _enabled = enabled;
+      _loading = false;
+    });
+  }
+
+  Future<void> _toggle(bool value) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      if (value) {
+        final ok =
+            await BiometricService.authenticate('أكّد هويتك لتفعيل القفل');
+        if (!ok) return;
+        await LocalFlags.setBiometricEnabled(true);
+        if (mounted) setState(() => _enabled = true);
+      } else {
+        await LocalFlags.setBiometricEnabled(false);
+        if (mounted) setState(() => _enabled = false);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const ListTile(
+        leading: Icon(Icons.fingerprint, color: AppColors.navy600),
+        title: Text('قفل بالبصمة'),
+        trailing: SizedBox(
+          height: 20,
+          width: 20,
+          child: CircularProgressIndicator(strokeWidth: 2.2),
+        ),
+      );
+    }
+    return SwitchListTile(
+      secondary: const Icon(Icons.fingerprint, color: AppColors.navy600),
+      title: const Text('قفل بالبصمة',
+          style: TextStyle(fontWeight: FontWeight.w700)),
+      subtitle: Text(
+        _available
+            ? 'اطلب البصمة عند فتح التطبيق'
+            : 'غير متوفّر على هذا الجهاز',
+        style: const TextStyle(color: AppColors.slate, fontSize: 12),
+      ),
+      value: _enabled && _available,
+      onChanged: (_available && !_busy) ? _toggle : null,
     );
   }
 }

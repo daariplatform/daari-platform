@@ -28,6 +28,9 @@ dependencies:
   # تخزين آمن للتوكنات (بديل expo-secure-store)
   flutter_secure_storage: ^9.2.2
 
+  # مصادقة بيومترية (بصمة/وجه) — قفل الدخول للوحة الإدارة (بديل expo-local-authentication)
+  local_auth: ^2.3.0
+
   # تخزين بسيط للأعلام والطابور الأوفلاين (بديل AsyncStorage)
   shared_preferences: ^2.3.2
 

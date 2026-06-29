@@ -1,5 +1,6 @@
 package com.phibit.daariadmin
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// FlutterFragmentActivity مطلوبة لإضافة local_auth (قفل البصمة/الوجه).
+class MainActivity : FlutterFragmentActivity()
