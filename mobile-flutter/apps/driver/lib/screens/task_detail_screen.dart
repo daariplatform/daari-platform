@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:daari_core/daari_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,7 +22,36 @@ class TaskDetailScreen extends ConsumerStatefulWidget {
 
 class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   bool _busy = false;
-  ReclaimReason _reclaimReason = ReclaimReason.customerMoved;
+  // null = لم يُختَر سبب بعد. الاختيار **إجباري** لتأكيد السحب (يطابق Expo —
+  // يمنع تسجيل سحب خزان بلا سبب في سجلّ تدقيق المعمل).
+  ReclaimReason? _reclaimReason;
+
+  // موقع السائق الحالي لمعاينة الخريطة (محلّي فقط) — يُحدَّث كل 10ث ما دامت
+  // الشاشة مفتوحة، لإظهار دبّوس السائق والمسافة/الوصول. (التتبّع الفعلي للخادم
+  // يبقى في LocationService.) يطابق watchPosition في worker/task/[id].tsx.
+  Coords? _driverCoord;
+  Timer? _locTimer;
+  // لحظة فتح الشاشة — لقياس مدّة إنجاز المهمة في تحليلات الإتمام.
+  final DateTime _openedAt = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshDriverCoord();
+    _locTimer =
+        Timer.periodic(const Duration(seconds: 10), (_) => _refreshDriverCoord());
+  }
+
+  @override
+  void dispose() {
+    _locTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshDriverCoord() async {
+    final c = await ref.read(locationServiceProvider).currentCoords();
+    if (mounted && c != null) setState(() => _driverCoord = c);
+  }
 
   /// بدء الجولة: ASSIGNED → EN_ROUTE.
   Future<void> _startTrip() async {
@@ -50,6 +81,12 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
   /// إكمال التسليم (أو استرجاع الخزان) مع تحصيل النقد وإحداثيات الإكمال.
   Future<void> _complete(DriverTask task) async {
+    final isReclaim = task.kind == RefillOrderKind.tankReclaim;
+    // الاختيار إجباري للاسترجاع (الزرّ معطّل أصلاً حتى الاختيار — هذا حارس إضافي).
+    if (isReclaim && _reclaimReason == null) {
+      showSnack(context, 'اختر سبب السحب قبل التأكيد', error: true);
+      return;
+    }
     setState(() => _busy = true);
     // نُجهّز جسم الطلب مسبقاً كي نحفظه في الطابور عند فشل الشبكة.
     Map<String, dynamic>? pendingBody;
@@ -66,10 +103,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       // حاجز الوصول: ارفض الإكمال إن كان السائق بعيداً عن منزل الزبون (مانع
       // احتيال «التعبئة من آخر الشارع»). الباك إند يفرض نفس الحدّ عبر
       // REFILL_GPS_MAX_DISTANCE_M؛ هذا الفحص العميلي يعطي رسالة فورية قبل الإرسال.
-      // يُطبَّق على التعبئة فقط (لا الاسترجاع) وعند توفّر إحداثيات الزبون.
+      // يُطبَّق على التعبئة **والاسترجاع** كليهما (كما في Expo) عند توفّر إحداثيات الزبون.
       const maxArrivalMetres = 50.0;
       final cust = task.customer;
-      if (task.kind != RefillOrderKind.tankReclaim && cust.hasLocation) {
+      if (cust.hasLocation) {
         final metres = LocationService.distanceMetres(
           coords,
           Coords(lng: cust.locationLng!, lat: cust.locationLat!),
@@ -91,9 +128,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         completionLng: coords.lng,
         completionLat: coords.lat,
       );
-      final isReclaim = task.kind == RefillOrderKind.tankReclaim;
       final reclaimInput = isReclaim
-          ? ReclaimInput(complete: input, reason: _reclaimReason)
+          ? ReclaimInput(complete: input, reason: _reclaimReason!)
           : null;
       pendingBody = reclaimInput?.toJson() ?? input.toJson();
 
@@ -105,8 +141,12 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       }
 
       Hap.success();
-      Analytics.capture('order_completed',
-          properties: {'orderId': widget.taskId, 'kind': task.kind.name});
+      Analytics.capture('order_completed', properties: {
+        'orderId': widget.taskId,
+        'kind': task.kind.name,
+        'priceIqd': task.priceIqd,
+        'durationSec': DateTime.now().difference(_openedAt).inSeconds,
+      });
       ref.invalidate(todayTasksProvider);
       ref.invalidate(historyProvider);
       if (!mounted) return;
@@ -115,9 +155,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     } on ApiException catch (e) {
       // فشل شبكة → احفظ العملية في الطابور لتُرسَل لاحقاً (لا تُفقَد).
       if (e.isNetwork && pendingBody != null) {
+        // مفتاح إزالة التكرار = مسار الإكمال (يتضمّن معرّف الطلب) → إكمالان
+        // لنفس الطلب أوفلاين لا يُدرَجان مرّتين (منع مزدوج الإكمال).
         await ref
             .read(offlineQueueProvider)
-            .enqueue('POST', completePath, pendingBody);
+            .enqueue('POST', completePath, pendingBody, dedupeKey: completePath);
         ref.invalidate(todayTasksProvider);
         if (!mounted) return;
         showSnack(context,
@@ -139,6 +181,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       await ref
           .read(ordersRepositoryProvider)
           .cancel(widget.taskId, reason: reason);
+      Analytics.capture('order_cancelled_by_driver',
+          properties: {'orderId': widget.taskId, 'reason': reason});
       ref.invalidate(todayTasksProvider);
       if (!mounted) return;
       showSnack(context, 'تم إلغاء المهمة — أبلغ المعمل بالتفاصيل');
@@ -232,6 +276,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           return _TaskBody(
             task: task,
             busy: _busy,
+            driverCoord: _driverCoord,
             reclaimReason: _reclaimReason,
             onReclaimReasonChanged: (r) => setState(() => _reclaimReason = r),
             onStart: () => _startTrip(),
@@ -249,6 +294,7 @@ class _TaskBody extends StatelessWidget {
   const _TaskBody({
     required this.task,
     required this.busy,
+    required this.driverCoord,
     required this.reclaimReason,
     required this.onReclaimReasonChanged,
     required this.onStart,
@@ -258,7 +304,8 @@ class _TaskBody extends StatelessWidget {
 
   final DriverTask task;
   final bool busy;
-  final ReclaimReason reclaimReason;
+  final Coords? driverCoord;
+  final ReclaimReason? reclaimReason;
   final ValueChanged<ReclaimReason> onReclaimReasonChanged;
   final VoidCallback onStart;
   final VoidCallback onComplete;
@@ -354,21 +401,10 @@ class _TaskBody extends StatelessWidget {
           ),
         ),
 
-        // الخريطة + الملاحة
-        if (customer.hasLocation) ...[
-          const SizedBox(height: 16),
-          _CustomerMap(lat: customer.locationLat!, lng: customer.locationLng!),
-          const SizedBox(height: 10),
-          LoadingButton(
-            label: 'ابدأ الملاحة',
-            icon: Icons.navigation,
-            color: AppColors.water600,
-            onPressed: () => Launchers.navigate(
-              lat: customer.locationLat!,
-              lng: customer.locationLng!,
-            ),
-          ),
-        ],
+        // الخريطة + المسافة/الوصول + الملاحة — تظهر دائماً (بديل نصّي عند غياب
+        // إحداثيات الزبون بدل إسقاط القسم كاملاً).
+        const SizedBox(height: 16),
+        _MapPreview(customer: customer, driver: driverCoord),
 
         const SizedBox(height: 16),
 
@@ -395,8 +431,9 @@ class _TaskBody extends StatelessWidget {
           ),
         ),
 
-        // اختيار سبب السحب (لمهام الاسترجاع)
-        if (isReclaim && isEnRoute) ...[
+        // اختيار سبب السحب (لمهام الاسترجاع — يظهر من ASSIGNED مباشرةً كما في Expo،
+        // فالاسترجاع لا يمرّ بخطوة «ابدأ الجولة»).
+        if (isReclaim && (isAssigned || isEnRoute)) ...[
           const SizedBox(height: 16),
           SectionCard(
             child: Column(
@@ -435,7 +472,24 @@ class _TaskBody extends StatelessWidget {
         const SizedBox(height: 20),
 
         // الأفعال حسب الحالة
-        if (isAssigned)
+        if (isReclaim && (isAssigned || isEnRoute)) ...[
+          // الاسترجاع يؤكَّد مباشرةً (بلا «ابدأ الجولة»)؛ الزرّ معطّل حتى اختيار السبب.
+          LoadingButton(
+            label: 'أكّد سحب الخزان',
+            icon: Icons.check_circle,
+            color: AppColors.danger,
+            loading: busy,
+            onPressed: (busy || reclaimReason == null) ? null : onComplete,
+          ),
+          if (reclaimReason == null) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'اختر سبب السحب أعلاه لتفعيل التأكيد',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12.5, color: AppColors.muted),
+            ),
+          ],
+        ] else if (isAssigned)
           LoadingButton(
             label: 'ابدأ الجولة',
             icon: Icons.play_arrow,
@@ -444,10 +498,9 @@ class _TaskBody extends StatelessWidget {
           )
         else if (isEnRoute)
           LoadingButton(
-            label:
-                isReclaim ? 'أكّد سحب الخزان' : 'إكمال $completeVerb والتحصيل',
+            label: 'إكمال $completeVerb والتحصيل',
             icon: Icons.check_circle,
-            color: isReclaim ? AppColors.danger : AppColors.success,
+            color: AppColors.success,
             loading: busy,
             onPressed: busy ? null : onComplete,
           )
@@ -513,34 +566,205 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-/// خريطة صغيرة بعلامة على موقع الزبون.
-class _CustomerMap extends StatelessWidget {
-  const _CustomerMap({required this.lat, required this.lng});
+/// معاينة الخريطة + طبقة زجاجية (المسافة/الوصول أو الوجهة) + زرّ ملاحة.
+/// تظهر دائماً: خريطة عند توفّر إحداثيات الزبون، أو حالة «لا GPS» مع بديل العنوان.
+class _MapPreview extends StatelessWidget {
+  const _MapPreview({required this.customer, required this.driver});
 
-  final double lat;
-  final double lng;
+  final TaskCustomer customer;
+  final Coords? driver;
 
   @override
   Widget build(BuildContext context) {
-    final target = LatLng(lat, lng);
+    final hasCust = customer.hasLocation;
+    String? distanceText;
+    String? etaText;
+    if (hasCust && driver != null) {
+      final metres = LocationService.distanceMetres(
+        driver!,
+        Coords(lng: customer.locationLng!, lat: customer.locationLat!),
+      );
+      final km = metres / 1000;
+      distanceText =
+          km >= 1 ? '${km.toStringAsFixed(1)} كم' : '${metres.round()} م';
+      // تقدير الوصول من المسافة المستقيمة بسرعة مدينة ~22 كم/س (يطابق Expo).
+      final mins = (km / 22 * 60).round();
+      etaText = '${mins < 1 ? 1 : mins} دقيقة';
+    }
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppTheme.radiusCard),
       child: SizedBox(
-        height: 180,
-        child: GoogleMap(
-          initialCameraPosition: CameraPosition(target: target, zoom: 15),
-          markers: {
-            Marker(
-              markerId: const MarkerId('customer'),
-              position: target,
-              infoWindow: const InfoWindow(title: 'موقع الزبون'),
+        height: 184,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: hasCust
+                  ? _TaskMap(
+                      customer: Coords(
+                          lng: customer.locationLng!,
+                          lat: customer.locationLat!),
+                      driver: driver,
+                    )
+                  : Container(
+                      color: AppColors.bg,
+                      child: const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.location_off,
+                                size: 28, color: AppColors.muted),
+                            SizedBox(height: 6),
+                            Text('لا يوجد موقع GPS — استعمل العنوان',
+                                style: TextStyle(
+                                    fontSize: 12, color: AppColors.muted)),
+                          ],
+                        ),
+                      ),
+                    ),
             ),
-          },
-          myLocationButtonEnabled: false,
-          zoomControlsEnabled: false,
-          liteModeEnabled: true,
+            Positioned(
+              left: 10,
+              right: 10,
+              bottom: 10,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.ink.withValues(alpha: 0.12),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: distanceText != null
+                          ? Row(
+                              children: [
+                                _metric('المسافة', distanceText),
+                                const SizedBox(width: 16),
+                                _metric('الوصول', etaText!),
+                              ],
+                            )
+                          : _metric(
+                              'الوجهة',
+                              customer.addressLine.isNotEmpty
+                                  ? customer.addressLine
+                                  : (customer.district.isNotEmpty
+                                      ? customer.district
+                                      : '—'),
+                            ),
+                    ),
+                    const SizedBox(width: 8),
+                    InkWell(
+                      onTap: _navigate,
+                      borderRadius: BorderRadius.circular(11),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 9),
+                        decoration: BoxDecoration(
+                          color: AppColors.water600,
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.navigation,
+                                size: 15, color: Colors.white),
+                            SizedBox(width: 5),
+                            Text('الملاحة',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12.5)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  void _navigate() {
+    if (customer.hasLocation) {
+      Launchers.navigate(
+          lat: customer.locationLat!, lng: customer.locationLng!);
+    } else {
+      // بديل تنازلي: بحث خرائط بنصّ العنوان حين تغيب الإحداثيات.
+      final query = [customer.addressLine, customer.district, 'بغداد']
+          .where((s) => s.isNotEmpty)
+          .join('، ');
+      Launchers.navigateToAddress(query);
+    }
+  }
+
+  Widget _metric(String label, String value) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.slate,
+                fontWeight: FontWeight.w700)),
+        Text(value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w900,
+                color: AppColors.ink)),
+      ],
+    );
+  }
+}
+
+/// خريطة مدمجة: دبّوس الزبون دائماً + دبّوس السائق (أزرق) حين يتوفّر ويكون قريباً.
+class _TaskMap extends StatelessWidget {
+  const _TaskMap({required this.customer, required this.driver});
+
+  final Coords customer;
+  final Coords? driver;
+
+  @override
+  Widget build(BuildContext context) {
+    final custLatLng = LatLng(customer.lat, customer.lng);
+    // أظهر دبّوس السائق فقط إن كان قريباً (تفادي ضمّ نقطتين متباعدتين جداً).
+    final near = driver != null &&
+        (customer.lat - driver!.lat).abs() < 1.5 &&
+        (customer.lng - driver!.lng).abs() < 1.5;
+    return GoogleMap(
+      initialCameraPosition: CameraPosition(target: custLatLng, zoom: 14),
+      markers: {
+        Marker(
+          markerId: const MarkerId('customer'),
+          position: custLatLng,
+          infoWindow: const InfoWindow(title: 'موقع الزبون'),
+        ),
+        if (near)
+          Marker(
+            markerId: const MarkerId('driver'),
+            position: LatLng(driver!.lat, driver!.lng),
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+                BitmapDescriptor.hueAzure),
+            infoWindow: const InfoWindow(title: 'موقعك'),
+          ),
+      },
+      myLocationButtonEnabled: false,
+      zoomControlsEnabled: false,
+      liteModeEnabled: true,
     );
   }
 }

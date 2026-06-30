@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:daari_core/daari_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,13 +19,13 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _claiming = false;
-  Timer? _flushTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // تسجيل توكن الإشعارات + فتح المهمة عند النقر على إشعار + تصريف الطابور.
+      // تسجيل توكن الإشعارات + فتح المهمة عند النقر على إشعار.
+      // (تصريف الطابور صار على مستوى التطبيق في `_AppChrome` بـ main.dart.)
       ref.read(pushServiceProvider).register(
         onOpenNotification: (orderId, type) {
           if (orderId != null && orderId.isNotEmpty && context.mounted) {
@@ -35,32 +33,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           }
         },
       );
-      _flushQueue();
     });
-    // مؤقّت تصريف الطابور كل 60 ثانية (يطابق worker/_layout.tsx).
-    _flushTimer =
-        Timer.periodic(const Duration(seconds: 60), (_) => _flushQueue());
-  }
-
-  @override
-  void dispose() {
-    _flushTimer?.cancel();
-    super.dispose();
-  }
-
-  /// يصرّف الطفرات المعلّقة؛ عند نجاح أيٍّ منها يُعيد جلب البيانات المتأثّرة.
-  Future<void> _flushQueue() async {
-    try {
-      final res = await ref.read(offlineQueueProvider).flush();
-      if (res.ok > 0) {
-        ref.invalidate(todayTasksProvider);
-        ref.invalidate(historyProvider);
-        ref.invalidate(cashSummaryProvider);
-      }
-    } catch (_) {
-      // best-effort — سنحاول مجدداً في الدورة التالية.
-    }
-    if (mounted) ref.invalidate(pendingMutationsProvider);
   }
 
   Future<void> _toggleShift(bool value) async {
@@ -95,10 +68,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       Analytics.capture('order_claimed', properties: {'orderId': task.id});
       ref.invalidate(availableOrdersProvider);
       ref.invalidate(todayTasksProvider);
-      if (mounted) {
-        showSnack(context, 'تم قبول الطلب — ابدأ المهمة');
-        context.push('/task/${task.id}');
-      }
+      if (!mounted) return;
+      // حوار تأكيد بدل التنقّل التلقائي + snackbar (يطابق Expo «فتح المهمة»).
+      final open = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('تم قبول الطلب'),
+          content: const Text('أصبح ضمن مهامك. افتح المهمة لبدء الجولة.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('لاحقاً'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('فتح المهمة'),
+            ),
+          ],
+        ),
+      );
+      if (open == true && mounted) context.push('/task/${task.id}');
     } on ApiException catch (e) {
       Hap.error();
       ref.invalidate(availableOrdersProvider);
@@ -120,11 +109,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final availableAsync = ref.watch(availableOrdersProvider);
     final tasksAsync = ref.watch(todayTasksProvider);
     final onShift = ref.watch(onShiftProvider);
-
-    // صرّف الطابور تلقائياً لحظة عودة الاتصال (لم يكن في Expo — كان مؤقّتاً فقط).
-    ref.listen<AsyncValue<bool>>(isOnlineProvider, (prev, next) {
-      if (prev?.value == false && next.value == true) _flushQueue();
-    });
+    final driverCoords = ref.watch(driverCoordsProvider).valueOrNull;
+    final nearestFirst = ref.watch(nearestFirstProvider);
 
     return Scaffold(
       body: RefreshIndicator(
@@ -166,7 +152,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       return Column(
                         children: [
                           for (final order in orders) ...[
-                            _availableCard(order),
+                            _availableCard(order, driverCoords),
                             const SizedBox(height: 12),
                           ],
                         ],
@@ -174,29 +160,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  _sectionTitle('مهام اليوم', Icons.list_alt),
-                  const SizedBox(height: 10),
                   AsyncView<List<DriverTask>>(
                     value: tasksAsync,
                     onRetry: () => ref.invalidate(todayTasksProvider),
                     skeleton: const SkeletonList(count: 2, padding: EdgeInsets.zero),
-                    data: (tasks) {
-                      if (tasks.isEmpty) {
-                        return const EmptyState(
-                          icon: Icons.check_circle_outline,
-                          title: 'لا مهام اليوم',
-                          message: 'اقبل طلباً من البركة لبدء جولتك.',
-                        );
-                      }
-                      return Column(
-                        children: [
-                          for (final task in tasks) ...[
-                            _taskCard(task),
-                            const SizedBox(height: 12),
-                          ],
-                        ],
-                      );
-                    },
+                    data: (tasks) =>
+                        _todaySection(tasks, driverCoords, nearestFirst),
                   ),
                 ],
               ),
@@ -296,34 +265,81 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _availableCard(DriverTask order) {
+  Widget _newBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.success,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: const Text('جديد',
+          style: TextStyle(
+              color: Colors.white,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w900)),
+    );
+  }
+
+  Widget _miniChip(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.bg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: AppColors.slate),
+          const SizedBox(width: 4),
+          Text(text,
+              style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.slate)),
+        ],
+      ),
+    );
+  }
+
+  Widget _availableCard(DriverTask order, Coords? driverCoords) {
+    final tank = order.tank;
+    final name = order.customer.fullName;
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
+              // صورة بالحرف الأوّل من اسم الزبون.
               Container(
                 width: 44,
                 height: 44,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: AppColors.navy50,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child:
-                    Icon(orderKindIcon(order.kind), color: AppColors.navy600),
+                child: Text(
+                  name.isEmpty ? '؟' : name.substring(0, 1),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 18,
+                      color: AppColors.navy600),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(order.customer.fullName,
+                    Text(name,
                         style: const TextStyle(
                             fontWeight: FontWeight.w800, fontSize: 15)),
                     const SizedBox(height: 2),
                     Text(
-                      '${order.customer.district} · ${order.kind.label}',
+                      order.customer.district,
                       style: const TextStyle(
                           color: AppColors.muted, fontSize: 12.5),
                       maxLines: 1,
@@ -332,6 +348,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ],
                 ),
               ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  _newBadge(),
+                  const SizedBox(height: 6),
+                  DistanceChip(driver: driverCoords, customer: order.customer),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // شارات: النوع + سعة الخزّان + رمز QR (حين يتوفّر الخزّان).
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _miniChip(orderKindIcon(order.kind), order.kind.label),
+              if (tank != null)
+                _miniChip(Icons.water_drop_outlined, tank.capacity),
+              if (tank != null) _miniChip(Icons.qr_code_2, tank.qrCode),
             ],
           ),
           const SizedBox(height: 12),
@@ -368,7 +404,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _taskCard(DriverTask task) {
+  Widget _taskCard(DriverTask task, Coords? driverCoords) {
     return InkWell(
       onTap: () => context.push('/task/${task.id}'),
       borderRadius: BorderRadius.circular(AppTheme.radiusCard),
@@ -405,7 +441,212 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ],
               ),
             ),
+            DistanceChip(driver: driverCoords, customer: task.customer),
+            const SizedBox(width: 8),
             const Icon(Icons.chevron_left, color: AppColors.muted),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// قسم «مهام اليوم»: بطاقة المهمة النشطة (EN_ROUTE) المميَّزة + مفتاح «الأقرب
+  /// أولاً» + قائمة البقيّة (مرتّبة بالمسافة عند التفعيل). يطابق بنية worker/home.tsx.
+  Widget _todaySection(
+      List<DriverTask> tasks, Coords? driverCoords, bool nearestFirst) {
+    DriverTask? active;
+    final others = <DriverTask>[];
+    for (final t in tasks) {
+      if (active == null && t.status == RefillOrderStatus.enRoute) {
+        active = t;
+      } else {
+        others.add(t);
+      }
+    }
+    if (nearestFirst && driverCoords != null) {
+      others.sort((a, b) => _distMetres(driverCoords, a.customer)
+          .compareTo(_distMetres(driverCoords, b.customer)));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (active != null) ...[
+          _activeTaskCard(active, driverCoords),
+          const SizedBox(height: 14),
+        ],
+        Row(
+          children: [
+            Expanded(child: _sectionTitle('مهام اليوم', Icons.list_alt)),
+            _nearestFirstChip(nearestFirst, driverCoords),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (others.isEmpty && active == null)
+          const EmptyState(
+            icon: Icons.check_circle_outline,
+            title: 'لا مهام اليوم',
+            message: 'اقبل طلباً من البركة لبدء جولتك.',
+          )
+        else
+          for (final task in others) ...[
+            _taskCard(task, driverCoords),
+            const SizedBox(height: 12),
+          ],
+      ],
+    );
+  }
+
+  /// المسافة بالأمتار، أو ما لا نهاية للمهام بلا إحداثيات (تُرتَّب أخيراً).
+  double _distMetres(Coords driver, TaskCustomer c) {
+    if (!c.hasLocation) return double.infinity;
+    return LocationService.distanceMetres(
+        driver, Coords(lng: c.locationLng!, lat: c.locationLat!));
+  }
+
+  /// مفتاح «الأقرب أولاً»: يبدّل الفرز، وعند التفعيل بلا موقع يعيد جلب GPS وينبّه إن تعذّر.
+  Widget _nearestFirstChip(bool active, Coords? driverCoords) {
+    final locating = ref.watch(driverCoordsProvider).isLoading;
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: () async {
+        final next = !active;
+        ref.read(nearestFirstProvider.notifier).state = next;
+        if (next && driverCoords == null) {
+          final coords = await ref.refresh(driverCoordsProvider.future);
+          if (coords == null && mounted) {
+            showSnack(context,
+                'GPS غير متاح — فعّل خدمات الموقع للترتيب حسب الأقرب.',
+                error: true);
+          }
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? AppColors.water600 : AppColors.water100,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.near_me,
+                size: 14, color: active ? Colors.white : AppColors.water700),
+            const SizedBox(width: 4),
+            Text(
+              locating ? 'جارٍ التحديد…' : 'الأقرب أولاً',
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: active ? Colors.white : AppColors.water700),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// بطاقة المهمة النشطة (قيد التنفيذ) — CTA متدرّج بارز يقود لمتابعة الجولة.
+  Widget _activeTaskCard(DriverTask task, Coords? driverCoords) {
+    final dist = distanceLabel(
+        driverCoords, task.customer.locationLat, task.customer.locationLng);
+    return InkWell(
+      onTap: () => context.push('/task/${task.id}'),
+      borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
+            colors: [AppColors.water500, AppColors.water700],
+          ),
+          borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.water600.withValues(alpha: 0.28),
+              blurRadius: 14,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Text('قيد التنفيذ',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 11.5)),
+                ),
+                const Spacer(),
+                if (dist != null)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.near_me, size: 14, color: Colors.white),
+                      const SizedBox(width: 4),
+                      Text(dist,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12.5)),
+                    ],
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(orderKindIcon(task.kind), color: Colors.white, size: 26),
+                const SizedBox(width: 8),
+                Text(task.kind.label,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 18)),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(task.customer.fullName,
+                style: const TextStyle(color: Colors.white, fontSize: 15)),
+            const SizedBox(height: 2),
+            Text(
+              '${task.customer.district} · ${task.customer.addressLine}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.85), fontSize: 13),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(AppTheme.radiusInput),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.navigation, size: 18, color: AppColors.water700),
+                  SizedBox(width: 6),
+                  Text('تابِع المهمة',
+                      style: TextStyle(
+                          color: AppColors.water700,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14)),
+                ],
+              ),
+            ),
           ],
         ),
       ),

@@ -1,6 +1,7 @@
 import 'package:daari_core/daari_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../providers.dart';
 import '../widgets/common.dart';
 
@@ -17,20 +18,27 @@ class VanInventoryScreen extends ConsumerStatefulWidget {
 class _VanInventoryScreenState extends ConsumerState<VanInventoryScreen> {
   int _full = 0;
   int _empty = 0;
+  // قيم الخادم وقت آخر مزامنة — للمقارنة «هل تغيّر شيء فعلاً».
+  int _serverFull = 0;
+  int _serverEmpty = 0;
   bool _hydrated = false;
   bool _saving = false;
   // بعد أوّل تعديل يدوي نوقف تحريك الإجمالي كي يلاحق أزرار +/− فوراً.
   bool _userEdited = false;
 
+  /// هل تختلف القيم الحالية عن قيم الخادم؟ (الحفظ يُتاح فقط حينها.)
+  bool get _dirty => _full != _serverFull || _empty != _serverEmpty;
+
   /// بذر العدّادَين من قيم الخادم مرّة واحدة عند وصول الملفّ.
   void _hydrate(DriverProfile driver) {
     if (_hydrated) return;
     _hydrated = true;
-    _full = driver.tanksFullOnVan ?? 0;
-    _empty = driver.tanksEmptyOnVan ?? 0;
+    _full = _serverFull = driver.tanksFullOnVan ?? 0;
+    _empty = _serverEmpty = driver.tanksEmptyOnVan ?? 0;
   }
 
   Future<void> _save() async {
+    if (!_dirty) return; // لا تُرسِل POST لا-عمل.
     setState(() => _saving = true);
     try {
       await ref.read(driverRepositoryProvider).updateVanInventory(
@@ -38,9 +46,28 @@ class _VanInventoryScreenState extends ConsumerState<VanInventoryScreen> {
             tanksEmptyOnVan: _empty,
           );
       if (!mounted) return;
+      // صارت القيم محفوظة → اجعل المرجع يساويها كي تُعطَّل «حفظ» حتى التعديل التالي.
+      _serverFull = _full;
+      _serverEmpty = _empty;
+      Hap.success();
       ref.invalidate(driverProfileProvider);
-      showSnack(context, 'تم حفظ جرد الفان');
+      // تنبيه نجاح ثم رجوع تلقائي للشاشة السابقة (يطابق Expo).
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('تم الحفظ'),
+          content: const Text('حُدِّث جرد الفان بنجاح.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('حسناً'),
+            ),
+          ],
+        ),
+      );
+      if (mounted) context.pop();
     } on ApiException catch (e) {
+      Hap.error();
       if (!mounted) return;
       showSnack(context, e.message, error: true);
     } finally {
@@ -74,6 +101,7 @@ class _VanInventoryScreenState extends ConsumerState<VanInventoryScreen> {
                 tint: AppColors.water600,
                 value: _full,
                 onChanged: (v) => setState(() {
+                  Hap.tap();
                   _full = v;
                   _userEdited = true;
                 }),
@@ -86,6 +114,7 @@ class _VanInventoryScreenState extends ConsumerState<VanInventoryScreen> {
                 tint: AppColors.slate,
                 value: _empty,
                 onChanged: (v) => setState(() {
+                  Hap.tap();
                   _empty = v;
                   _userEdited = true;
                 }),
@@ -95,8 +124,18 @@ class _VanInventoryScreenState extends ConsumerState<VanInventoryScreen> {
                 label: 'حفظ الجرد',
                 icon: Icons.save_outlined,
                 loading: _saving,
-                onPressed: _save,
+                loadingLabel: 'جارٍ الحفظ…',
+                // مُعطَّل ما لم تختلف القيم عن الخادم (لا حفظ بلا تغيير).
+                onPressed: _dirty ? _save : null,
               ),
+              if (!_dirty) ...[
+                const SizedBox(height: 10),
+                const Text(
+                  'لا توجد تغييرات لحفظها',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12.5, color: AppColors.muted),
+                ),
+              ],
             ],
           );
         },

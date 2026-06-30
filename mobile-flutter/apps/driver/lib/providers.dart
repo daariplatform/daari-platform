@@ -70,6 +70,18 @@ final customerSearchProvider =
 /// حالة الوردية (هل التتبّع يعمل) — يتحكّم بها السائق من الرئيسية.
 final onShiftProvider = StateProvider<bool>((ref) => false);
 
+/// موقع السائق الحالي (نبضة واحدة) — لشارات المسافة والفرز «الأقرب أولاً» في
+/// الرئيسية. يُجلب مرّة عند فتح الشاشة؛ إن تعذّر GPS تختفي الشارات بهدوء.
+final driverCoordsProvider = FutureProvider.autoDispose<Coords?>((ref) {
+  return ref.read(locationServiceProvider).currentCoords();
+});
+
+/// تفعيل الترتيب «الأقرب أولاً» لمهام اليوم (يطابق مفتاح Expo).
+final nearestFirstProvider = StateProvider<bool>((ref) => false);
+
+/// فترة بطاقة الأداء في «حسابي» (`week`/`month`) — مبدّل يطابق Expo.
+final profilePerfPeriodProvider = StateProvider<String>((ref) => 'month');
+
 /// عدد الطفرات المعلّقة في الطابور الأوفلاين — استقصاء كل 15 ثانية لتحديث الشارة.
 final pendingMutationsProvider = FutureProvider.autoDispose<int>((ref) async {
   final count = await ref.watch(offlineQueueProvider).pendingCount();

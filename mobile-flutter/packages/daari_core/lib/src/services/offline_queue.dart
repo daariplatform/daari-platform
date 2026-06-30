@@ -24,32 +24,63 @@ class OfflineQueue {
     final dir = await getDatabasesPath();
     final db = await openDatabase(
       '$dir/daari_worker.db',
-      version: 1,
+      version: 2,
       onCreate: (db, _) => db.execute('''
         CREATE TABLE pending_mutations (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           method TEXT NOT NULL,
           path TEXT NOT NULL,
           body TEXT NOT NULL,
+          dedupe_key TEXT,
           created_at INTEGER NOT NULL,
           retries INTEGER NOT NULL DEFAULT 0,
           last_error TEXT
         )
       '''),
+      onUpgrade: (db, oldV, newV) async {
+        // الإصدار 2: مفتاح إزالة التكرار لمنع إدراج نفس العملية المالية مرّتين.
+        if (oldV < 2) {
+          await db.execute(
+            'ALTER TABLE pending_mutations ADD COLUMN dedupe_key TEXT',
+          );
+        }
+      },
     );
     _db = db;
     return db;
   }
 
   /// أضِف طفرة معلّقة (تُرسَل لاحقاً عند عودة الشبكة).
-  Future<void> enqueue(String method, String path, Map<String, dynamic> body) async {
+  ///
+  /// إن مُرِّر [dedupeKey] وكان في الطابور صفٌّ معلّق بنفس المفتاح، تُتجاهَل
+  /// الإضافة ويعود `false` — هذا حارس **منع الإرسال المزدوج** للعمليات المالية:
+  /// لو أعاد السائق النقر على «إكمال» (الطلب يبقى ASSIGNED في الكاش حتى تُصرَّف
+  /// الطفرة) لن تُسجَّل العملية مرّتين. يعود `true` إن أُضيفت فعلاً.
+  Future<bool> enqueue(
+    String method,
+    String path,
+    Map<String, dynamic> body, {
+    String? dedupeKey,
+  }) async {
     final db = await _open();
+    if (dedupeKey != null) {
+      final dup = await db.query(
+        'pending_mutations',
+        columns: ['id'],
+        where: 'dedupe_key = ?',
+        whereArgs: [dedupeKey],
+        limit: 1,
+      );
+      if (dup.isNotEmpty) return false; // عملية مطابقة منتظرة أصلاً
+    }
     await db.insert('pending_mutations', {
       'method': method,
       'path': path,
       'body': jsonEncode(body),
+      'dedupe_key': dedupeKey,
       'created_at': DateTime.now().millisecondsSinceEpoch,
     });
+    return true;
   }
 
   /// عدد الطفرات المنتظرة المزامنة.

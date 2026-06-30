@@ -65,14 +65,16 @@ class _ForgotScreenState extends ConsumerState<ForgotScreen> {
       _otpError = false;
     });
     try {
-      await ref.read(authRepositoryProvider).resetPassword(
+      // الخادم يُصدر توكنات بعد إعادة التعيين → دخول تلقائي مباشرةً للرئيسية
+      // (كان يعود لـ/login تاركاً حالة المصادقة في الذاكرة غير موثّقة — يطابق إصلاح الزبون).
+      await ref.read(authControllerProvider.notifier).resetPasswordAndLogin(
             phone: _phone.text.trim(),
             otp: _otp.text.trim(),
             newPassword: _newPassword.text,
           );
       if (mounted) {
-        showSnack(context, 'تم تغيير كلمة السر. سجّل الدخول الآن.');
-        context.go('/login');
+        showSnack(context, 'تم تغيير كلمة السر ودخولك تلقائياً.');
+        context.go('/home');
       }
     } on ApiException catch (e) {
       if (mounted) {
@@ -142,8 +144,16 @@ class _ForgotScreenState extends ConsumerState<ForgotScreen> {
                 onPressed: _reset,
               ),
               TextButton(
-                onPressed: _loading ? null : _requestCode,
-                child: const Text('إعادة إرسال الرمز'),
+                // يرجع للخطوة 1 ويمسح المدخلات لطلب رمز جديد (يطابق الزبون/Expo).
+                onPressed: _loading
+                    ? null
+                    : () => setState(() {
+                          _step = 1;
+                          _otp.clear();
+                          _newPassword.clear();
+                          _otpError = false;
+                        }),
+                child: const Text('لم يصلك الرمز؟ أعِد المحاولة'),
               ),
             ],
           ],

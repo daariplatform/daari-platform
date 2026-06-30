@@ -1,0 +1,562 @@
+[
+ {
+  "id": "login-1",
+  "pair": "login",
+  "title": "401 login error gives wrong guidance vs Expo's 'wrong credentials / contact lab to reset password'",
+  "severity": "medium",
+  "status": "different",
+  "expoEvidence": "driver-login.tsx:48-49 — `} else if (status === 401) { Alert.alert('بيانات غير صحيحة', 'تواصل مع المعمل لإعادة تعيين كلمة المرور'); }`",
+  "detail": "On a 401 (bad password) Expo always overrides with a fixed, actionable message telling the driver to contact the lab to reset their password — auth accounts are lab-created, so this guidance matters. Flutter relies on the generic ApiException message; if the backend sends no message it shows 'session expired, log in again' which is the wrong meaning for a failed login (the user IS on the login screen). The lab-reset hint is never shown on 401.",
+  "reason": "Could not refute — the behavior is genuinely absent in Flutter, and the gap is worse than the auditor described. Expo (mobile-worker/app/(auth)/driver-login.tsx:48-49) ALWAYS overrides a 401 with fixed Arabic guidance 'بيانات غير صحيحة' / 'تواصل مع المعمل لإعادة تعيين كلمة المرور', and also specially handles 429 (line 46-47). Flutter login_screen.dart:63-65 only does `showSnack(context, e.message)` with the raw ApiException message. I confirmed there is NO override anywhere: auth_interceptor.dart:28-31 + 56 explicitly EXCLUDE /auth/login from the 401-refresh/onSessionExpired path, so a login 401 propagates straight to the screen; auth_controller.dart:44-57 and auth_repository.dart:16-34 just rethrow ApiException.fromDio with no per-status remapping. Decisive: the backend login endpoint (backend/src/auth/auth.service.ts:227,230) throws UnauthorizedException('Invalid phone or password') — an ENGLISH string. api_exception.dart:_extractMessage (lines 30-31) prefers the backend message, so an Arabic-speaking driver entering a wrong password sees raw English 'Invalid phone or password', never the Arabic 'contact the lab to reset your password' hint. (The auditor's 'session expired' fallback only triggers if the backend sends no message, which it does not here.) No 429-specific message exists in Flutter either. Severity medium: auth still functions and rejects bad credentials, but the user-facing guidance is wrong/untranslated and the actionable lab-reset hint is lost."
+ },
+ {
+  "id": "login-2",
+  "pair": "login",
+  "title": "429 rate-limit message drops the explicit '15 minute' wait",
+  "severity": "low",
+  "status": "different",
+  "expoEvidence": "driver-login.tsx:46-47 — `if (status === 429) { Alert.alert('محاولات كثيرة', 'تجاوزت الحد، حاول بعد ١٥ دقيقة.'); }`",
+  "detail": "Expo tells the driver the lockout is ~15 minutes; Flutter says only 'wait a little'. Same category of message, less specific — cosmetic wording difference.",
+  "reason": "Could not refute. Expo driver login (mobile-worker/app/(auth)/driver-login.tsx:46-47) shows a 429 alert with the explicit wait: 'تجاوزت الحد، حاول بعد ١٥ دقيقة.' The Flutter driver login (apps/driver/lib/screens/login_screen.dart:63-65) catches ApiException and passes e.message straight to showSnack with NO rate-limit override. For a 429, e.message resolves to the shared generic fallback in packages/daari_core/lib/src/api/api_exception.dart:52 -> 'محاولات كثيرة. انتظر قليلاً ثم حاول مجدداً.' ('wait a little'), with no '15 minute' figure. I verified the override is NOT elsewhere in Flutter: the customer login DOES have a _loginError() helper (apps/customer/lib/screens/login_screen.dart:67-68) that maps isRateLimited -> 'محاولات كثيرة. حاول بعد ١٥ دقيقة.', proving the explicit-15-min pattern exists in the codebase but was applied ONLY to customer, not the driver screen. The backend never supplies an Arabic 15-min body either: NestJS ThrottlerGuard (backend/src/auth/auth.controller.ts, app.module.ts) returns the default 'Too Many Requests' ThrottlerException, so _extractMessage cannot surface a '15 minute' string. The driver screen, shared core, and backend all lack the explicit wait wording. Severity stays low: both apps show an equivalent 'too many attempts' message; only the specificity of the wait duration differs — pure wording, no money/auth/data/flow impact."
+ },
+ {
+  "id": "login-3",
+  "pair": "login",
+  "title": "Submit button does not reflect live validity (always enabled; no greyed/gradient state)",
+  "severity": "low",
+  "status": "different",
+  "expoEvidence": "driver-login.tsx:30 `const canSubmit = /^07\\d{9}$/.test(phone) && password.length >= 6;` and 184-222: button is `disabled={loading || !canSubmit}`, rendering a blue gradient only when `canSubmit && !loading`, otherwise a grey (#cbd5e1) disabled-looking button.",
+  "detail": "Expo gives live affordance: the login button stays visually disabled (grey) until phone matches ^07\\d{9}$ and password >= 6, then turns into a blue gradient CTA. Flutter's button is always tappable and only reports invalid input reactively via a snackbar. Functionally validation still happens, but the real-time enable/disable + gradient feedback is missing.",
+  "reason": "Confirmed real gap. Expo (driver-login.tsx:30,184-222) derives `canSubmit = /^07\\d{9}$/.test(phone) && password.length >= 6` and renders a blue LinearGradient CTA only when valid+not-loading, otherwise a grey (#cbd5e1) disabled button (disabled={loading || !canSubmit}). Flutter login uses LoadingButton (login_screen.dart:159-164) with onPressed:_submit, and common.dart:26 only sets onPressed to null when `loading` — so the button is always tappable/styled-enabled regardless of field validity. There are no controller listeners, no canSubmit equivalent, and no ValueListenableBuilder on the screen (grep for canSubmit/addListener/ValueListenableBuilder/enabled returned no matches). Validation only fires reactively on tap via Validators.isPhone/isPassword (login_screen.dart:35-42) via a snackbar. Searched the screen, widgets/common.dart, and the auditor-cited core/router/providers paths: the live validity-driven enable/disable + gradient-vs-grey affordance is genuinely absent. Severity low stands: functional validation still occurs on submit; only the real-time visual affordance differs, no money/auth/data-loss impact."
+ },
+ {
+  "id": "login-4",
+  "pair": "login",
+  "title": "Dev-only quick-login button (كريم السائق, 07700000002/password123) not present",
+  "severity": "low",
+  "status": "missing",
+  "expoEvidence": "driver-login.tsx:260-281 — `{__DEV__ && (<Pressable onPress={async () => { await loginWithPassword('07700000002', 'password123'); startShiftTracking()...; router.replace('/(tabs)/home'); ...}}>⚡️ دخول سريع — كريم السائق ...`",
+  "detail": "Expo ships a __DEV__-only one-tap button that logs in against the REAL production API as كريم (07700000002/password123) for simulator testing, stripped from prod. Flutter's demo button instead routes through DemoInterceptor with fake data. This is a developer convenience, not a user-facing prod feature, hence low severity.",
+  "reason": "Confirmed. Expo driver-login.tsx:260-281 ships a __DEV__-gated one-tap button that calls loginWithPassword('07700000002','password123') against the REAL production API (api.phi-bit.com), then startShiftTracking() and router.replace('/(tabs)/home'). Flutter login_screen.dart:72-84 (_demoLogin) is the only quick-login: it is gated on Env.demoMode (env.dart:41, a DEMO_MODE compile-time flag), uses password 'demo' (not 'password123'), and when DEMO_MODE is on, api_client.dart:29 mounts DemoInterceptor FIRST, which short-circuits every request including /auth/login with fixtures (demo_interceptor.dart:22,68 -> 'demo-access-token') — so it NEVER hits the real backend. It also skips startShift(). Grep across apps/driver/lib for password123/kDebugMode/quick-login found no real-API debug quick-login in the screen, router, or providers. The Expo dev-convenience (real prod API as كريم for simulator testing) has no Flutter equivalent. Low severity: it is a __DEV__-only developer tool stripped from production, not a user-facing prod feature."
+ },
+ {
+  "id": "forgot-1",
+  "pair": "forgot",
+  "title": "After successful reset, Flutter routes to /login instead of auto-logging in to home",
+  "severity": "high",
+  "status": "different",
+  "expoEvidence": "mobile-worker/app/(auth)/forgot.tsx:76-80 — `const res = await api.post('/auth/verify-otp', {...}); await setTokens(res.data.accessToken, res.data.refreshToken); await hydrate(); router.replace('/(tabs)/home');` — Expo persists the fresh tokens, hydrates the auth store, and lands the user directly on the home tab (auto-signed-in).",
+  "detail": "The screen calls the repository directly instead of the AuthController.resetPasswordAndLogin() helper, so the in-memory auth state stays unauthenticated even though tokens are saved to storage. It then navigates to /login. Because authControllerProvider is never set to authenticated, the router redirect at router.dart:44 will NOT auto-forward /login to /home, so the user is dropped on the login screen and must manually sign in — regressing Expo's seamless auto-login-to-home after reset. (The router refresh listener fires on auth changes, but no auth change occurs here since the controller state is never updated.)",
+  "reason": "Confirmed real gap. Expo (mobile-worker/app/(auth)/forgot.tsx:76-80) persists fresh tokens, hydrates the auth store, and router.replace's to home — user is auto-signed-in. Flutter forgot_screen.dart:68-75 calls authRepositoryProvider.resetPassword() directly then context.go('/login'). resetPassword (auth_repository.dart:83-102) saves tokens and returns me() but never updates AuthController state. The dedicated AuthController.resetPasswordAndLogin() (auth_controller.dart:60-74) which would set state=authenticated is NEVER called. Because authControllerProvider stays unauthenticated, AuthState.isAuthenticated (auth_state.dart:12-13) is false, so the router redirect (router.dart:42-44) does NOT forward /login to /home — the !loggedIn branch (line 43) keeps the user on /login. The refresh listener (router.dart:25) never fires since no auth state change occurs. Searched the screen, auth_repository, auth_controller, auth_state, router.dart, providers.dart, providers/core_providers (via imports), and login_screen — nowhere re-syncs auth state after reset. User is dropped on /login and must manually sign in, regressing Expo's seamless auto-login-to-home. HIGH: auth flow regression forcing re-authentication."
+ },
+ {
+  "id": "forgot-2",
+  "pair": "forgot",
+  "title": "Resend control re-sends the code in place instead of returning to step 1 and clearing inputs",
+  "severity": "low",
+  "status": "different",
+  "expoEvidence": "mobile-worker/app/(auth)/forgot.tsx:202-211 — the '↺ إعادة إرسال الكود' button does `setStep(1); setOtp(''); setNewPassword('');` — it returns the user to the phone-entry step and clears the OTP + new-password fields (it does NOT immediately re-POST).",
+  "detail": "Functionally close (both let the user get a new code), but the UX differs: Expo navigates back to step 1 and wipes the entered OTP/password so the user re-confirms the phone, whereas Flutter silently re-sends to the same number and leaves any partially-typed OTP/password in place. Minor, user-noticeable behavior difference.",
+  "reason": "Genuine, non-refutable behavior difference. Expo (forgot.tsx:202-211) \"↺ إعادة إرسال الكود\" Pressable does NOT re-POST — its onPress only runs setStep(1); setOtp(''); setNewPassword('') returning the user to step 1 and clearing the OTP + new-password fields; the user must then re-tap \"أرسل الكود\" to actually request a new code. Flutter (forgot_screen.dart:144-147) \"إعادة إرسال الرمز\" TextButton calls _requestCode directly, which immediately re-POSTs /auth/forgot-password (line 41) while remaining on step 2, and never resets _step, _otp, or _newPassword. I searched for the reset behavior elsewhere in Flutter: driver widgets/common.dart and otp_field.dart (no such control or reset), router.dart/providers.dart/main.dart wiring, and daari_core authRepository (forgotPassword/resetPassword just call the API, no step/field state). The resend control and its onPressed are fully local to forgot_screen.dart with no shared equivalent. Severity remains low: both paths ultimately let the user obtain a new code with no money/auth/data-loss impact — only a minor, user-noticeable UX divergence (in-place re-send with retained inputs vs. return-to-step-1 with cleared inputs)."
+ },
+ {
+  "id": "splash-routing-1",
+  "pair": "splash-routing",
+  "title": "Global offline banner not present on most screens",
+  "severity": "medium",
+  "status": "partial",
+  "expoEvidence": "app/_layout.tsx:131 `<OfflineBanner />` mounted directly inside RootLayoutInner so it overlays EVERY screen; components/OfflineBanner.tsx:6 'Mounted in app/_layout.tsx so it overlays every screen' — slim red strip 'أنت غير متصل بالإنترنت — تعرض بيانات محفوظة' (OfflineBanner.tsx:50) driven by NetInfo, auto-hides on reconnect.",
+  "detail": "In Expo the offline strip overlays the entire app (task-detail, cash, earnings, walkin, shift-summary, van-inventory, login, splash). In Flutter the offline indication exists only on the Home tab; on task-detail, cash, earnings, walkin, shift-summary, van-inventory, login and splash there is no offline indicator, so a driver acting on those screens while offline gets no 'showing cached data / you are offline' cue. The banner placement (in _layout, the splash-routing pair) is the source of the regression.",
+  "reason": "Confirmed real gap. In Expo, components/OfflineBanner.tsx is mounted globally at app/_layout.tsx:131 inside RootLayoutInner, so the red strip 'أنت غير متصل بالإنترنت — تعرض بيانات محفوظة' overlays EVERY screen (task-detail, cash, earnings, walkin, shift-summary, van-inventory, login, splash). In the Flutter DRIVER app the offline cue exists ONLY on the Home tab: home_screen.dart:212 `_syncBanner()` watches isOnlineProvider and is the sole consumer. I verified the absence of any global wrapper: main.dart:47-50 builder is just Directionality (no offline wrapper, unlike the sibling customer app whose main.dart:53/60 wraps every screen in `_OfflineWrapper`), router.dart:30-72 has no widget above ShellRoute/routes, and home_shell.dart:24-49 Scaffold has only a NavigationBar. A grep across apps/driver/lib for isOnlineProvider/wifi_off/غير متصل found matches only in home_screen.dart — none of task_detail/cash/earnings/walkin/shift_summary/van_inventory/login/splash render an offline indicator. So a driver acting on those screens while offline gets no 'you are offline / showing cached data' cue, a regression from Expo. Severity medium (not high): the offline-queue persists and flushes mutations app-wide regardless of the banner, so cash/money and data are not lost — only the visual offline cue is missing on non-home screens."
+ },
+ {
+  "id": "splash-routing-2",
+  "pair": "splash-routing",
+  "title": "login_success analytics event not emitted",
+  "severity": "low",
+  "status": "missing",
+  "expoEvidence": "app/_layout.tsx:99 `track(ph, 'login_success', { role: user.role, tenantId: user.tenantId });` fired in the identity-sync effect whenever a non-demo user becomes present.",
+  "detail": "Flutter performs Analytics.identify on login but never captures the explicit 'login_success' event with role/tenantId properties. The login funnel metric present in Expo is lost.",
+  "reason": "Genuine gap confirmed after thorough search. Expo (app/_layout.tsx:99) fires track(ph, 'login_success', {role, tenantId}) in the identity-sync effect for every non-demo user. Flutter's Analytics.capture is defined (packages/daari_core/lib/src/services/analytics.dart:42) and used for order_claimed (home_screen.dart:95), shift_ended (shift_summary_screen.dart:98), and order_completed (task_detail_screen.dart:108) only. The auth controller (packages/daari_core/lib/src/auth/auth_controller.dart) calls Analytics.identify on all three login paths (hydrate:26, login:56, resetPasswordAndLogin:73) but never Analytics.capture('login_success', ...). The driver splash_screen.dart calls hydrate() with no capture. Grep for 'login_success' across mobile-flutter returns zero matches; grep for 'capture(' confirms no login event. The login funnel metric is genuinely absent. Severity stays LOW: pure telemetry/analytics with no user-facing effect — identity is still established via Analytics.identify with role; only the discrete funnel event property (and tenantId) is missing, which affects internal dashboards, not money/auth/data flows."
+ },
+ {
+  "id": "splash-routing-3",
+  "pair": "splash-routing",
+  "title": "Periodic offline-queue flush is Home-tab-scoped, not app-wide",
+  "severity": "medium",
+  "status": "different",
+  "expoEvidence": "app/_layout.tsx:60-66 drains the queue on mount and on a 60s interval at the ROOT layout level: `flush().catch(()=>{}); const t = setInterval(()=>{ flush()... }, 60_000);` — runs regardless of which screen is showing.",
+  "detail": "In Expo the queue drains every 60s anywhere in the app (the timer lives in _layout). In Flutter the periodic drain only runs while the Home tab is mounted; if the driver stays on task-detail / cash / walkin (offline then reconnects) for over a minute, queued mutations are not flushed until they return to Home. Same flush logic, narrower trigger scope.",
+  "reason": "Real gap, not refuted. Expo runs the 60s periodic flush + mount flush at the ROOT layout (app/_layout.tsx:60-66), so it drains app-wide on any screen. In Flutter the periodic Timer.periodic(60s) and the initial flush live entirely in HomeScreen.initState (home_screen.dart:38, 41-42) and are cancelled in dispose (line 47). I checked the shared core (offline_queue.dart only exposes flush(), it does not self-schedule; isOnlineProvider/offlineQueueProvider in core_providers.dart are just streams/providers with no flush trigger), main.dart, router.dart, home_shell.dart, and providers.dart — none host an app-level periodic or background drain. The other flush call sites (task_detail_screen.dart:119, walkin_screen.dart:299/495) are per-submit post-mutation flushes, not background periodic drains. Flutter does ADD a reconnect-driven flush via ref.listen(isOnlineProvider) at home_screen.dart:125-126, but that listener is registered in HomeScreen.build and only fires while HomeScreen is mounted — same narrow scope. So if the driver stays on task-detail/cash/walkin/earnings (each a separate route that unmounts HomeScreen) for over a minute after reconnecting, queued mutations are not drained until they return to Home. Medium (not high): mutations persist in SQLite and are not lost — they flush on next Home visit or per-submit — so this is delayed-flush, not data-loss/double-submit."
+ },
+ {
+  "id": "splash-routing-4",
+  "pair": "splash-routing",
+  "title": "Notification tap routes on any orderId, ignoring the new-order kind guard",
+  "severity": "low",
+  "status": "different",
+  "expoEvidence": "app/_layout.tsx:120-122 routes to the task only when the payload kind matches: `if (data?.orderId && data.kind === 'new-order') { router.push(`/task/${data.orderId}`); }` — other notification kinds (e.g. completion) deliberately do not deep-link to task detail.",
+  "detail": "Expo gates the task deep-link to kind==='new-order'; Flutter opens task detail for ANY notification carrying an orderId. A non-new-order notification that still includes an orderId (e.g. a completion/cash notification) would wrongly push the driver into the task screen in Flutter.",
+  "reason": "Real gap, not refuted. Expo gates the notification-tap deep-link to kind==='new-order' (mobile-worker/app/_layout.tsx:120-122). Flutter has NO equivalent kind guard anywhere in the routing path. The driver callback at apps/driver/lib/screens/home_screen.dart:32-36 routes whenever orderId is non-empty (`if (orderId != null && orderId.isNotEmpty && context.mounted) context.push('/task/$orderId')`) and ignores the forwarded `type`. The shared push_service (packages/daari_core/lib/src/services/push_service.dart:85-94 _handleOpen) extracts and forwards type=(data['type']??data['kind']) but applies no guard. I searched the full driver tree and daari_core for any 'new-order'/kind guard on the notification path — none exists; all other `kind` references are RefillOrderKind (order type), unrelated to the notification-payload discriminator. Impact is real and observable: backend (backend/src/orders/orders.service.ts:273) sends a kind:'order-offer' notification that DOES carry an orderId — under Expo this would NOT deep-link to task detail, but under Flutter it would. Severity stays low: it's a wrong-but-recoverable navigation (no money/auth/data-loss/GPS), driver can simply navigate back."
+ },
+ {
+  "id": "home-1",
+  "pair": "home",
+  "title": "Nearest-first GPS sorting toggle missing",
+  "severity": "medium",
+  "status": "missing",
+  "expoEvidence": "app/(tabs)/home.tsx:167-214,344-373 — `nearestFirst` state, `toggleNearest()` requests GPS (Alert 'GPS غير متاح' on failure), `orderedOthers` haversine-sorts upcoming tasks nearest-first; renders 'الأقرب أولاً' pill (shown when others.length>1) with locating spinner state.",
+  "detail": "Flutter renders today's tasks in raw backend order with no GPS-based reordering and no 'الأقرب أولاً' control. Drivers with multiple stops lose the route-optimization affordance entirely.",
+  "reason": "Verified absent across the full Flutter driver app. Expo home.tsx implements nearestFirst state (167-168), toggleNearest() with GPS 'GPS غير متاح' Alert fallback (170-192), haversine-sorted orderedOthers (194-214), and the 'الأقرب أولاً' pill rendered when others.length>1 with a locating spinner (344-373), plus per-task distance chips (409-453). In Flutter, screens/home_screen.dart renders tasks via _taskCard (371-413) in raw todayTasksProvider order — no toggle, no sort, no distance chip, no 'الأقرب أولاً' control. providers.dart has no coords/sort/getCurrentCoords state (grep: no matches). Grep across mobile-flutter for nearest/الأقرب/distanceMetres shows the only driver usage of LocationService.distanceMetres is task_detail_screen.dart:73 (distance to the single active task), never on the home list. order_widgets.dart and the driver shared widgets contain no such control. The behavior is genuinely missing, not implemented elsewhere. Severity medium: it is a frontend-only route-optimization convenience (no money/auth/data-loss/GPS-tracking regression — shift GPS tracking exists via locationService); multi-stop drivers lose the nearest-first affordance."
+ },
+ {
+  "id": "home-2",
+  "pair": "home",
+  "title": "Distance chips on task/available cards missing",
+  "severity": "medium",
+  "status": "missing",
+  "expoEvidence": "app/(tabs)/home.tsx:149-161 fetches driver coords on mount; :411-453 shows a 'near-me' distance chip (e.g. '1.2 كم'/'350 م' via distLabel) on upcoming task cards when nearestFirst; :528,620-623 AvailableOrderCard shows a distance chip from driver coords.",
+  "detail": "No driver GPS is read on the Flutter home screen, so neither the available-order cards nor task cards ever show how far away the customer is — a glanceable signal present throughout the Expo home.",
+  "reason": "Genuine gap. Expo home (home.tsx:149-161 fetches driver coords on mount; :411-453 task-card distance chip via distLabel when nearestFirst; :528,620-623 AvailableOrderCard distance chip) shows glanceable distance chips. Flutter home_screen.dart never fetches driver coords (initState L26-43 only registers push + flushes queue), and _availableCard (L299-369) and _taskCard (L371-413) render no distance chip. providers.dart has no coords provider; shared order_widgets.dart has no distance rendering. The capability exists in core (daari_core LocationService.currentCoords() at location_service.dart:76, LocationService.distanceMetres, DriverTask.locationLat/Lng) but is wired only into task_detail_screen.dart's arrival gate, NOT the home cards. So the user-facing distance chip on home available/task cards is genuinely absent. Severity medium (not high): it is a UX convenience signal, not money/auth/GPS-tracking/data-loss; a real feature difference users notice but cosmetic-adjacent."
+ },
+ {
+  "id": "home-3",
+  "pair": "home",
+  "title": "Featured active (EN_ROUTE) task card missing",
+  "severity": "medium",
+  "status": "missing",
+  "expoEvidence": "app/(tabs)/home.tsx:143,289-335 — the EN_ROUTE task is pulled out as `active` and rendered as a prominent aqua-gradient hero card with 'قيد التنفيذ' badge, scheduledFor time, kind icon+label, customer/district, and a white 'متابعة المهمة' continue button.",
+  "detail": "Flutter treats the in-progress task like any other list row (just a status pill). The Expo design surfaces the active job as a large gradient CTA so the driver immediately sees and resumes the current delivery.",
+  "reason": "Genuinely absent in Flutter — could not refute. Expo home.tsx:143 pulls the EN_ROUTE task out as `active` and L289-335 renders it as a distinct aqua-gradient hero Pressable: 'قيد التنفيذ' schedule badge, active.scheduledFor time, kind icon+label, customer name + district/address, and a white 'متابعة المهمة' continue button; the active task is also excluded from the normal list (others filters EN_ROUTE at L144). In Flutter home_screen.dart, todayTasksProvider data is mapped through a single `_taskCard` (L193-194, L371-413) with no EN_ROUTE filtering and no featured/gradient variant — every task is an identical row (icon + name + district/kind + OrderStatusPill + chevron). Thorough search of the screen plus shared code found no equivalent: order_widgets.dart (read in full) only exposes OrderStatusPill/orderStatusColor/orderKindIcon; grep for EN_ROUTE|متابعة|قيد التنفيذ|featured|hero across apps/driver/lib and packages/daari_core/lib surfaced only the enum definition (enums.dart:39, isActive at :57), the task_detail start-trip flow, the generic gradient_header, and unrelated profile-dialog 'متابعة؟' text — none of which surface the active job as a prominent CTA on home. providers.dart/router.dart/main.dart add no such behavior. The in-progress job is therefore not surfaced as a resume hero; it appears as a plain list row differentiated only by the status pill. Severity medium: real, user-visible UX/feature difference (driver cannot glance-and-resume the current delivery), but not money/auth/GPS/data-loss, so not high."
+ },
+ {
+  "id": "home-4",
+  "pair": "home",
+  "title": "Daily-progress card (done/total + bar) missing",
+  "severity": "low",
+  "status": "missing",
+  "expoEvidence": "app/(tabs)/home.tsx:250-268 — when total>0 renders 'جولة اليوم' card showing '{done} / {total} مهمة' and a progress bar filled to done/total*100%.",
+  "detail": "Flutter home has no at-a-glance daily completion progress indicator that Expo shows above the task list.",
+  "reason": "Confirmed gap. Expo home.tsx:250-268 renders a \"جولة اليوم\" card (when total>0) showing \"{done} / {total} مهمة\" plus a progress bar filled to done/total*100% (done = tasks with status COMPLETED, total = all today tasks, computed at home.tsx:141-142). Flutter home_screen.dart build() (lines 136-205) renders only: GradientHeader → _syncBanner → _quickLinks → \"طلبات متاحة\" list → \"مهام اليوم\" list. There is no progress/summary card and no done/total computation anywhere in the file. Searched the full driver lib and daari_core lib: the only LinearProgressIndicator is in packages/daari_core/lib/src/widgets/refill_status_strip.dart:94, a customer refill-status widget unrelated to driver daily task completion. No \"جولة اليوم\" string, no done/total tally, and no shared widget/provider implements it. Severity stays low: it is a glanceable cosmetic summary derived from already-displayed data, with no money/auth/GPS/data-loss impact."
+ },
+ {
+  "id": "home-5",
+  "pair": "home",
+  "title": "Available-order card omits tank capacity, QR, kind chip, 'new' badge, and avatar",
+  "severity": "medium",
+  "status": "partial",
+  "expoEvidence": "app/(tabs)/home.tsx:515-682 AvailableOrderCard — gradient avatar with customer first letter (:594-608), district + ' · QR {qr}' subtitle (:613-615), chips for distance/'خزان {capacity}'/kind (:620-628), animated pulsing 'جديد' badge (:236,568-591,713-739), FadeInDown entry animation.",
+  "detail": "The Flutter claim card drops the tank capacity chip, QR code, distance, kind chip, customer-initial avatar, and the pulsing 'جديد' badge — the driver gets noticeably less info (notably which tank size / QR) before claiming, even though the model exposes these fields.",
+  "reason": "Real gap. Flutter _availableCard (home_screen.dart L299-369) renders a plain navy kind icon (L306-315), subtitle '{district} · {kind.label}' with no QR (L326), no distance/capacity/kind chips, no 'جديد' badge, and no entrance animation. Expo AvailableOrderCard (home.tsx L515-682) has a gradient first-letter avatar (L595-608), 'QR {qr}' subtitle (L613-615), distance + 'خزان {capacity}' + kind chips (L620-628), a gradient 'جديد' badge (L568-591), and FadeInDown entry (L553). No equivalent rich card exists in order_widgets.dart (only OrderStatusPill + orderKindIcon) or elsewhere in daari_core. Data IS available but unused: TaskTank.qrCode/capacity (driver_task.dart L47-48 via DriverTask.tank L77) and locationLat/locationLng (L21-22). One nuance: the pulsing animation in Expo is on the header NewPulseBadge dot (L713-739), not the card badge which is a static gradient — but that badge is still absent in Flutter. Severity medium: it is pre-claim info/UX (tank size, QR, distance), not a money/auth/data-loss flow."
+ },
+ {
+  "id": "home-6",
+  "pair": "home",
+  "title": "Claim success uses auto-navigate + snackbar instead of confirmation Alert",
+  "severity": "low",
+  "status": "different",
+  "expoEvidence": "app/(tabs)/home.tsx:535-548 onAccept success shows Alert 'تم قبول الطلب' / 'تم تعيين الطلب لك — ابدأ المهمة.' with a 'فتح المهمة' button that navigates; error path shows Alert with backend message.",
+  "detail": "Flutter auto-pushes into the task and shows a transient snackbar rather than the Expo confirmation dialog where the driver taps 'فتح المهمة' to proceed. Idempotency/409 handling is equivalent (both re-invalidate the pool), so this is UX-only.",
+  "reason": "Verified real difference. Flutter home_screen.dart _claim (L98-101): on claim success it calls showSnack(context, 'تم قبول الطلب — ابدأ المهمة') then immediately context.push('/task/${task.id}') — a transient snackbar plus auto-navigation. Expo home.tsx onAccept (L539-541) instead shows Alert.alert('تم قبول الطلب','تم تعيين الطلب لك — ابدأ المهمة.') with an explicit 'فتح المهمة' button that the driver must tap before router.push navigates. Searched the whole Flutter mobile-flutter tree for showDialog/AlertDialog/'فتح المهمة'/'تم تعيين الطلب' — the only dialogs are in apps/admin (login/more/onboarding/promos/stock/team screens); none in apps/driver and none in daari_core. The shared ordersRepository.claim (orders_repository.dart:134-136) just POSTs and returns void, with no confirmation UI. So the Expo tap-to-proceed confirmation dialog is genuinely absent in Flutter. Severity confirmed low: 409/idempotency handling is equivalent (both re-invalidate availableOrdersProvider; error path shows 'سبقك سائق آخر' on conflict, else backend message via snackbar), no money/auth/data-loss; difference is UX-only (confirmation Alert vs auto-navigate + snackbar)."
+ },
+ {
+  "id": "home-7",
+  "pair": "home",
+  "title": "Walk-in entry reduced from labeled list card to a small quick-link icon",
+  "severity": "low",
+  "status": "different",
+  "expoEvidence": "app/(tabs)/home.tsx:462-504 — a dedicated bordered card at the bottom of the task list: title 'بيع فوري أو زبون جديد' with subtitle 'للزبون الذي لم يطلب من التطبيق' and an add icon, routing to /walkin.",
+  "detail": "Route parity exists, but Flutter demotes the prominent self-explanatory walk-in CTA (with its 'for customers who didn't order in-app' hint) to a tiny unlabeled-context grid tile.",
+  "reason": "Verified the gap is real after a thorough Flutter search. Expo (home.tsx:461-504) renders a dedicated bordered card at the bottom of the task list: title 'بيع فوري أو زبون جديد' + subtitle 'للزبون الذي لم يطلب من التطبيق' + add icon → /walkin. In Flutter the ONLY walk-in entry point is home_screen.dart:421 — a 5-up quick-links grid tile labeled 'بيع فوري' → /walkin (_quickLinks L415-457). A repo-wide grep for the Arabic title/subtitle strings ('بيع فوري أو زبون جديد', 'لم يطلب من التطبيق') across all of mobile-flutter returns zero matches; no shared widget, core service, router, or provider reintroduces the descriptive card. So the subtitle hint and the prominent in-task-list placement are genuinely absent — the auditor's facts are correct. Severity stays LOW: route parity exists (both reach /walkin), the primary label 'بيع فوري' is identical, and the only loss is a descriptive subtitle and visual prominence — a pure presentation/UX difference with no money, auth, data-loss, or flow-breaking impact."
+ },
+ {
+  "id": "history-1",
+  "pair": "history",
+  "title": "History card primary line shows order-kind label instead of the customer name",
+  "severity": "medium",
+  "status": "different",
+  "expoEvidence": "history.tsx:135-142 renders the customer name as the bold title of each row: `<Text className=\"font-bold text-sm\">{h.customer?.fullName ?? '— مجهول —'}</Text>` then the date below it. The HistoryRow type (history.tsx:12) declares `customer: { fullName: string } | null`, so the reference treats the customer name as the headline identifier of each completed task.",
+  "detail": "In Expo each history card is identified by WHO it was for (customer name, with '— مجهول —' fallback). In Flutter every card is identified by the task TYPE label, and there is no way to see which customer a completed task belonged to. The status pill Flutter adds does not compensate — the user loses the per-row customer identity. Fix requires adding a customer/fullName field to RefillOrder + fromJson and rendering it as the card title (kind can move to a secondary position).",
+  "reason": "Confirmed real gap. Expo history.tsx:136-138 renders the customer name as the bold card title: `{h.customer?.fullName ?? '— مجهول —'}` (HistoryRow.customer typed at history.tsx:12). Flutter history_screen.dart:241 instead renders `order.kind.label` (e.g. تعبئة/بيع فوري) as the bold title; the date sits below it and there is no customer name anywhere on the card. Verified the model: packages/daari_core/lib/src/models/refill_order.dart — RefillOrder has NO customer/fullName field, and RefillOrder.fromJson (L120-122) reads json['customer'] ONLY to extract deliveryLat/deliveryLng (customer?['locationLat'/'locationLng']); it discards fullName. historyProvider (providers.dart:32) is typed FutureProvider<List<RefillOrder>>, so the card receives exactly this model with no customer data. A repo-wide grep of daari_core for fullName/customer surfaced only customer_profile.dart and customer_repository.dart (the customer-app's own /customers/me profile + address/schedule endpoints), none of which attach a customer name to a driver history order row. So the per-row customer identity present in the Expo reference is genuinely absent in Flutter. The OrderStatusPill Flutter adds does not restore it. Severity medium: real, user-noticeable information difference (which customer a completed task was for) but not money/auth/GPS/data-loss. Fix: add a customer fullName field to RefillOrder + fromJson and render it as the card title, moving kind.label to a secondary position."
+ },
+ {
+  "id": "history-2",
+  "pair": "history",
+  "title": "Card date shows date+time in Flutter but date-only in Expo",
+  "severity": "low",
+  "status": "different",
+  "expoEvidence": "history.tsx:139-141 renders the row timestamp with `fmtArabicDate(when)` — format.ts:12-16 `fmtArabicDate` uses Intl.DateTimeFormat('ar-IQ', { dateStyle: 'medium' }), i.e. DATE ONLY, no time component.",
+  "detail": "Minor visual divergence: Expo cards show e.g. '٢٣ أيار ٢٠٢٦', Flutter shows '٢٣ أيار ٢٠٢٦ ٤:١٥ م'. To match the reference use Fmt.arabicDate (date only) for the history row timestamp.",
+  "reason": "Verified real divergence. Expo history card timestamp (mobile-worker/app/(tabs)/history.tsx:139-141) uses fmtArabicDate(when), and format.ts:12-16 fmtArabicDate = Intl.DateTimeFormat('ar-IQ', { dateStyle: 'medium' }) — DATE ONLY. Flutter history card (apps/driver/lib/screens/history_screen.dart:245) uses Fmt.arabicDateTime(when), and packages/daari_core/lib/src/format/format.dart:38-42 arabicDateTime = DateFormat.yMMMd('ar').add_jm() — appends time (jm). I searched the shared core format.dart, driver widgets, providers, router, and the screen itself: format.dart DOES expose a date-only Fmt.arabicDate (line 31-35), and the section-bucket label (_bucketLabel line 29) correctly uses it, but the per-card line at 245 deliberately calls arabicDateTime instead. No shared widget/interceptor/provider overrides this. The claim is NOT refuted — Flutter shows a clock time the Expo reference omits. Severity correctly low (purely cosmetic; fix is to swap arabicDateTime -> arabicDate at history_screen.dart:245)."
+ },
+ {
+  "id": "profile-1",
+  "pair": "profile",
+  "title": "Week/Month performance period switcher missing",
+  "severity": "medium",
+  "status": "missing",
+  "expoEvidence": "profile.tsx:34-37,96-117 — `const [period, setPeriod] = useState<'week'|'month'>('month')` and `useMyPerf(period)`; a two-button switcher ('هذا الأسبوع' / 'هذا الشهر') refetches the perf tiles for the selected window. queries.ts:190-211 passes `params:{period}` to /drivers/me/perf.",
+  "detail": "Expo lets the driver switch perf tiles between a 7-day and 30-day window via a tappable chip pair; Flutter only ever shows the month figures with no way to view the week. The backing query already supports the param, so only the UI control was dropped.",
+  "reason": "Confirmed real gap. Expo profile.tsx implements a week/month period switcher: line 34 `const [period, setPeriod] = useState<'week'|'month'>('month')`, line 37 `useMyPerf(period)`, and lines 96-117 render a two-button chip pair ('هذا الأسبوع' / 'هذا الشهر') whose onPress calls setPeriod; the perf tiles at lines 125-142 render `perfPeriod` so tapping refetches the 7-day window. Flutter profile_screen.dart hardcodes `ref.watch(perfProvider('month'))` at line 36 (and invalidate at line 93), with a fixed card title 'أداء هذا الشهر' at line 105, and NO toggle/chip pair anywhere in the screen. Searched the full screen (no week/الأسبوع/setPeriod/period match) and the whole apps/driver/lib tree: the only week/month segmented control lives in earnings_screen.dart:36 (a different screen — the earnings chart) and is not reused by the profile perf card. The backing capability exists (perfProvider family takes a String period at providers.dart:37-40, and driverRepository.perf(period:) supports it), so only the UI control was dropped. Checked shared core, driver widgets, providers.dart, router — no equivalent switcher feeds the profile perf tiles. Severity medium: a real feature/UX difference the driver notices (cannot view 7-day performance), not money/auth/GPS/data-loss."
+ },
+ {
+  "id": "profile-2",
+  "pair": "profile",
+  "title": "Shift-summary action row missing from profile screen",
+  "severity": "medium",
+  "status": "missing",
+  "expoEvidence": "profile.tsx:207-214 — `<ActionRow icon=\"emoji-events\" label=\"ملخّص الوردية وإنهاؤها\" onPress={() => router.push('/shift-summary')} />` is one of the self-service shortcuts on the profile screen.",
+  "detail": "Expo surfaces 'ملخّص الوردية وإنهاؤها' (shift summary + end shift) directly from profile; Flutter's profile screen omits that row, so a driver who looks for it under 'my account' won't find it here (only via home). Partial entry-point regression on this screen.",
+  "reason": "Confirmed. Flutter profile_screen.dart action rows (lines 198-248) are: cash (/cash), earnings (/earnings), van-inventory (/van-inventory), notifications, change-password, logout, delete — there is NO shift-summary _ActionRow. Expo profile.tsx:207-214 has an ActionRow labeled 'ملخّص الوردية وإنهاؤها' -> router.push('/shift-summary') positioned between earnings and van-inventory. I searched the full profile screen, all _ActionRow widgets, the router (router.dart), providers.dart, driver widgets, and grepped the entire driver lib for shift-summary/ملخّص الوردية: the /shift-summary route DOES exist (router.dart:68 -> ShiftSummaryScreen) but its only entry point is the home quick-actions grid (home_screen.dart:419), never the profile screen. So the feature is intact globally but the profile-screen entry point specifically is absent — a real partial entry-point regression matching exactly what the auditor described. Note shift_summary_screen.dart:69 even has a code comment acknowledging the feature 'سقط في نقل Flutter' (was dropped in the Flutter port), corroborating incomplete parity. Severity stays medium: discoverability/UX regression on one screen, not money/auth/GPS/data-loss, and the feature remains reachable from home."
+ },
+ {
+  "id": "profile-3",
+  "pair": "profile",
+  "title": "Privacy policy / terms link missing",
+  "severity": "low",
+  "status": "missing",
+  "expoEvidence": "profile.tsx:286-298 — a footer Pressable 'سياسة الخصوصية والشروط' that opens an Alert explaining location is only recorded during shift and never shared externally.",
+  "detail": "Expo shows a tappable privacy/terms footer with a location-privacy disclosure; Flutter has no such link or disclosure on the profile screen. Store-policy-adjacent informational element dropped.",
+  "reason": "Genuine gap. Expo profile.tsx:286-298 renders a tappable footer 'سياسة الخصوصية والشروط' that opens an Alert disclosing 'موقعك يُسجَّل فقط أثناء وردية العمل لتأكيد التعبئات. لا نشاركه مع أي طرف خارجي'. Flutter profile_screen.dart's ListView (lines 41-251) ends at the delete-account _ActionRow with no privacy/terms footer or location disclosure. Searched the entire driver app (apps/driver/lib): every privacy/terms/سياسة الخصوصية match is in the CUSTOMER app (login_screen, settings_screen, welcome_screen, onboarding_screen, core launchers) — none in the driver app. Searched driver code for the location-privacy disclosure text (موقعك/التتبّع/طرف خارجي): only shift-stop and delete/logout copy exist, no 'recorded only during shift / never shared externally' statement. Not present in router.dart, providers.dart, main.dart, or shared driver widgets either. Severity low: it is an informational/store-policy-adjacent footer alert, not money/auth/GPS-tracking logic; the actual Apple/Google in-app-deletion requirement is independently satisfied by the existing delete-account row."
+ },
+ {
+  "id": "profile-4",
+  "pair": "profile",
+  "title": "Bonus/earnings money tile uses abbreviated value instead of full IQD",
+  "severity": "low",
+  "status": "different",
+  "expoEvidence": "profile.tsx:134-140 — bonus tile `value={iqd(perfPeriod.bonusIqd ?? 0)}` where iqd renders the full grouped amount (e.g. '11,750 د.ع'); label 'بونص + عمولات'.",
+  "detail": "On a money/earnings figure the Expo reference shows the exact grouped IQD amount; Flutter abbreviates and rounds it ('12ك د.ع'), so the driver sees a less precise bonus/revenue number than the reference. Money-display precision difference.",
+  "reason": "Verified against both sides. Expo profile.tsx:136 renders the bonus tile with iqd(perfPeriod.bonusIqd) where iqd (lib/format.ts:2-4) = full grouped amount + ' د.ع' (e.g. '11,750 د.ع'). Flutter profile_screen.dart:140 uses Fmt.iqdShort(perf.bonusIqd), and line 126 revenue tile also uses Fmt.iqdShort. Fmt.iqdShort (packages/daari_core/lib/src/format/format.dart:17-28) rounds: >=1000 -> '${(amount/1000).toStringAsFixed(0)}ك د.ع' (11,750 -> '12ك د.ع'), losing the exact figure. A full-precision Fmt.iqd exists at format.dart:14 but is NOT used for these money tiles. I searched the shared core format file, the profile screen, and the format helper — no full-precision rendering is applied to these tiles. Genuine different-behavior gap. Severity low: read-only earnings display precision, no impact on any cash/transaction flow; abbreviating a displayed figure is cosmetic-adjacent."
+ },
+ {
+  "id": "profile-5",
+  "pair": "profile",
+  "title": "Header chip shows live shift status instead of static role 'سائق معمل'",
+  "severity": "low",
+  "status": "different",
+  "expoEvidence": "profile.tsx:72-82 — the header pill always renders the fixed role text 'سائق معمل' (lab driver), optionally followed by '· {vehiclePlate}'.",
+  "detail": "Expo's profile header identifies the user by role ('سائق معمل'); Flutter replaced that with the driver's current shift status, so the role label from the reference is gone. Different header semantics — cosmetic/label-level.",
+  "reason": "Verified genuine. Expo profile.tsx:73 always renders the static role text 'سائق معمل' (optionally followed by '· {vehiclePlate}'). Flutter profile_screen.dart:68-70 renders _HeaderChip(label: profile.status.label) instead, which resolves via daari_core driver_profile.dart:6-9 (DriverStatus enum) to the dynamic shift status ('غير متصل'/'متاح'/'في مهمة'/'استراحة'), with the plate shown as a separate chip (lines 72-77). A repo-wide grep for 'سائق معمل' across the entire mobile-flutter tree (screen, daari_core, widgets, router.dart, providers.dart, main.dart) returns ZERO matches — the static role label is genuinely absent everywhere in Flutter, not relocated to a shared widget/core/provider. The header chip semantics changed from a fixed role identifier to a live status indicator. Real difference, but cosmetic/label-level only — no money/auth/data impact, so low severity is correct."
+ },
+ {
+  "id": "task-detail-1",
+  "pair": "task-detail",
+  "title": "Reclaim task is mis-gated: Flutter forces start-trip and hides the reason picker until EN_ROUTE; Expo allows reclaim completion from ASSIGNED with no start-trip",
+  "severity": "medium",
+  "status": "different",
+  "expoEvidence": "[id].tsx:599-639 — `{isReclaim ? (<reason picker + 'أكّد السحب' onPress=onCompleteReclaim>) : (<steps/start-trip/complete>)}`. The reclaim branch replaces the whole step/start-trip flow; the reason list and confirm button render for ANY status (ASSIGNED or EN_ROUTE), and onCompleteReclaim (l225) has no status guard.",
+  "detail": "An ASSIGNED reclaim task in Expo immediately shows the 6 reason options and the confirm-reclaim button — the driver picks a reason and completes. In Flutter the same ASSIGNED reclaim shows the generic 'ابدأ الجولة' (start-trip) button and NO reason picker, so the driver is forced to start a trip first; only after EN_ROUTE does the reason picker/confirm appear. This blocks the direct-from-ASSIGNED reclaim Expo supports and changes the required action sequence for a tank-recovery (asset) flow.",
+  "reason": "Confirmed real gap after full re-read of Flutter screen + core/widgets. Expo (app/task/[id].tsx:599) gates the entire reclaim branch on `isReclaim` ALONE — no status check. So for an ASSIGNED reclaim it immediately renders the 6 reason options (l603-625) and the 'أكّد السحب' confirm button (l627 onPress=onCompleteReclaim), and onCompleteReclaim (l225-265) has NO status guard — it only requires a reason + GPS, then calls reclaim.mutateAsync. The start-trip/complete buttons (l759-811) live inside the non-reclaim `else` branch, so a reclaim never shows start-trip. Flutter task_detail_screen.dart does exactly what the auditor says: l399 `if (isReclaim && isEnRoute)` hides the reason SectionCard until EN_ROUTE; l438 `if (isAssigned)` renders the generic 'ابدأ الجولة' start-trip button for an ASSIGNED reclaim (no reclaim exclusion); l445 `else if (isEnRoute)` is the ONLY place 'أكّد سحب الخزان' (onComplete) appears. I searched daari_core (orders_repository.dart:161 reclaim, enums.dart:64 tankReclaim, order_inputs.dart:14 ReclaimReason) and driver widgets — the reclaim/reason rendering and gating exist only in this screen; there is no alternate path that lets an ASSIGNED reclaim show the reason picker/confirm. So the Flutter driver is forced to start a trip first; the direct-from-ASSIGNED reclaim Expo supports is blocked. Severity reduced from high to medium: this changes the required action sequence for an asset-recovery flow (user-noticeable), but reclaim collects no cash (paidAmountIqd:0) and involves no auth, idempotency, or data-loss; the start-trip itself succeeds, so the task can still be completed via the extra step."
+ },
+ {
+  "id": "task-detail-2",
+  "pair": "task-detail",
+  "title": "Reclaim reason is not a forced choice in Flutter (pre-selected default) vs Expo's mandatory explicit selection",
+  "severity": "medium",
+  "status": "different",
+  "expoEvidence": "[id].tsx:51-52 `useState<...>(null)` (no default), l626-631 confirm button `disabled={submitting || !reclaimReason}`, l225-229 onCompleteReclaim alerts 'اختر سبب السحب / يجب اختيار سبب قبل تأكيد السحب' if none chosen.",
+  "detail": "Expo forces the driver to consciously pick the audit reason (button disabled + alert until a reason is chosen). Flutter defaults to 'الزبون انتقل' (customerMoved) and the confirm button is always enabled, so a driver can submit a reclaim with the default reason without ever choosing — degrading the plant's audit trail accuracy for tank recovery.",
+  "reason": "Gap confirmed after thorough search of the Flutter screen, core models, and providers. Expo (mobile-worker/app/task/[id].tsx) forces an explicit reclaim-reason choice three ways: useState<...>(null) with no default (l51-52), confirm button disabled={submitting || !reclaimReason} (l626-631), and onCompleteReclaim alerts 'اختر سبب السحب / يجب اختيار سبب قبل تأكيد السحب' when none chosen (l225-229). Flutter (task_detail_screen.dart) pre-selects ReclaimReason.customerMoved at l23; RadioGroup groupValue is non-null from the start (l410-411); the confirm button is only gated on busy (onPressed: busy ? null : onComplete, l445-453); and _complete()/ReclaimInput (l94-102) submits _reclaimReason with NO 'must explicitly choose' guard or alert. The default is a real enum value (customerMoved = 'CUSTOMER_MOVED', order_inputs.dart:17), not a null sentinel, so the body always sends a reason without the driver consciously picking. No router guard, interceptor, provider, or shared widget adds this requirement anywhere in daari_core or the driver widgets. Real, user-facing behavior difference that degrades the plant's reclaim audit-trail accuracy. Not money/auth/data-loss (a valid reason is still recorded), so medium, not high."
+ },
+ {
+  "id": "task-detail-3",
+  "pair": "task-detail",
+  "title": "GPS arrival (50m) verification is NOT applied to reclaim in Flutter but IS in Expo",
+  "severity": "medium",
+  "status": "different",
+  "expoEvidence": "[id].tsx:225-233 onCompleteReclaim calls `const coords = await verifyArrivalGPS()` (same as refill), and verifyArrivalGPS (l106-126) enforces the 50m GPS_MAX_METRES limit against the customer location for BOTH flows.",
+  "detail": "For a TANK_RECLAIM Expo still rejects completion if the driver is >50m from the customer address (same anti-fraud guard as refill). Flutter deliberately skips the arrival-distance check for reclaim, so a reclaim can be confirmed from far away. This is a behavioral regression of the arrival-evidence guard for the reclaim path. (Flutter still requires SOME coords, but not proximity.)",
+  "reason": "Verified the gap is real after a full search of the screen and shared core. In Flutter, task_detail_screen.dart:70-86 gates the 50m arrival-distance check behind `if (task.kind != RefillOrderKind.tankReclaim && cust.hasLocation)`, explicitly excluding TANK_RECLAIM; for reclaim it only requires that SOME coords exist (line 58-64), not proximity. No proximity guard exists anywhere else in Flutter: orders_repository.dart:161-167 reclaim() just POSTs to /orders/$id/complete with no check; daari_core has only the LocationService.distanceMetres helper (location_service.dart:94) which is invoked solely from the refill branch of the screen; no interceptor, router guard, or provider applies a distance check for reclaim. Expo [id].tsx:225-233 onCompleteReclaim calls verifyArrivalGPS(), and verifyArrivalGPS (l106-126) enforces GPS_MAX_METRES=50 against the customer location for BOTH refill and reclaim. So Expo rejects a far-away reclaim client-side while Flutter does not — a genuine behavioral difference in the arrival-evidence guard. Severity kept at medium (not high): this is a client-side early-feedback pre-check only; reclaim is not a cash-handover (paidAmountIqd=0), and the Flutter code comment notes the backend enforces the GPS max-distance server-side for the /complete endpoint, so the authoritative anti-fraud control is unaffected. It is a real, user-noticeable validation regression for the reclaim path, hence medium."
+ },
+ {
+  "id": "task-detail-4",
+  "pair": "task-detail",
+  "title": "Live driver map (driver pin + auto-updating position) and the distance/ETA overlay are missing; Flutter shows a static customer-only pin",
+  "severity": "medium",
+  "status": "missing",
+  "expoEvidence": "[id].tsx:62-95 subscribes to watchPositionAsync (10s/50m) for a live driver marker; l336-346 computes distanceText + etaText from live driver fix vs customer GPS; l455-519 glass overlay shows المسافة + الوصول (ETA); TaskMap l858-913 renders BOTH a customer pin and a driver ('موقعي') pin and frames a region around both.",
+  "detail": "Expo gives the driver a live map with their own moving pin plus a floating overlay showing real straight-line distance and an ETA estimate (km/22 km/h), updating every 10s while the screen is open. Flutter shows only a static lite-mode map centered on the customer with no driver pin, no distance, and no ETA — the driver loses the at-a-glance 'how far am I' navigation aid.",
+  "reason": "Confirmed genuine gap. Expo task/[id].tsx subscribes to watchPositionAsync (10s/50m) into driverCoord (l62-95), computes live distanceText + etaText (km / 22km-h ETA) at l332-346, renders them in a glass overlay (المسافة / الوصول) at l477-490, and TaskMap (l858-913) draws BOTH a customer pin (الزبون) and a driver pin (موقعي) framing a region around both. Flutter's _CustomerMap (task_detail_screen.dart:517-546) is a liteModeEnabled:true GoogleMap with a single MarkerId('customer'), fixed zoom 15, no driver marker, no position subscription, no distance/ETA overlay. The shared LocationService (packages/daari_core/lib/src/services/location_service.dart) exposes only pingOnce (server push) and a one-shot currentCoords() — there is NO watch/stream API. providers.dart has no live-position provider (onShiftProvider is just a bool). Grep of apps/driver/lib/widgets found no GoogleMap/Marker/driver/liteMode usage, and grep for موقعي/المسافة/الوصول/distanceText/etaText in apps/driver returned nothing user-facing (only the unrelated arrival-gate comment). So the live driver pin, distance, and ETA are genuinely absent everywhere in Flutter. Severity medium (not high): this is a navigational at-a-glance aid; the money/GPS-fraud arrival gate that gates completion DOES exist in Flutter (l66-86), so no core flow or anti-fraud check is lost."
+ },
+ {
+  "id": "task-detail-5",
+  "pair": "task-detail",
+  "title": "No-GPS fallback map state ('لا يوجد موقع GPS — استعمل العنوان') is absent in Flutter",
+  "severity": "low",
+  "status": "missing",
+  "expoEvidence": "[id].tsx:439-453 when `!hasCustomerCoord`, renders a location-off icon + 'لا يوجد موقع GPS — استعمل العنوان' placeholder card in place of the map, and the overlay falls back to showing the destination address (l492-503).",
+  "detail": "Expo always shows the map area: when the customer has no GPS it swaps in an explanatory placeholder so the driver knows to navigate by the address. Flutter silently drops the whole map+navigate section when coords are missing, giving the driver no map affordance and no navigation button at all for address-only customers (the navigate launcher is also coord-only, l362-370).",
+  "reason": "Confirmed genuine gap. Flutter task_detail_screen.dart:358 wraps BOTH the map (_CustomerMap) and the navigation button inside `if (customer.hasLocation) ...[ ]`; when the customer has no coordinates the entire map+navigate block is silently dropped. There is no placeholder. A full-codebase grep for the Expo placeholder string ('لا يوجد موقع GPS — استعمل العنوان' / 'استعمل العنوان' / 'location-off') returns ZERO matches anywhere in mobile-flutter, and no shared widget in daari_core, driver widgets, router, providers, or main implements a no-GPS map fallback. The `hasLocation` getter (daari_core/lib/src/models/driver_task.dart:24) is a plain null-check with no fallback coords. Launchers.navigate is coord-only (task_detail_screen.dart:366-369), so address-only customers get no navigation button either. By contrast Expo ([id].tsx:439-453) always renders the map area, swapping in a location-off icon + 'use the address' card, and the overlay shows the destination address (l492-503) with the navigation button still present (l506-518). Severity correctly LOW: the driver still sees the full district + address in the customer card (Flutter l318-320) plus call/WhatsApp buttons, so no contact/address data is lost — only the in-map GPS-off hint and the address-only navigate affordance are missing (cosmetic/minor UX, no money/auth/GPS-tracking/data-loss impact)."
+ },
+ {
+  "id": "task-detail-6",
+  "pair": "task-detail",
+  "title": "Address-text navigation fallback (maps search by address string) is missing in Flutter",
+  "severity": "low",
+  "status": "missing",
+  "expoEvidence": "[id].tsx:271-288 openNavigation: when customer has no lat/lng it builds a Google Maps SEARCH url from `${addressLine}, ${district}, بغداد` so the driver can still navigate by address text.",
+  "detail": "Expo degrades gracefully to an address-text maps search when GPS coordinates are absent. Flutter's navigate helper is coordinate-only and the button is hidden without coords, so a driver with an address-only order cannot launch navigation from the app.",
+  "reason": "Real gap, confirmed after full re-check of the screen + shared core. Expo openNavigation ([id].tsx:280-284) degrades gracefully: when customer has no lat/lng it builds a Google Maps SEARCH url `maps/search/?api=1&query=${addressLine}, ${district}, بغداد` so a driver can still navigate by address text. Flutter's only navigation helper, Launchers.navigate (packages/daari_core/lib/src/services/launchers.dart:29-33), takes required lat/lng and builds a `dir/?api=1&destination=lat,lng` url — no address-string variant exists anywhere (grep across the whole flutter tree returns only this single definition, no maps/search usage). The task_detail_screen.dart navigation button is wrapped entirely in `if (customer.hasLocation)` (lines 358-371), so address-only customers get no map and no navigation button at all. Severity confirmed low: it degrades only address-only orders, and the driver still sees the district/addressLine text in the customer card plus call/WhatsApp buttons, so they can navigate manually — a UX convenience regression, not money/auth/GPS-tracking/data-loss."
+ },
+ {
+  "id": "task-detail-7",
+  "pair": "task-detail",
+  "title": "Completion duration analytics (durationSec) and richer order_completed props dropped in Flutter",
+  "severity": "low",
+  "status": "partial",
+  "expoEvidence": "[id].tsx:66 `startedAtRef = useRef(Date.now())`; l146-151 track(ph,'order_completed',{orderId, kind, priceIqd, durationSec: Math.round((Date.now()-startedAtRef.current)/1000)}).",
+  "detail": "Expo emits order_completed with priceIqd and a measured durationSec (time from screen mount to completion) and emits order_cancelled_by_driver on the fail path. Flutter sends only orderId+kind on completion and emits no cancellation analytics event, so completion-time and cancel-reason telemetry are lost.",
+  "reason": "Confirmed real gap after full search of the screen + core. Flutter task_detail_screen.dart:108-109 captures order_completed with only {orderId, kind} via the generic Analytics.capture passthrough (daari_core/src/services/analytics.dart:42 adds no enrichment). No startedAt/mount-time ref is captured anywhere (no useRef equivalent; grep for startedAt/durationSec across mobile-flutter returns zero hits), so no durationSec, and priceIqd is omitted from the event though it exists on the task. The fail path _cancelWithReason (lines 136-152) emits NO analytics event, so Expo's order_cancelled_by_driver ([id].tsx:191, with {orderId, reason}) has no Flutter counterpart (grep for order_cancelled across mobile-flutter = zero hits). The behavior is genuinely absent, not hidden in a shared widget/interceptor/provider. Severity stays low: this is telemetry-only with no user-facing, money, auth, GPS, or data-loss impact."
+ },
+ {
+  "id": "cash-1",
+  "pair": "cash",
+  "title": "Handover date shows time; Expo shows date only",
+  "severity": "low",
+  "status": "different",
+  "expoEvidence": "mobile-worker/app/cash.tsx:459 `{fmtArabicDate(h.createdAt)}` and lib/format.ts:15 `new Intl.DateTimeFormat('ar-IQ', { dateStyle: 'medium' })` — medium DATE only, no time",
+  "detail": "Each ledger row in Expo renders only the Arabic medium date (e.g. ٢٣ أيار ٢٠٢٦). Flutter appends a time component (add_jm). Display content differs for every handover row; should call Fmt.arabicDate for parity.",
+  "reason": "Verified on both sides; could not refute. Expo lib/format.ts:15 fmtArabicDate uses Intl.DateTimeFormat('ar-IQ', { dateStyle: 'medium' }) — DATE ONLY, no time — and cash.tsx:459 renders {fmtArabicDate(h.createdAt)} per ledger row. Flutter cash_screen.dart:371 calls Fmt.arabicDateTime(handover.createdAt), which at daari_core/.../format/format.dart:38-42 is DateFormat.yMMMd('ar').add_jm() — date PLUS h:mm AM/PM. The date-only equivalent Fmt.arabicDate (format.dart:31-35, DateFormat.yMMMd('ar')) exists but is not used on this screen. No alternate code path, shared widget, or provider supplies a date-only render — the screen builds the row inline at lines 368-373. Every handover row therefore displays an extra time component absent from the Expo reference. Real, user-visible content difference. Severity low: cosmetic display only, no impact on money amount, idempotency, auth, or data."
+ },
+ {
+  "id": "cash-2",
+  "pair": "cash",
+  "title": "No success/error haptic feedback on handover submit",
+  "severity": "low",
+  "status": "missing",
+  "expoEvidence": "mobile-worker/app/cash.tsx:71 `await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)` on success and :76 `...NotificationFeedbackType.Error` on failure",
+  "detail": "Expo gives the driver a success haptic when a handover is recorded and an error haptic on validation failure / API error. Flutter's cash submit fires no haptics, so the tactile confirmation present elsewhere in the app is missing for this money-handover action.",
+  "reason": "Verified absent. Expo cash.tsx fires Haptics.notificationAsync(Success) on handover success (line 71) and (Error) on validation-failure/API-error (line 76). Flutter _submit (cash_screen.dart:228-250) only calls showSnack: line 231 on invalid amount, line 244 on success, line 248 on ApiException — no Hap call on any path. The shared Hap service (daari_core/lib/src/services/haptics.dart, Hap.success/Hap.error) exists and IS wired into the success/error paths of home_screen.dart:94/103, shift_summary_screen.dart:97, task_detail_screen.dart:107, but a repo-wide grep for Hap./HapticFeedback returns zero hits in cash_screen.dart. Checked the shared widgets that the cash flow uses: LoadingButton (common.dart:6-42) and showSnack (common.dart:210-218) contain no haptic invocation, so there is no button-level or snack-level haptic either. The tactile success/error confirmation present elsewhere is genuinely missing for the money-handover action. Severity stays low: tactile-only, no impact on handover correctness, idempotency, or data — the handover still records and shows snack/dialog confirmation."
+ },
+ {
+  "id": "cash-3",
+  "pair": "cash",
+  "title": "Pending-hero pulse animation and emphasized hero card reduced to plain stat card",
+  "severity": "low",
+  "status": "different",
+  "expoEvidence": "mobile-worker/app/cash.tsx:302-362 `PendingHero` — a large dedicated gradient hero with a looping scale pulse (useSharedValue/withRepeat, :304-312, applied at :336) on the pending amount, swapping label/icon/colors between settled (verified/green) and pending (savings/amber) states",
+  "detail": "Expo draws extra attention to 'cash pending handover' via a standalone pulsing hero card. Flutter conveys the same value and the color/label state-swap (warn vs success) via a wide stat card with a count-up, but drops the continuous pulse emphasis. Informationally equivalent; the attention-drawing animation is absent.",
+  "reason": "Verified absent after full search. Expo (cash.tsx:302-362) draws pending via a standalone gradient `PendingHero` with a looping scale pulse (useSharedValue/withRepeat at :304-312, applied :336) plus state-swap of colors/icon/label (settled green/verified vs pending amber/savings). Flutter (cash_screen.dart:88-94) renders pending as a wide `_StatCard` with `AnimatedCounter` count-up and a warn600/success color + savings icon, but NO separate hero and NO looping pulse. AnimatedCounter (packages/daari_core/lib/src/widgets/animated_counter.dart:34) is a one-shot TweenAnimationBuilder with no repeat. The only `..repeat()` widgets in core are rain_background.dart and skeleton.dart (shimmer) — unrelated. Searches for PendingHero/withRepeat/ScaleTransition/pulse across apps/driver/lib returned no matches. The pulse emphasis and dedicated hero treatment are genuinely gone, but the value and warn/success state-swap with count-up animation are preserved, so it is informationally equivalent — purely a cosmetic attention-drawing animation difference. Correctly low severity (no money/idempotency/auth/data impact)."
+ },
+ {
+  "id": "earnings-1",
+  "pair": "earnings",
+  "title": "Per-bar value label above each bar (week view) missing",
+  "severity": "low",
+  "status": "missing",
+  "expoEvidence": "earnings.tsx:279 showValue={!isMonth}; :340-349 renders Animated.Text above the bar: `{value > 0 ? Math.round(value / 1000) + 'ك' : ''}` (e.g. '3ك')",
+  "detail": "In the Expo week view each bar shows its rounded thousands value (value/1000 + 'ك') above the column, giving the user a per-day amount readout on the chart. Flutter renders no value text above any bar in either week or month view, so this on-chart figure is lost.",
+  "reason": "Verified the claim holds. Expo earnings.tsx week view passes showValue={!isMonth} (line 279) and Bar renders an Animated.Text above the column showing Math.round(value/1000)+'ك' (lines 340-349), reserving VALUE_AREA=16 (line 329). Flutter earnings_screen.dart _BarChartCard bar Column (lines 273-310) contains ONLY the bar Container (278), a 4px spacer (295), and the bottom weekday/date label Text (296-307); _chartHeight=150 / _labelArea=18 reserve no value-area above the bar. Searched daari_core/lib, apps/driver/lib/widgets, and the whole mobile-flutter tree: no 'ك' thousands suffix, no /1000 division, no showValue/valueLabel/barValue anywhere. So the on-chart per-day value label is genuinely absent. Severity downgraded medium->low: the identical per-day figures (total, commission, bonus, orders) are fully rendered in the 'تفاصيل الأيام' _DayRow list directly below the chart (lines 101-102, 362-427), so no data is lost — this is a missing chart-decoration readout, cosmetic in impact."
+ },
+ {
+  "id": "earnings-2",
+  "pair": "earnings",
+  "title": "Bars do not animate (grow-from-zero with staggered delay)",
+  "severity": "low",
+  "status": "missing",
+  "expoEvidence": "earnings.tsx:321-335 grow = useSharedValue(0); withDelay((total-1-index)*45, withTiming(1, {duration:600, easing: Easing.out(Easing.cubic)})); barStyle height = targetH * grow.value — bars grow right-to-left, freshest day last; value label fades in via valStyle.",
+  "detail": "Expo bars animate height from 0 with a staggered per-bar delay. Flutter bars render at final height immediately with no animation. Cosmetic/motion only.",
+  "reason": "Confirmed real gap. Flutter _BarChartCard (earnings_screen.dart:278-294) renders each bar as a plain Container with a fixed height: barHeight and no animation — no AnimationController, TweenAnimationBuilder, AnimatedContainer, or staggered delay (grep for those in the screen returned no matches). Core has AnimatedCounter (TweenAnimationBuilder, animated_counter.dart) but it is used only for the numeric totals in _TotalHero/_MiniTotal (lines 157, 217), never for the chart bars; no AnimatedBar/bar-animation widget exists in daari_core. The Expo reference (earnings.tsx:321-335) animates bar height from 0 with a per-bar staggered delay ((total-1-index)*45ms, 600ms cubic-out, right-to-left) and fades the value label in via opacity (valStyle). None of that is present in Flutter — bars appear instantly at final height. Severity is correctly low: pure motion/UX polish with no data, money, validation, or functional impact."
+ },
+ {
+  "id": "earnings-3",
+  "pair": "earnings",
+  "title": "Hero card and chart card entrance (FadeInDown) missing",
+  "severity": "low",
+  "status": "missing",
+  "expoEvidence": "earnings.tsx:144 Animated.View entering={FadeInDown.duration(450)} on the total hero; :184-185 entering={FadeInDown.delay(150).duration(450)} on the chart card.",
+  "detail": "Expo fades/slides the hero and chart cards in on load (staggered). Flutter shows them statically. Cosmetic motion difference.",
+  "reason": "Genuine gap confirmed. Expo earnings.tsx:144 wraps the total hero in Animated.View entering={FadeInDown.duration(450)} and :184-185 wraps the chart card in entering={FadeInDown.delay(150).duration(450)} for a staggered entrance. In Flutter, earnings_screen.dart:79-90 renders _TotalHero and _BarChartCard directly inside a ListView with no entrance wrapper. The shared widgets (common.dart SectionCard:97 is a static Container; AnimatedCounter only uses TweenAnimationBuilder to animate the number value, not card entrance) contain no fade/slide-in. A repo-wide grep for FadeInDown/FadeTransition/SlideTransition/entering across apps/driver and packages/daari_core returns no entrance animation for these cards. Purely cosmetic motion difference, so LOW severity is correct."
+ },
+ {
+  "id": "earnings-4",
+  "pair": "earnings",
+  "title": "Selection haptic on period toggle missing",
+  "severity": "low",
+  "status": "missing",
+  "expoEvidence": "earnings.tsx:103-106 onPress: `if (p !== period) await Haptics.selectionAsync().catch(() => {})` before setPeriod — toggling week/month fires a selection haptic.",
+  "detail": "Expo gives haptic feedback when switching the week/month period. Flutter provides none (no haptics anywhere in the driver app). Minor tactile-feedback regression.",
+  "reason": "Real gap confirmed, though the auditor's premise is partly wrong. A haptics service DOES exist in shared core (packages/daari_core/lib/src/services/haptics.dart: Hap.tap() = HapticFeedback.selectionClick(), the Flutter equivalent of Expo's Haptics.selectionAsync()) and IS used elsewhere in the driver app (home_screen.dart:94,103; shift_summary_screen.dart:97; task_detail_screen.dart:30,107). So haptics are NOT absent app-wide. However, the SPECIFIC behavior — a selection haptic when toggling the earnings week/month period — is genuinely not wired up. Expo earnings.tsx:103-106 fires Haptics.selectionAsync() before setPeriod when p !== period. Flutter earnings_screen.dart:41-43 onSelectionChanged only calls setState(() => _period = selection.first); it never invokes Hap.tap(), and SegmentedButton has no built-in selection haptic. Searched the screen, daari_core, and grepped Hap.* across the driver app — no haptic on this toggle. Severity stays low: purely tactile feedback on a non-critical toggle, no money/auth/data/GPS impact."
+ },
+ {
+  "id": "earnings-5",
+  "pair": "earnings",
+  "title": "Empty-state condition differs (total===0 in-chart vs days.isEmpty full-screen)",
+  "severity": "medium",
+  "status": "different",
+  "expoEvidence": "earnings.tsx:204-213 empty state keyed on `total === 0` and shown ONLY inside the chart card (insights icon + 'لا توجد أرباح مسجّلة في هذه الفترة'); the hero total/breakdown card is still rendered with zeros above it.",
+  "detail": "Backends return a continuous zero-filled series, so days is rarely empty; the meaningful 'no earnings' case is total===0. Expo handles that by keeping the hero (showing 0 د.ع) and swapping just the chart body for an empty message. Flutter only shows its EmptyState when the list is literally empty; for a zero-earnings period it renders the hero plus zero-height bars plus a day list, never showing the dedicated empty message. Different user-facing behavior for the no-earnings period.",
+  "reason": "Verified against both full files. Expo earnings.tsx:204-213 keys the empty state on `total === 0` and renders it ONLY inside the chart card body (insights icon + 'لا توجد أرباح مسجّلة في هذه الفترة'); the hero/total/breakdown card (lines 144-181) is always rendered above it with zeros. Expo never references days.length/isEmpty. Flutter earnings_screen.dart:52-58 instead keys on `days.isEmpty`, rendering a full-screen EmptyState that replaces the entire body (no hero, no chart). For the realistic zero-earnings period (backend returns a continuous zero-filled series, so `days` is non-empty but `total===0`), Flutter falls through lines 60-105: it renders _TotalHero showing 0, a _BarChartCard with zero-height bars, and a per-day list — it never shows the dedicated 'no earnings' message. The empty-state condition and its scope genuinely differ. Searched providers.dart (earningsProvider, line 53), the shared/generic EmptyState and AsyncView in driver/widgets/common.dart (lines 126/174) — they contain no total===0 logic; the condition lives only in the screen and is the literal-empty case. Severity medium: user-noticeable empty-state UX difference for a no-earnings period, but no money/auth/data-loss/GPS impact."
+ },
+ {
+  "id": "earnings-6",
+  "pair": "earnings",
+  "title": "Header subtitle 'عمولاتك وبونصك يوماً بيوم' missing",
+  "severity": "low",
+  "status": "missing",
+  "expoEvidence": "earnings.tsx:89-92 title 'أرباحي' with subtitle line 'عمولاتك وبونصك يوماً بيوم' under it in the gradient header.",
+  "detail": "Expo shows a descriptive subtitle beneath the screen title. Flutter's AppBar shows only the title. Cosmetic copy difference.",
+  "reason": "Verified genuinely absent in Flutter. Expo earnings.tsx:88-92 renders a gradient header with title 'أرباحي' AND subtitle 'عمولاتك وبونصك يوماً بيوم'. Flutter earnings_screen.dart:27 uses a plain Material AppBar(title: Text('أرباحي')) with no subtitle and no gradient_header.dart usage. Grepped the entire mobile-flutter tree for the subtitle string and its tokens (يوماً بيوم / بونصك / عمولاتك): the subtitle is found nowhere. The only token hit is an unrelated empty-state message at earnings_screen.dart:56 ('عند إكمال المهام، ستظهر عمولاتك وبونصك هنا.'), which is different copy. Confirmed gap, but purely a cosmetic descriptive-subtitle omission — no flow, data, validation, or state impact — so low severity stands."
+ },
+ {
+  "id": "shift-summary-1",
+  "pair": "shift-summary",
+  "title": "End-Shift CTA has no double-submit / in-flight disable",
+  "severity": "medium",
+  "status": "missing",
+  "expoEvidence": "mobile-worker/app/shift-summary.tsx:49 const [ending, setEnding] = useState(false); :61 setEnding(true); :138-153 Pressable disabled={ending} with gradient swapped to gray ['#cbd5e1','#94a3b8'] while ending",
+  "detail": "In Expo the button is disabled and visually greyed for the entire duration of stopShiftTracking()/track/navigate, preventing a second tap. The Flutter screen never sets loading=true on LoadingButton (it has a `loading` flag but the call site omits it and there is no state), so during the awaited stopShift() the button stays enabled and re-tappable. End-shift toggles driver OFFLINE / stops GPS and fires analytics, so a repeated tap is a real money/GPS-state hazard. Fix: make the screen stateful (or use a Riverpod flag) and pass loading: true while _endShift runs.",
+  "reason": "Confirmed real gap. shift_summary_screen.dart:55-60 constructs LoadingButton WITHOUT passing `loading:`, so it defaults false; common.dart:26 `onPressed: loading ? null : onPressed` therefore never disables. ShiftSummaryScreen is a ConsumerWidget with no state/Riverpod in-flight flag, and _endShift() (line 70-102) awaits stopShift() (location_service.dart:65, a network setStatus(offline) call) then flips onShiftProvider OFFLINE and fires Analytics.capture('shift_ended') before context.go('/home'). No guard exists in the screen, the shared LoadingButton, providers.dart, or router.dart (no onShiftProvider redirect). Expo (shift-summary.tsx:49,61,139,143) disables the Pressable and greys the gradient to ['#cbd5e1','#94a3b8'] for the whole post-confirm stopShiftTracking()+navigate window; Flutter leaves the button enabled there. The first tap opens a modal confirmation dialog (barrier blocks re-tap), so the only unguarded window is the awaited stopShift()+navigation phase — narrower than the auditor implied. Lowered HIGH->MEDIUM: the duplicated effects are an idempotent OFFLINE setStatus and a duplicate shift_ended analytics event; stopShift() is idempotent (timer cancel + status flip to same OFFLINE state) with no cash/money mutation, no data loss, so the rubric's HIGH triggers (money/cash-handover, mutating-endpoint idempotency, data-loss) don't apply. It is a genuine user-visible state/UX parity difference, hence Medium. Fix as auditor states: make screen stateful or use a Riverpod flag and pass loading:true while _endShift runs."
+ },
+ {
+  "id": "shift-summary-2",
+  "pair": "shift-summary",
+  "title": "Confirmation dialog drops the cash-handover reminder and OFFLINE wording",
+  "severity": "medium",
+  "status": "different",
+  "expoEvidence": "mobile-worker/app/shift-summary.tsx:52-54 Alert: 'سيتم إيقاف تتبّع موقعك وتعيين حالتك \"غير متصل\". تأكّد أنك سلّمت النقد للمعمل.'",
+  "detail": "Expo's confirm copy explicitly tells the driver their status becomes 'غير متصل' AND reminds them to hand the cash to the plant before ending — a money-safety prompt. Flutter's dialog replaces this with 'you won't receive new orders' and omits the cash-handover reminder entirely. The reminder is the whole point of confirming before an end-of-shift cash flow.",
+  "reason": "Verified the full Flutter shift_summary_screen.dart (dialog at lines 73-89: 'سيتوقّف تتبّع موقعك ولن تصلك طلبات جديدة. متأكّد؟') plus a repo-wide grep for the cash-handover reminder ('سلّم/تسليم النقد للمعمل', 'تأكّد أنك سلّمت النقد') and the explicit OFFLINE wording ('غير متصل'). Expo carries the reminder TWICE: in the Alert body (shift-summary.tsx:52-54) AND as helper subtext under the CTA (lines 154-157: 'تأكّد من تسليم النقد قبل الإنهاء'). Flutter has NEITHER — its dialog omits both the explicit 'غير متصل' status wording and the cash-handover reminder, and there is no helper subtext below the button. The only cash-handover text in the driver app lives on the separate cash_screen.dart (a different flow), not on the end-of-shift confirmation. The reminder is genuinely absent from the Flutter end-of-shift path. Severity medium: it is a missing money-safety reminder/UX-wording regression, not a broken cash-handling mechanism (actual settlement still occurs on cash_screen), so it does not rise to HIGH."
+ },
+ {
+  "id": "shift-summary-3",
+  "pair": "shift-summary",
+  "title": "CTA helper caption (location-off + cash-handover note) missing",
+  "severity": "medium",
+  "status": "missing",
+  "expoEvidence": "mobile-worker/app/shift-summary.tsx:154-157 <Text> 'سيتوقّف تتبّع موقعك وتُعيَّن حالتك \"غير متصل\".\\nتأكّد من تسليم النقد قبل الإنهاء.'",
+  "detail": "Below the End-Shift button Expo always renders a two-line caption reinforcing that tracking stops, status goes offline, and the driver must hand over cash first. Flutter shows nothing under the button, so this persistent (not just dialog-time) cash/location reminder is gone.",
+  "reason": "Confirmed real gap. Expo shift-summary.tsx:154-157 renders a PERSISTENT two-line caption directly below the End-Shift button ('سيتوقّف تتبّع موقعك وتُعيَّن حالتك \"غير متصل\".\\nتأكّد من تسليم النقد قبل الإنهاء.'), always visible whenever the CTA is shown. In Flutter shift_summary_screen.dart the LoadingButton (lines 55-60) is the last child of the ListView (line 24-61); build() closes immediately after with no caption Text below it. A repo-wide grep for 'سيتوقّف'/'تسليم النقد قبل الإنهاء' across e:/daari-platform/mobile-flutter returns only shift_summary_screen.dart:76 — and that hit is the on-tap AlertDialog content ('سيتوقّف تتبّع موقعك ولن تصلك طلبات جديدة. متأكّد؟'), which is (a) only shown after pressing the button, not persistent, and (b) a DIFFERENT sentence that OMITS the cash-handover reminder entirely. No shared widget (common.dart has no such caption), core service, router, provider, or interceptor renders this text. So both the persistent placement AND the cash-handover note are genuinely absent from the Flutter end-shift flow. Severity medium (not high): it is advisory reminder text, not a transactional/idempotency/auth break — the actual stopShift call still works — but the cash-handover reminder is money-adjacent and is now gone from both the caption and the dialog."
+ },
+ {
+  "id": "shift-summary-4",
+  "pair": "shift-summary",
+  "title": "TANK_RECLAIM kind label differs ('سحب خزان' vs 'استرجاع خزان')",
+  "severity": "low",
+  "status": "different",
+  "expoEvidence": "mobile-worker/app/shift-summary.tsx:42 TANK_RECLAIM: { label: 'سحب خزان', ... }",
+  "detail": "In the by-kind breakdown the reclaim row reads 'سحب خزان' in Expo but 'استرجاع خزان' in Flutter (the shared enum label). REFILL ('تعبئة') and TANK_DELIVERY ('توصيل خزان') match. Cosmetic Arabic wording difference visible to the driver.",
+  "reason": "Could not refute. Expo shift-summary.tsx:42 labels TANK_RECLAIM as 'سحب خزان'. Flutter shift_summary_screen.dart:247 renders kind.label directly via _KindRow, and the only TANK_RECLAIM label in Flutter is the shared enum at daari_core/lib/src/models/enums.dart:64 -> tankReclaim('TANK_RECLAIM', 'استرجاع خزان'). A repo-wide grep for the label/enum confirms NO per-screen override, widget, provider, or interceptor substitutes 'سحب خزان'; every usage resolves to the enum's 'استرجاع خزان'. REFILL ('تعبئة') and TANK_DELIVERY ('توصيل خزان') match Expo exactly, isolating the reclaim row as the real difference. Genuine but cosmetic Arabic-wording divergence on a breakdown-row label; no money/flow/state impact, so severity stays low."
+ },
+ {
+  "id": "shift-summary-5",
+  "pair": "shift-summary",
+  "title": "Pull-to-refresh on the summary list is missing",
+  "severity": "low",
+  "status": "missing",
+  "expoEvidence": "mobile-worker/app/shift-summary.tsx:119-121 refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor='#1d4ed8' />}",
+  "detail": "Expo lets the driver pull down to re-fetch the shift summary (which may 404 until backend deploys, per the file header). Flutter offers retry only on the error state via EmptyState; on a successfully loaded screen there is no way to refresh the numbers without leaving and returning.",
+  "reason": "Refutation failed — the gap is real. Expo (mobile-worker/app/shift-summary.tsx:115-121) wraps the ScrollView in a RefreshControl(refreshing=isRefetching, onRefresh=refetch) so the driver can pull to re-fetch the summary. In Flutter, shift_summary_screen.dart:19-64 places a bare ListView directly inside AsyncView<ShiftSummary> with NO RefreshIndicator and no AlwaysScrollableScrollPhysics. The shared AsyncView widget (apps/driver/lib/widgets/common.dart:174-208) only renders a SkeletonList on loading, an EmptyState with a retry button on error, and the raw data builder otherwise — it provides no pull-to-refresh wrapper. A repo-wide grep for RefreshIndicator/onRefresh confirms it is NOT present anywhere in shift_summary_screen.dart nor in any shared widget/provider/router. Notably the sibling screens cash_screen.dart:20-24, earnings_screen.dart:72, history_screen.dart:82, and home_screen.dart:130 ALL wrap their lists in RefreshIndicator(onRefresh: ref.invalidate(...)) — so the established Flutter convention exists but was simply not applied to shift-summary. Severity remains low: it is a UX-convenience regression only (the numbers can still be refreshed by navigating away and back, and ref.invalidate is wired for retry); no money, auth, GPS, idempotency, or data-loss impact."
+ },
+ {
+  "id": "shift-summary-6",
+  "pair": "shift-summary",
+  "title": "shift_ended analytics event drops completedOrders/collectedCashIqd properties",
+  "severity": "low",
+  "status": "partial",
+  "expoEvidence": "mobile-worker/app/shift-summary.tsx:67-70 track(ph, 'shift_ended', { completedOrders: data?.completedOrders ?? 0, collectedCashIqd: data?.collectedCashIqd ?? 0 })",
+  "detail": "Expo tags the shift_ended event with the day's completed-order count and collected cash so analytics can report per-shift totals. Flutter fires the same event name but passes no properties, even though Analytics.capture supports a properties map and the data (data.completedOrders / data.collectedCashIqd) is in scope. Analytics-only regression, not user-visible.",
+  "reason": "Genuine gap. Flutter shift_summary_screen.dart:98 fires `Analytics.capture('shift_ended')` with NO properties. Searched the screen, daari_core analytics.dart, and shared widgets/providers — nowhere else enriches this event. Analytics.capture (analytics.dart:42-46) supports an optional `{Map<String, Object>? properties}` map and forwards it to Posthog().capture, and the data is in scope (data.completedOrders / data.collectedCashIqd are used at lines 27/29 of the same file), yet they are not passed. Expo shift-summary.tsx:67-70 tags the event with `{ completedOrders, collectedCashIqd }`. So the per-shift totals are dropped from the analytics event. Severity low confirmed: analytics-only, not user-visible."
+ },
+ {
+  "id": "van-inventory-1",
+  "pair": "van-inventory",
+  "title": "No dirty-state guard: save is always enabled and can fire a no-op POST",
+  "severity": "medium",
+  "status": "missing",
+  "expoEvidence": "van-inventory.tsx:50-53 `const dirty = hydrated && (full !== (driver?.tanksFullOnVan ?? 0) || empty !== (driver?.tanksEmptyOnVan ?? 0));` and :187 `disabled={!dirty || update.isPending}`",
+  "detail": "In Expo the Save button is disabled until the local stepper values actually differ from the server-side tanksFullOnVan/tanksEmptyOnVan. In Flutter the button is always enabled (only blocked while _saving), so a driver who opens the screen and taps Save with no changes still fires POST /drivers/me/van-inventory, overwriting/re-confirming inventory needlessly. The guard is a real behavioral feature lost in the rebuild.",
+  "reason": "Confirmed real gap. Flutter van_inventory_screen.dart tracks only _full/_empty/_hydrated/_saving/_userEdited — no `dirty` computation against driver.tanksFullOnVan/tanksEmptyOnVan. Save is wired as LoadingButton(onPressed: _save, loading: _saving) at lines 94-99 with no changed-check. The shared LoadingButton in apps/driver/lib/widgets/common.dart:26 disables only on `loading` (`onPressed: loading ? null : onPressed`), never on a dirty flag. No router guard, interceptor, or core service supplies an equivalent. Expo (van-inventory.tsx:50-53,187,208-212) computes `dirty`, disables save unless dirty/pending, and shows a \"no changes to save\" hint — all three absent in Flutter. A driver opening the screen and tapping Save with no edits fires POST /drivers/me/van-inventory with unchanged values. Severity medium: it is a needless no-op re-confirm (same values re-sent), not money/auth/data-loss, so not high."
+ },
+ {
+  "id": "van-inventory-2",
+  "pair": "van-inventory",
+  "title": "Missing 'no changes to save' hint text under the button",
+  "severity": "low",
+  "status": "missing",
+  "expoEvidence": "van-inventory.tsx:208-212 `{!dirty && (<Text ...>لا توجد تغييرات لحفظها</Text>)}`",
+  "detail": "Expo shows the helper text 'لا توجد تغييرات لحفظها' beneath the Save button whenever there are no unsaved changes, telling the user why nothing will happen. Flutter has no such hint (and, per gap 1, no dirty concept at all).",
+  "reason": "Refutation failed; gap is real. Expo van-inventory.tsx:208-212 renders the helper text 'لا توجد تغييرات لحفظها' beneath the save button whenever !dirty (dirty computed at lines 50-53 by comparing local full/empty against driver.tanksFullOnVan/tanksEmptyOnVan). Flutter van_inventory_screen.dart:94-99 ends the ListView with LoadingButton and renders nothing after it — no conditional hint Text. The screen has no dirty concept at all: state is only _full/_empty/_hydrated/_saving/_userEdited, with no comparison against original server values, and the save button is always enabled. Searched the shared widget common.dart — LoadingButton (lines 6-42) only renders a spinner or icon+label, AsyncView (174-208) only handles loading/error/data; neither emits this hint. A repo-wide grep for 'لا توجد تغييرات' across mobile-flutter returns zero matches, and grep for dirty/hasChanges in the screen finds nothing. Genuinely absent. Severity remains LOW: purely cosmetic helper text, no money/auth/data-loss/GPS impact."
+ },
+ {
+  "id": "van-inventory-3",
+  "pair": "van-inventory",
+  "title": "Save success shows snackbar only; missing success Alert + auto navigate back",
+  "severity": "medium",
+  "status": "different",
+  "expoEvidence": "van-inventory.tsx:57-60 `await update.mutateAsync(...); await Haptics.notificationAsync(Success); Alert.alert('تم الحفظ ✓', 'حُدِّث جرد الشاحنة.'); router.back();`",
+  "detail": "Expo confirms the save with a modal Alert and then automatically returns the driver to the previous screen (router.back()). Flutter shows only a transient snackbar and leaves the user on the inventory screen, so the flow differs: no confirmation dialog and no auto-navigation back after a successful save.",
+  "reason": "Gap is real after thorough search. Expo van-inventory.tsx:57-60 confirms save with a modal Alert ('تم الحفظ ✓', 'حُدِّث جرد الشاحنة.') then auto-navigates via router.back(). Flutter van_inventory_screen.dart:33-49 on success only calls ref.invalidate(driverProfileProvider) + showSnack(context, 'تم حفظ جرد الفان') — a plain transient floating snackbar (common.dart:210-218, no navigation) — and stays on the inventory screen. Grep for pop/router.back/context.pop/Navigator in the screen returns no matches; the success snackbar helper, LoadingButton, AsyncView, and router contain no auto-back or confirmation-dialog logic. So Flutter has neither the modal confirmation Alert nor the auto-navigation back. Medium: UX/flow difference users notice; not money/auth/data-loss and local edits are not lost."
+ },
+ {
+  "id": "van-inventory-4",
+  "pair": "van-inventory",
+  "title": "No haptic feedback on stepper taps or save success/error",
+  "severity": "low",
+  "status": "missing",
+  "expoEvidence": "van-inventory.tsx:247 `Haptics.selectionAsync()` on each +/- bump; :58 `Haptics.notificationAsync(Success)` on save success; :62 `Haptics.notificationAsync(Error)` on save failure",
+  "detail": "Expo fires a selection haptic on every stepper increment/decrement and success/error notification haptics around the save. Flutter provides no haptic feedback for any of these interactions, a tactile-UX regression.",
+  "reason": "Real gap. Expo van-inventory.tsx fires Haptics.selectionAsync() on each stepper bump (line 247), Haptics.notificationAsync(Success) on save success (line 58), and Haptics.notificationAsync(Error) on save failure (line 62). A Hap haptics service DOES exist in Flutter core (packages/daari_core/lib/src/services/haptics.dart: tap/success/error) and is used in other driver screens (home_screen.dart:94/103, shift_summary_screen.dart:97, task_detail_screen.dart:30/107) — but it is NOT imported or called anywhere in van_inventory_screen.dart. Verified the full screen: _StepButton.onTap (266-267) calls onChanged only; the onChanged callbacks (76-91) only setState; _save (33-49) calls showSnack with no Hap.success()/Hap.error(). Also verified the shared widgets it relies on — LoadingButton and showSnack in widgets/common.dart contain no HapticFeedback/Hap calls. So no haptic fires on any of these interactions. Severity low: tactile-UX only, no money/data/auth/GPS impact."
+ },
+ {
+  "id": "van-inventory-5",
+  "pair": "van-inventory",
+  "title": "Saving state shows spinner only, dropping the 'جارٍ الحفظ…' label",
+  "severity": "low",
+  "status": "different",
+  "expoEvidence": "van-inventory.tsx:203 `{update.isPending ? 'جارٍ الحفظ…' : 'احفظ الجرد'}` — button text changes to 'جارٍ الحفظ…' while pending",
+  "detail": "While the save is in flight Expo keeps the button visible and swaps its label to 'جارٍ الحفظ…'. The shared Flutter LoadingButton replaces the entire label with a bare spinner, so the explicit 'saving' wording is lost (cosmetic).",
+  "reason": "Confirmed real but cosmetic. Expo (van-inventory.tsx:203) keeps the save button visible during the pending state and only swaps its text to 'جارٍ الحفظ…' (icon + gradient remain). Flutter wires the save button via shared LoadingButton(loading: _saving) at van_inventory_screen.dart:94-99; that widget (apps/driver/lib/widgets/common.dart:27-39) replaces the ENTIRE label/icon Row with a bare CircularProgressIndicator while loading — no text. I searched the shared surface for any equivalent saving-label behavior: common.dart is the only button widget (no other variant, no interceptor/provider that injects a 'saving' label), and the screen passes a static label 'حفظ الجرد'. So the explicit 'جارٍ الحفظ…' wording is genuinely absent. Severity stays low: a spinner still communicates progress and the button is disabled during save, so only the literal word 'saving' is lost — no money, auth, or data-loss impact."
+ },
+ {
+  "id": "walkin-1",
+  "pair": "walkin",
+  "title": "Tank QR code not shown in search results or selected-customer card",
+  "severity": "medium",
+  "status": "missing",
+  "expoEvidence": "walkin.tsx:285-289 selected card: `selected.tanks?.[0] && (<Text>QR: {selected.tanks[0].qrCode}</Text>)`; walkin.tsx:378-380 search row subtitle: `{c.district} • {c.tanks?.[0]?.qrCode ?? '—'}`; the whole UX tip at :205 instructs the driver to search by tank number (e.g. T-1001) to disambiguate same-name customers.",
+  "detail": "Expo surfaces the customer's tank QR code in both the search list and the confirmation card so the driver can confirm the right physical tank, which the in-app tip explicitly relies on to avoid confusing same-name customers. Flutter never renders qrCode anywhere on the walk-in screen, dropping a disambiguation signal the reference flow depends on.",
+  "reason": "Real gap, refutation fails. Expo renders the tank QR code in two places on the walk-in screen: the search-result row subtitle (walkin.tsx:378-380, `{c.district} • {c.tanks?.[0]?.qrCode ?? '—'}`) and the selected-customer confirmation card (walkin.tsx:285-289, `QR: {selected.tanks[0].qrCode}`), and the in-app tip at walkin.tsx:205 explicitly tells the driver to search by tank number (e.g. T-1001) to disambiguate same-name customers. I read the entire Flutter walkin_screen.dart: the private _CustomerTile subtitle (walkin_screen.dart:196-211) shows only phone + district, and the _WalkinForm selected card (walkin_screen.dart:329-372) shows name/phone/address and optional default price — qrCode is rendered nowhere. These are screen-private widgets, not shared, so there is no delegation to a core widget. A repo-wide grep for qrCode across daari_core and the driver app shows it rendered only in task_detail_screen.dart:324-325 (a different flow); it is never shown on the walk-in screen or in any shared customer tile/card. The data is confirmed available (CustomerProfile.tanks at customer_profile.dart:35/58 is populated with Tank.qrCode at tank.dart:17/26), so this is purely a missing render, not a data limitation. Severity medium: it drops a disambiguation signal the reference flow's own tip depends on, but it is not money/auth/GPS/data-loss."
+ },
+ {
+  "id": "walkin-2",
+  "pair": "walkin",
+  "title": "Last-refill date row missing from selected-customer card",
+  "severity": "low",
+  "status": "missing",
+  "expoEvidence": "walkin.tsx:290-297 selected card: row labeled `آخر تعبئة` showing `selected.lastRefillAt ? new Date(...).toLocaleDateString('ar-IQ') : '—'`.",
+  "detail": "Expo shows the customer's last refill date on the confirmation card to give the driver context before billing a walk-in refill. Flutter omits this field entirely.",
+  "reason": "Confirmed real gap. Expo walkin.tsx:290-297 renders a row labeled آخر تعبئة on the selected-customer card showing selected.lastRefillAt formatted via toLocaleDateString('ar-IQ'), or '—' when null. The Flutter selected-customer card in _WalkinForm.build (walkin_screen.dart:329-372) renders only: fullName (334), phone (340), addressLine (344-350, conditional), and a refill-price row (353-369, conditional). It never references customer.lastRefillAt. CustomerProfile.lastRefillAt exists (customer_profile.dart:42) and is parsed (61) but is unused on this driver screen. A repo-wide grep for lastRefill confirms lastRefillAt is consumed only by the customer app (home_screen.dart:135 via RefillStatusStrip) and admin (stock_screen.dart), and the shared RefillStatusStrip widget is not used anywhere in the driver app. No shared driver/customer card widget, provider, interceptor, or router path renders the last-refill date for the walk-in flow. So the driver loses the last-refill context the Expo card provides before billing a walk-in refill. Severity low is correct: it is informational context only, no money/cash-handover, idempotency, auth, GPS, or data-loss impact; the refill still completes identically without it."
+ },
+ {
+  "id": "walkin-3",
+  "pair": "walkin",
+  "title": "Picker 'tip' info footer (search-by-tank-number guidance) not present",
+  "severity": "low",
+  "status": "missing",
+  "expoEvidence": "walkin.tsx:188-209 info footer card with lightbulb icon, title `نصيحة`, and body advising to search walk-ins by tank number (T-1001) to avoid confusion between customers with the same name.",
+  "detail": "Expo presents an explicit tip coaching the driver to search by tank number to disambiguate same-name customers; Flutter has no equivalent guidance, and its lookup hint text even omits 'tank number' as a search key (says only name/phone).",
+  "reason": "Could not refute. The Expo tip footer (walkin.tsx:188-209) — lightbulb icon + title نصيحة + body coaching the driver to search by tank number (T-1001) to disambiguate same-name customers — has no equivalent anywhere in Flutter. walkin_screen.dart lookup tab (:99-161) shows only a one-line hint 'ابحث عن الزبون بالاسم أو الهاتف...' (:102-105) and even omits tank number as a search key (search hint :112 is 'مثال: أم محمد أو 0770...', no T-xxxx). The register tab's info box (:562-583) is about GPS/lab-review, unrelated. Grep across the entire mobile-flutter tree for رقم الخزان / نصيحة / T-1001 / lightbulb returns zero matches in any driver file; no shared widget, core service, provider, or router renders this tip. customerSearchProvider (providers.dart:64-68) doc and UI never surface tank-number search guidance. Genuinely absent. Severity is low: purely informational coaching text with no money/auth/data/flow impact."
+ },
+ {
+  "id": "walkin-4",
+  "pair": "walkin",
+  "title": "Walk-in liters: required & defaulted in Expo, optional in Flutter",
+  "severity": "medium",
+  "status": "different",
+  "expoEvidence": "walkin.tsx:222 `const [liters, setLiters] = useState('500')` (pre-filled default); walkin.tsx:242-247 validates `litersNum <= 0` and blocks submit with `أدخل عدد لترات صحيح أكبر من صفر`; always sends `walkinLiters: litersNum`. Comment at :218-221 stresses liters must be real so manager revenue rows are correct.",
+  "detail": "Expo forces a non-empty, >0 liters value (defaulted to 500) on every walk-in so revenue/volume reporting is accurate — the code comment calls out that hardcoded/missing liters previously made manager dashboard rows wrong. Flutter makes liters optional with an empty default, so a driver can submit a walk-in with no liters, regressing the data-quality guarantee the Expo screen was specifically changed to enforce.",
+  "reason": "Could not refute — the gap is real and present everywhere I looked. Flutter walkin_screen.dart:231 starts _litersController empty; the field is labeled \"عدد اللترات (اختياري)\" (optional) at :386; _confirm (:258-266) treats empty liters as valid (`liters` stays null) and builds WalkinRefillInput(walkinLiters: liters). The shared model daari_core/lib/src/models/order_inputs.dart confirms `int? walkinLiters` (:91), optional in the constructor (:83), and toJson() at :101 OMITS the field entirely when null. orders_repository.dart:170-176 passes input.toJson() straight through with no default or validation. So a driver can submit a walk-in with no liters → backend receives no walkinLiters → manager revenue/volume rows are blank, exactly the regression the Expo comment (walkin.tsx:218-221) warned about. Expo by contrast defaults to '500' (walkin.tsx:222), validates litersNum <= 0 and blocks submit (:244-247), and ALWAYS sends walkinLiters: litersNum (:256). No shared widget, core service, router guard, interceptor, or provider supplies a default or enforces >0 liters anywhere in Flutter. Severity stays medium (not high): the paid amount IS still validated > 0 in Flutter (:254), so it is a data-quality/reporting-accuracy regression, not a cash-handover or auth break."
+ },
+ {
+  "id": "walkin-5",
+  "pair": "walkin",
+  "title": "Search list subtitle drops tank QR (shows only district/phone)",
+  "severity": "low",
+  "status": "different",
+  "expoEvidence": "walkin.tsx:378-380 each result row subtitle: `{c.district} • {c.tanks?.[0]?.qrCode ?? '—'}` — district AND tank QR.",
+  "detail": "Expo's result rows combine district + tank QR so the driver can pick the correct registered tank directly from the list; Flutter's rows show phone + district, omitting the QR that the reference list intentionally surfaces.",
+  "reason": "Confirmed real gap. Expo walkin.tsx:378-380 renders each search-result subtitle as `{c.district} • {c.tanks?.[0]?.qrCode ?? '—'}` — district AND the first tank's QR code (with '—' fallback). Flutter's _CustomerTile subtitle (walkin_screen.dart:196-211) instead renders customer.phone (line 201) then customer.district (line 205); there is NO qrCode segment. I verified the data is available in Flutter: CustomerProfile carries `final List<Tank> tanks` (customer_profile.dart:35) parsed via `tanks: P.list(json['tanks'], Tank.fromJson)` (line 58), Tank has a qrCode field (driver_task/tank model + types.ts:55,61 parity), and customer_repository.dart:150-167 search() parses each row through CustomerProfile.fromJson, so tanks ARE populated. Despite the data being present, the tile deliberately omits the QR. Searched the screen, CustomerProfile/Tank models, providers.dart customerSearchProvider, and customer_repository.search — the tank QR is genuinely absent from the Flutter search-row subtitle. Severity low: this is a list-row informational/label omission only; the driver still selects the correct customer by name/phone/district and the walkin refill flow proceeds unaffected (the form itself does not require QR). No money, auth, or data-loss impact — purely a surfaced-info difference in the list composition."
+ }
+]

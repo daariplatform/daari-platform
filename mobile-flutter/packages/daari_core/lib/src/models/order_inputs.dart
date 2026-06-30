@@ -1,3 +1,17 @@
+import 'dart:math';
+
+/// مُعرِّف طلب عميل (بصيغة UUIDv4) لإزالة التكرار على الخادم. يُولَّد **مرّة**
+/// عند الإرسال ويُعاد استخدامه لو حُفظت العملية في الطابور وأُعيد إرسالها —
+/// فيرجع الخادم الصفّ الأصلي بدل تسجيل العملية مرّتين (منع مزدوج الشحن).
+String newClientRequestId() {
+  final r = Random.secure();
+  String hex(int len) =>
+      List.generate(len, (_) => r.nextInt(16).toRadixString(16)).join();
+  // النِبّل 13 = «4» (الإصدار)، والنِبّل 17 من 8..b (المتغيّر).
+  return '${hex(8)}-${hex(4)}-4${hex(3)}-'
+      '${(8 + r.nextInt(4)).toRadixString(16)}${hex(3)}-${hex(12)}';
+}
+
 /// طريقة الدفع — نقدي بحكم العمل، لكن نبقي الاتحاد لتوافق الباك إند.
 enum PaymentMethod {
   cash('CASH', 'نقداً'),
@@ -81,6 +95,7 @@ class WalkinRefillInput {
     required this.completionLng,
     required this.completionLat,
     this.walkinLiters,
+    this.clientRequestId,
   });
 
   final String customerId;
@@ -89,6 +104,10 @@ class WalkinRefillInput {
   final double completionLng;
   final double completionLat;
   final int? walkinLiters;
+
+  /// مفتاح إزالة التكرار على الخادم (UUID) — يمنع تسجيل البيع مرّتين عند إعادة
+  /// إرسال الطابور بعد الاتصال.
+  final String? clientRequestId;
 
   Map<String, dynamic> toJson() {
     final body = <String, dynamic>{
@@ -99,6 +118,7 @@ class WalkinRefillInput {
       'completionLat': completionLat,
     };
     if (walkinLiters != null) body['walkinLiters'] = walkinLiters;
+    if (clientRequestId != null) body['clientRequestId'] = clientRequestId;
     return body;
   }
 }

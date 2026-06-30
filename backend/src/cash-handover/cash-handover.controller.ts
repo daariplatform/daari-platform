@@ -23,6 +23,11 @@ class CreateHandoverDto {
 
   @IsOptional() @IsString() @MaxLength(300)
   note?: string;
+
+  // Idempotency key (UUID) — guards a double-tap / retried handover from being
+  // recorded twice. Optional → legacy clients omit it.
+  @IsOptional() @IsString() @MaxLength(64)
+  clientRequestId?: string;
 }
 
 /**
@@ -49,6 +54,7 @@ export class DriverCashController {
     return this.cash.createForDriver(driver.tenantId, driver.id, {
       amountIqd: dto.amountIqd,
       note: dto.note,
+      clientRequestId: dto.clientRequestId,
     });
   }
 

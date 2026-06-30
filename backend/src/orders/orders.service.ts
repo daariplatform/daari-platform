@@ -1199,28 +1199,56 @@ export class OrdersService {
       proofPhotoUrl?: string;
       completionLng?: number;
       completionLat?: number;
+      clientRequestId?: string;
     },
   ) {
-    return this.prisma.refillOrder.create({
-      data: {
-        tenantId,
-        driverId,
-        customerId: input.customerId ?? null,
-        kind: 'WALKIN_SALE',
-        status: RefillOrderStatus.COMPLETED,
-        priceIqd: input.paidAmountIqd,
-        paidAmountIqd: input.paidAmountIqd,
-        paymentMethod: input.paymentMethod,
-        proofPhotoUrl: input.proofPhotoUrl,
-        completionLng: input.completionLng,
-        completionLat: input.completionLat,
-        walkinBuyerName: input.walkinBuyerName,
-        walkinBuyerPhone: input.walkinBuyerPhone,
-        walkinLiters: input.walkinLiters,
-        requestedAt: new Date(),
-        completedAt: new Date(),
-      },
-    });
+    // Idempotency: a walk-in flushed twice from the driver's offline queue must
+    // not double-record the sale. When the client supplies a clientRequestId we
+    // return the row already created for that key; the @@unique([tenantId,
+    // clientRequestId]) constraint also guards against a concurrent-flush race.
+    const clientRequestId = input.clientRequestId?.trim() || null;
+    if (clientRequestId) {
+      const existing = await this.prisma.refillOrder.findFirst({
+        where: { tenantId, clientRequestId },
+      });
+      if (existing) return existing;
+    }
+    try {
+      return await this.prisma.refillOrder.create({
+        data: {
+          tenantId,
+          driverId,
+          customerId: input.customerId ?? null,
+          kind: 'WALKIN_SALE',
+          status: RefillOrderStatus.COMPLETED,
+          priceIqd: input.paidAmountIqd,
+          paidAmountIqd: input.paidAmountIqd,
+          paymentMethod: input.paymentMethod,
+          proofPhotoUrl: input.proofPhotoUrl,
+          completionLng: input.completionLng,
+          completionLat: input.completionLat,
+          walkinBuyerName: input.walkinBuyerName,
+          walkinBuyerPhone: input.walkinBuyerPhone,
+          walkinLiters: input.walkinLiters,
+          clientRequestId,
+          requestedAt: new Date(),
+          completedAt: new Date(),
+        },
+      });
+    } catch (e) {
+      // A concurrent flush won the unique key — return the original row.
+      if (
+        clientRequestId &&
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
+        const existing = await this.prisma.refillOrder.findFirst({
+          where: { tenantId, clientRequestId },
+        });
+        if (existing) return existing;
+      }
+      throw e;
+    }
   }
 }
 

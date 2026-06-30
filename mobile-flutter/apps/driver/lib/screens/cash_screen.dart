@@ -85,12 +85,17 @@ class _SummarySection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
-        _StatCard(
-          icon: Icons.savings,
-          label: 'المتبقّي بانتظار التسليم',
-          value: pending,
-          color: pending > 0 ? AppColors.warn600 : AppColors.success,
-          wide: true,
+        // البطاقة تنبض عند وجود نقد بانتظار التسليم لجذب الانتباه (يطابق Expo).
+        _PulseGlow(
+          active: pending > 0,
+          color: AppColors.warn600,
+          child: _StatCard(
+            icon: Icons.savings,
+            label: 'المتبقّي بانتظار التسليم',
+            value: pending,
+            color: pending > 0 ? AppColors.warn600 : AppColors.success,
+            wide: true,
+          ),
         ),
         const SizedBox(height: 14),
         LoadingButton(
@@ -175,6 +180,58 @@ class _StatCard extends StatelessWidget {
   }
 }
 
+/// غلاف يضيف هالة نابضة حول طفله عند [active] (لفت الانتباه لنقد معلّق).
+class _PulseGlow extends StatefulWidget {
+  const _PulseGlow({
+    required this.child,
+    required this.active,
+    required this.color,
+  });
+
+  final Widget child;
+  final bool active;
+  final Color color;
+
+  @override
+  State<_PulseGlow> createState() => _PulseGlowState();
+}
+
+class _PulseGlowState extends State<_PulseGlow>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.active) return widget.child;
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, child) => DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+          boxShadow: [
+            BoxShadow(
+              color: widget.color.withValues(alpha: 0.10 + 0.18 * _c.value),
+              blurRadius: 8 + 12 * _c.value,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: child,
+      ),
+      child: widget.child,
+    );
+  }
+}
+
 class _IconBadge extends StatelessWidget {
   const _IconBadge({required this.icon, required this.color});
 
@@ -236,13 +293,17 @@ class _HandoverDialogState extends ConsumerState<_HandoverDialog> {
       await ref.read(driverRepositoryProvider).handoverCash(
             amountIqd: amount,
             note: _note.text.trim().isEmpty ? null : _note.text.trim(),
+            // مفتاح إزالة تكرار — يمنع تسجيل التسليم مرّتين عند إعادة المحاولة.
+            clientRequestId: newClientRequestId(),
           );
       ref.invalidate(cashSummaryProvider);
       ref.invalidate(cashHandoversProvider);
+      Hap.success();
       if (!mounted) return;
       Navigator.of(context).pop();
       showSnack(context, 'سُجّل تسليم النقد. بانتظار تأكيد المعمل.');
     } on ApiException catch (e) {
+      Hap.error();
       if (!mounted) return;
       setState(() => _submitting = false);
       showSnack(context, e.message, error: true);
@@ -368,7 +429,7 @@ class _HandoverRow extends StatelessWidget {
                 Text(
                   handover.createdAt == null
                       ? 'غير مؤرّخ'
-                      : Fmt.arabicDateTime(handover.createdAt),
+                      : Fmt.arabicDate(handover.createdAt),
                   style: const TextStyle(fontSize: 12, color: AppColors.muted),
                 ),
                 if (handover.note != null && handover.note!.isNotEmpty) ...[

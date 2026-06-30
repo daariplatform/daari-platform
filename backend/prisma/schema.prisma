@@ -496,6 +496,13 @@ model RefillOrder {
   walkinBuyerPhone String?
   walkinLiters     Int?
 
+  // Idempotency key supplied by the offline client (a UUID generated at enqueue
+  // time). A walk-in sale flushed twice from the offline queue dedupes to the
+  // original row instead of double-recording revenue. Nullable on purpose:
+  // legacy clients (Expo) and server-created rows send no key, and Postgres
+  // treats NULLs as distinct in the @@unique below, so they are never blocked.
+  clientRequestId String?
+
   tankId String?
   tank   Tank?   @relation(fields: [tankId], references: [id])
 
@@ -557,6 +564,7 @@ model RefillOrder {
 
   rating Rating?
 
+  @@unique([tenantId, clientRequestId])
   @@index([tenantId, status])
   @@index([customerId, requestedAt])
   @@index([driverId, status])
@@ -638,10 +646,15 @@ model CashHandover {
   driver      Driver             @relation(fields: [driverId], references: [id], onDelete: Cascade)
   amountIqd   Int
   note        String?
+  // Idempotency key from the client (see RefillOrder.clientRequestId). Guards a
+  // double-tap / retried handover from being recorded twice. Nullable → legacy
+  // clients unaffected.
+  clientRequestId String?
   status      CashHandoverStatus @default(PENDING)
   createdAt   DateTime           @default(now())
   confirmedAt DateTime?
 
+  @@unique([tenantId, clientRequestId])
   @@index([tenantId, status])
   @@index([driverId, createdAt])
 }

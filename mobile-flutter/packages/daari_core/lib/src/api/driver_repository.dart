@@ -70,10 +70,16 @@ class DriverRepository {
     }
   }
 
-  Future<void> handoverCash({required int amountIqd, String? note}) async {
+  Future<void> handoverCash({
+    required int amountIqd,
+    String? note,
+    String? clientRequestId,
+  }) async {
     try {
       final body = <String, dynamic>{'amountIqd': amountIqd};
       if (note != null && note.isNotEmpty) body['note'] = note;
+      // مفتاح إزالة التكرار على الخادم — يمنع تسجيل التسليم مرّتين عند إعادة المحاولة.
+      if (clientRequestId != null) body['clientRequestId'] = clientRequestId;
       await _dio.post<void>('/drivers/me/cash-handover', data: body);
     } on DioException catch (e) {
       throw ApiException.fromDio(e);

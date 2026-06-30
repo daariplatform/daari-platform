@@ -59,6 +59,7 @@ class RefillOrder {
     this.rating,
     this.deliveryLat,
     this.deliveryLng,
+    this.customerName,
   });
 
   final String id;
@@ -86,6 +87,11 @@ class RefillOrder {
   /// إحداثيات وجهة التوصيل (لحساب الـ ETA في شاشة التتبّع).
   final double? deliveryLat;
   final double? deliveryLng;
+
+  /// اسم الزبون (من `customer.fullName` على نقاط السجلّ/التفاصيل)؛ null للطلبات
+  /// بلا زبون مرتبط أو حين لا تُرجِعه النقطة. (الخادم يضمّ `customer` في
+  /// `/orders/me/history` — تحقّق خصومي: `Customer.fullName` حقل scalar.)
+  final String? customerName;
 
   bool get isRated => rating != null;
 
@@ -135,6 +141,7 @@ class RefillOrder {
       rating: ratingJson == null ? null : OrderRating.fromJson(ratingJson),
       deliveryLat: dLat == null ? null : P.dbl(dLat),
       deliveryLng: dLng == null ? null : P.dbl(dLng),
+      customerName: (customer?['fullName'] as String?)?.trim(),
     );
   }
 }

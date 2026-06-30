@@ -13,6 +13,7 @@ import {
 interface CreateHandoverInput {
   amountIqd: number;
   note?: string;
+  clientRequestId?: string;
 }
 
 @Injectable()
@@ -27,15 +28,40 @@ export class CashHandoverService {
     driverId: string,
     input: CreateHandoverInput,
   ) {
-    return this.prisma.cashHandover.create({
-      data: {
-        tenantId,
-        driverId,
-        amountIqd: input.amountIqd,
-        note: input.note,
-        status: CashHandoverStatus.PENDING,
-      },
-    });
+    // Idempotency: a retried / double-tapped handover must not record twice.
+    // When a clientRequestId is supplied we return the row already created for
+    // it; the @@unique([tenantId, clientRequestId]) also guards a race.
+    const clientRequestId = input.clientRequestId?.trim() || null;
+    if (clientRequestId) {
+      const existing = await this.prisma.cashHandover.findFirst({
+        where: { tenantId, clientRequestId },
+      });
+      if (existing) return existing;
+    }
+    try {
+      return await this.prisma.cashHandover.create({
+        data: {
+          tenantId,
+          driverId,
+          amountIqd: input.amountIqd,
+          note: input.note,
+          clientRequestId,
+          status: CashHandoverStatus.PENDING,
+        },
+      });
+    } catch (e) {
+      if (
+        clientRequestId &&
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
+        const existing = await this.prisma.cashHandover.findFirst({
+          where: { tenantId, clientRequestId },
+        });
+        if (existing) return existing;
+      }
+      throw e;
+    }
   }
 
   /** A driver's own handovers, newest first. */

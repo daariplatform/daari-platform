@@ -21,6 +21,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _obscure = true;
   bool _loading = false;
 
+  /// صلاحية المدخلات لحظياً — يُعطَّل زرّ الدخول حتى تصحّ (يطابق Expo).
+  bool get _canSubmit =>
+      Validators.isPhone(_phone.text.trim()) &&
+      Validators.isPassword(_password.text);
+
+  @override
+  void initState() {
+    super.initState();
+    _phone.addListener(_onChanged);
+    _password.addListener(_onChanged);
+  }
+
+  void _onChanged() => setState(() {});
+
   @override
   void dispose() {
     _phone.dispose();
@@ -46,6 +60,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await ref
           .read(authControllerProvider.notifier)
           .login(phone: phone, password: password);
+      Analytics.capture('login_success', properties: {'role': 'driver'});
       if (!mounted) return;
 
       // بدء الوردية best-effort: لا يُفشل الدخول إن رُفض إذن الموقع.
@@ -62,10 +77,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       context.go('/home');
     } on ApiException catch (e) {
       if (!mounted) return;
-      showSnack(context, e.message, error: true);
+      showSnack(context, _loginError(e), error: true);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// رسائل خطأ خاصّة بسياق الدخول (تتفادى رسالة 401 العامّة المضلّلة «الجلسة
+  /// منتهية»، وتعطي إرشاد المعمل لإعادة التعيين — حسابات السائقين يُنشئها المعمل).
+  String _loginError(ApiException e) {
+    if (e.isRateLimited) {
+      return 'محاولات كثيرة. حاول بعد ١٥ دقيقة.';
+    }
+    if (e.isUnauthorized) {
+      return 'بيانات الدخول غير صحيحة. تواصل مع المعمل لإعادة تعيين كلمة المرور.';
+    }
+    return e.message;
   }
 
   /// دخول تجريبي (وضع العرض) — بلا تشغيل وردية كي لا يُطلب إذن الموقع.
@@ -160,7 +187,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         label: 'دخول',
                         icon: Icons.login,
                         loading: _loading,
-                        onPressed: _submit,
+                        onPressed: _canSubmit ? _submit : null,
                       ),
                       const SizedBox(height: 10),
                       Center(

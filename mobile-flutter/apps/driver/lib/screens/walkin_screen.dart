@@ -100,8 +100,30 @@ class _LookupTabState extends ConsumerState<_LookupTab> {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
         const Text(
-          'ابحث عن الزبون بالاسم أو الهاتف ثم اختره لإتمام التعبئة.',
+          'ابحث عن الزبون بالاسم أو الهاتف أو رقم الخزّان ثم اختره لإتمام التعبئة.',
           style: TextStyle(fontSize: 13, color: AppColors.slate),
+        ),
+        const SizedBox(height: 8),
+        // نصيحة: البحث برقم الخزّان يميّز الزبائن المتشابهين بالاسم (يطابق Expo).
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.water100,
+            borderRadius: BorderRadius.circular(AppTheme.radiusInput),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.lightbulb_outline,
+                  size: 16, color: AppColors.water700),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'نصيحة: ابحث برقم الخزّان لتمييز الزبائن المتشابهين بالاسم.',
+                  style: TextStyle(fontSize: 12, color: AppColors.water700),
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         TextField(
@@ -109,7 +131,7 @@ class _LookupTabState extends ConsumerState<_LookupTab> {
           textInputAction: TextInputAction.search,
           onChanged: (v) => setState(() => _query = v),
           decoration: InputDecoration(
-            hintText: 'مثال: أم محمد أو 0770...',
+            hintText: 'مثال: أم محمد أو 0770... أو رقم الخزّان',
             prefixIcon: const Icon(Icons.search),
             suffixIcon: _query.isEmpty
                 ? null
@@ -207,6 +229,23 @@ class _CustomerTile extends StatelessWidget {
                   customer.district,
                   style: const TextStyle(fontSize: 12, color: AppColors.muted),
                 ),
+              // رمز QR للخزّان لتمييز الزبائن المتشابهين بالاسم (يطابق Expo).
+              if (customer.tanks.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.qr_code_2,
+                          size: 12, color: AppColors.muted),
+                      const SizedBox(width: 3),
+                      Text(
+                        customer.tanks.first.qrCode,
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.muted),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
           trailing: const Icon(Icons.chevron_left, color: AppColors.muted),
@@ -239,6 +278,8 @@ class _WalkinFormState extends ConsumerState<_WalkinForm> {
           ? widget.customer.refillPriceIqd.toString()
           : '',
     );
+    // لترات افتراضية 500 وإلزامية — تصحّ تقارير الإيراد/الحجم (يطابق Expo).
+    _litersController.text = '500';
   }
 
   @override
@@ -255,14 +296,11 @@ class _WalkinFormState extends ConsumerState<_WalkinForm> {
       showSnack(context, 'أدخل مبلغاً أكبر من صفر', error: true);
       return;
     }
-    int? liters;
-    final litersText = _litersController.text.trim();
-    if (litersText.isNotEmpty) {
-      liters = int.tryParse(litersText);
-      if (liters == null || liters <= 0) {
-        showSnack(context, 'عدد اللترات غير صحيح', error: true);
-        return;
-      }
+    // اللترات إلزامية (>0) لصحّة تقارير الإيراد/الحجم لدى المعمل (يطابق Expo).
+    final liters = int.tryParse(_litersController.text.trim());
+    if (liters == null || liters <= 0) {
+      showSnack(context, 'أدخل عدد لترات صحيحاً (أكبر من صفر)', error: true);
+      return;
     }
 
     setState(() => _submitting = true);
@@ -282,6 +320,8 @@ class _WalkinFormState extends ConsumerState<_WalkinForm> {
         completionLng: coords.lng,
         completionLat: coords.lat,
         walkinLiters: liters,
+        // مفتاح ثابت للإرسال المباشر وللطابور معاً → الخادم يُزيل أي تكرار.
+        clientRequestId: newClientRequestId(),
       );
       pendingBody = input.toJson();
       await ref.read(ordersRepositoryProvider).walkinRefill(input);
@@ -295,9 +335,14 @@ class _WalkinFormState extends ConsumerState<_WalkinForm> {
     } on ApiException catch (e) {
       // فشل شبكة → احفظ البيع في الطابور (لا يُفقَد).
       if (e.isNetwork && pendingBody != null) {
-        await ref
-            .read(offlineQueueProvider)
-            .enqueue('POST', '/orders/walkin-refill', pendingBody);
+        // مفتاح إزالة التكرار = الزبون + المبلغ → بيعان متطابقان أوفلاين لنفس
+        // الزبون لا يُدرَجان مرّتين (منع مزدوج شحن البيع الفوري على العميل).
+        await ref.read(offlineQueueProvider).enqueue(
+              'POST',
+              '/orders/walkin-refill',
+              pendingBody,
+              dedupeKey: 'walkin:${widget.customer.id}:$amount',
+            );
         if (!mounted) return;
         ref.invalidate(historyProvider);
         showSnack(context,
@@ -348,6 +393,30 @@ class _WalkinFormState extends ConsumerState<_WalkinForm> {
                   style: const TextStyle(fontSize: 13, color: AppColors.slate),
                 ),
               ],
+              // رمز QR للخزّان لتأكيد الخزّان الصحيح (يطابق Expo).
+              if (c.tanks.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    const Icon(Icons.qr_code_2,
+                        size: 15, color: AppColors.slate),
+                    const SizedBox(width: 4),
+                    Text(
+                      c.tanks.map((t) => t.qrCode).join(' · '),
+                      style:
+                          const TextStyle(fontSize: 13, color: AppColors.slate),
+                    ),
+                  ],
+                ),
+              ],
+              // آخر تعبئة — سياق للسائق قبل البيع الفوري (يطابق Expo).
+              if (c.lastRefillAt != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'آخر تعبئة: ${Fmt.arabicDate(c.lastRefillAt!)}',
+                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                ),
+              ],
               // نتائج البحث لا تحمل سعر المعمل (refillPriceIqd خاصّ بـ /customers/me)،
               // فلا نعرض «0 د.ع» مضلِّلاً — نُظهر الصفّ فقط حين يتوفّر سعر فعلي.
               if (c.refillPriceIqd > 0) ...[
@@ -383,7 +452,7 @@ class _WalkinFormState extends ConsumerState<_WalkinForm> {
               ),
               const SizedBox(height: 12),
               LabeledField(
-                label: 'عدد اللترات (اختياري)',
+                label: 'عدد اللترات',
                 controller: _litersController,
                 hint: '500',
                 keyboardType: TextInputType.number,

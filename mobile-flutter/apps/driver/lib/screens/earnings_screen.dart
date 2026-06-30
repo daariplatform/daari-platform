@@ -24,7 +24,17 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
     final earnings = ref.watch(earningsProvider(_period));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('أرباحي')),
+      appBar: AppBar(
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('أرباحي'),
+            Text('عمولاتك وبونصك يوماً بيوم',
+                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w400)),
+          ],
+        ),
+      ),
       body: Column(
         children: [
           Padding(
@@ -39,6 +49,7 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
                 selected: {_period},
                 showSelectedIcon: false,
                 onSelectionChanged: (selection) {
+                  Hap.tap();
                   setState(() => _period = selection.first);
                 },
               ),
@@ -49,14 +60,6 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
               value: earnings,
               onRetry: () => ref.invalidate(earningsProvider(_period)),
               data: (days) {
-                if (days.isEmpty) {
-                  return const EmptyState(
-                    icon: Icons.insights_outlined,
-                    title: 'لا توجد أرباح في هذه الفترة',
-                    message: 'عند إكمال المهام، ستظهر عمولاتك وبونصك هنا.',
-                  );
-                }
-
                 final totalCommission =
                     days.fold<int>(0, (s, d) => s + d.commissionIqd);
                 final totalBonus =
@@ -69,6 +72,31 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
                   (m, d) => d.totalIqd > m ? d.totalIqd : m,
                 );
 
+                // السلسلة تأتي مملوءة بأصفار غالباً، فالحالة الفارغة الحقيقية هي
+                // total==0 لا days.isEmpty: نُبقي البطل (يعرض 0) ونستبدل جسم الرسم
+                // برسالة فارغة (يطابق Expo) بدل إخفاء كل شيء.
+                if (days.isEmpty || total == 0) {
+                  return RefreshIndicator(
+                    onRefresh: () async =>
+                        ref.invalidate(earningsProvider(_period)),
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+                      children: const [
+                        _TotalHero(
+                            total: 0, commission: 0, bonus: 0, orders: 0),
+                        SizedBox(height: 24),
+                        EmptyState(
+                          icon: Icons.insights_outlined,
+                          title: 'لا توجد أرباح في هذه الفترة',
+                          message:
+                              'عند إكمال المهام، ستظهر عمولاتك وبونصك هنا.',
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
                 return RefreshIndicator(
                   onRefresh: () async =>
                       ref.invalidate(earningsProvider(_period)),
@@ -76,17 +104,22 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
                     children: [
-                      _TotalHero(
-                        total: total,
-                        commission: totalCommission,
-                        bonus: totalBonus,
-                        orders: totalOrders,
+                      _FadeSlideIn(
+                        child: _TotalHero(
+                          total: total,
+                          commission: totalCommission,
+                          bonus: totalBonus,
+                          orders: totalOrders,
+                        ),
                       ),
                       const SizedBox(height: 16),
-                      _BarChartCard(
-                        days: days,
-                        maxTotal: maxTotal,
-                        isMonth: _period == 'month',
+                      _FadeSlideIn(
+                        delayMs: 90,
+                        child: _BarChartCard(
+                          days: days,
+                          maxTotal: maxTotal,
+                          isMonth: _period == 'month',
+                        ),
                       ),
                       const SizedBox(height: 16),
                       const Text(
@@ -108,6 +141,28 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// دخول بسيط بتلاشٍ + انزلاق لأسفل (FadeInDown) — لمسة حركة عند التحميل.
+class _FadeSlideIn extends StatelessWidget {
+  const _FadeSlideIn({required this.child, this.delayMs = 0});
+
+  final Widget child;
+  final int delayMs;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 380 + delayMs),
+      curve: Curves.easeOut,
+      builder: (_, t, child) => Opacity(
+        opacity: t.clamp(0.0, 1.0),
+        child: Transform.translate(offset: Offset(0, (1 - t) * -12), child: child),
+      ),
+      child: child,
     );
   }
 }
@@ -252,7 +307,9 @@ class _BarChartCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final barWidth = isMonth ? 12.0 : 26.0;
     final gap = isMonth ? 6.0 : 10.0;
-    final maxBarHeight = _chartHeight - _labelArea;
+    const topLabelArea = 14.0; // مساحة قيمة العمود فوقه (عرض الأسبوع).
+    final maxBarHeight =
+        _chartHeight - _labelArea - (isMonth ? 0.0 : topLabelArea);
 
     final bars = <Widget>[];
     for (var i = 0; i < days.length; i++) {
@@ -275,20 +332,40 @@ class _BarChartCard extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            Container(
-              width: barWidth,
-              height: barHeight,
-              decoration: BoxDecoration(
-                gradient: day.totalIqd > 0
-                    ? const LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [AppColors.water400, AppColors.water600],
-                      )
-                    : null,
-                color: day.totalIqd > 0 ? null : AppColors.line,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(6),
+            // قيمة العمود بالآلاف فوقه (عرض الأسبوع فقط) — earnings-1.
+            if (!isMonth)
+              SizedBox(
+                height: topLabelArea,
+                child: Text(
+                  day.totalIqd > 0 ? '${(day.totalIqd / 1000).round()}ك' : '',
+                  maxLines: 1,
+                  style: const TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.water700,
+                  ),
+                ),
+              ),
+            // نموّ العمود من الصفر بتأخير متدرّج بسيط — earnings-2.
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: barHeight),
+              duration: Duration(milliseconds: 350 + i * 28),
+              curve: Curves.easeOutCubic,
+              builder: (_, h, __) => Container(
+                width: barWidth,
+                height: h,
+                decoration: BoxDecoration(
+                  gradient: day.totalIqd > 0
+                      ? const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [AppColors.water400, AppColors.water600],
+                        )
+                      : null,
+                  color: day.totalIqd > 0 ? null : AppColors.line,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(6),
+                  ),
                 ),
               ),
             ),

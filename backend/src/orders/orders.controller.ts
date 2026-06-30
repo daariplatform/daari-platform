@@ -106,6 +106,12 @@ class WalkinRefillDto {
 
   @IsOptional()
   completionLat?: number;
+
+  // Idempotency key (UUID) from the offline client. A flushed-twice walk-in
+  // dedupes to the original row server-side instead of double-recording the
+  // sale. Optional → legacy clients (Expo) omit it and behave as before.
+  @IsOptional() @IsString() @MaxLength(64)
+  clientRequestId?: string;
 }
 
 /**

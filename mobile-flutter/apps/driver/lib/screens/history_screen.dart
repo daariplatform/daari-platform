@@ -238,13 +238,20 @@ class _HistoryCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(order.kind.label,
-                          style: const TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w800)),
+                      // اسم الزبون أولاً (لمن كانت المهمّة)، مع بديل عند غيابه.
+                      Text(
+                        (order.customerName?.isNotEmpty ?? false)
+                            ? order.customerName!
+                            : '— مجهول —',
+                        style: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w800),
+                      ),
                       const SizedBox(height: 3),
-                      Text(when == null ? 'غير مؤرّخ' : Fmt.arabicDateTime(when),
-                          style: const TextStyle(
-                              fontSize: 12, color: AppColors.muted)),
+                      Text(
+                        '${order.kind.label} · ${when == null ? 'غير مؤرّخ' : Fmt.arabicDate(when)}',
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.muted),
+                      ),
                     ],
                   ),
                 ),

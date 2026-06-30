@@ -11,6 +11,7 @@ class LoadingButton extends StatelessWidget {
     this.loading = false,
     this.icon,
     this.color,
+    this.loadingLabel,
   });
 
   final String label;
@@ -19,17 +20,35 @@ class LoadingButton extends StatelessWidget {
   final IconData? icon;
   final Color? color;
 
+  /// عند تمريره يُعرَض مع المغزل أثناء التحميل (بدل مغزل وحده) — يُبقي السياق.
+  final String? loadingLabel;
+
   @override
   Widget build(BuildContext context) {
     return ElevatedButton(
       style: color == null ? null : ElevatedButton.styleFrom(backgroundColor: color),
       onPressed: loading ? null : onPressed,
       child: loading
-          ? const SizedBox(
-              height: 22,
-              width: 22,
-              child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
-            )
+          ? (loadingLabel == null
+              ? const SizedBox(
+                  height: 22,
+                  width: 22,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2.4, color: Colors.white),
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2.4, color: Colors.white),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(loadingLabel!),
+                  ],
+                ))
           : Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

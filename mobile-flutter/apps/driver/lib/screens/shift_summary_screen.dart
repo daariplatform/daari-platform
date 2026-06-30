@@ -8,11 +8,19 @@ import '../widgets/order_widgets.dart';
 
 /// شاشة ملخّص الوردية — إنجاز اليوم: المهام المكتملة، النقد المحصّل، وتفصيل
 /// حسب نوع المهمة. تصميم احتفالي بسيط بألوان النجاح.
-class ShiftSummaryScreen extends ConsumerWidget {
+class ShiftSummaryScreen extends ConsumerStatefulWidget {
   const ShiftSummaryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ShiftSummaryScreen> createState() => _ShiftSummaryScreenState();
+}
+
+class _ShiftSummaryScreenState extends ConsumerState<ShiftSummaryScreen> {
+  // يمنع نقر «أنهِ الوردية» مرّتين أثناء إيقاف التتبّع والتنقّل (مطابق Expo).
+  bool _ending = false;
+
+  @override
+  Widget build(BuildContext context) {
     final summary = ref.watch(shiftSummaryProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('ملخّص الوردية')),
@@ -21,7 +29,10 @@ class ShiftSummaryScreen extends ConsumerWidget {
         onRetry: () => ref.invalidate(shiftSummaryProvider),
         data: (data) {
           final kinds = data.byKind.entries.where((e) => e.value > 0).toList();
-          return ListView(
+          return RefreshIndicator(
+            onRefresh: () async => ref.invalidate(shiftSummaryProvider),
+            child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(14, 16, 14, 32),
             children: [
               _HeroCard(completedOrders: data.completedOrders),
@@ -56,9 +67,18 @@ class ShiftSummaryScreen extends ConsumerWidget {
                 label: 'أنهِ الوردية',
                 icon: Icons.stop_circle_outlined,
                 color: AppColors.danger,
-                onPressed: () => _endShift(context, ref),
+                loading: _ending,
+                onPressed: _ending ? null : _endShift,
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'سيتوقّف تتبّع الموقع وتصبح حالتك «غير متصل». تأكّد من تسليم النقد للمعمل أولاً.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 12, color: AppColors.muted, height: 1.5),
               ),
             ],
+            ),
           );
         },
       ),
@@ -67,13 +87,15 @@ class ShiftSummaryScreen extends ConsumerWidget {
 
   /// إنهاء الوردية: يوقف تتبّع الموقع، يقلب الحالة OFFLINE، ويعود للرئيسية.
   /// (كان موجوداً في Expo `shift-summary.tsx` وسقط في نقل Flutter.)
-  Future<void> _endShift(BuildContext context, WidgetRef ref) async {
+  Future<void> _endShift() async {
+    if (_ending) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('إنهاء الوردية'),
-        content:
-            const Text('سيتوقّف تتبّع موقعك ولن تصلك طلبات جديدة. متأكّد؟'),
+        content: const Text(
+            'سيتوقّف تتبّع موقعك وتصبح حالتك «غير متصل» فلن تصلك طلبات جديدة. '
+            'سلّم النقد المُحصَّل للمعمل قبل الإنهاء. متأكّد؟'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -88,6 +110,8 @@ class ShiftSummaryScreen extends ConsumerWidget {
       ),
     );
     if (ok != true) return;
+    // عطّل الزرّ طوال إيقاف التتبّع والتنقّل لمنع الإرسال المزدوج.
+    setState(() => _ending = true);
     try {
       await ref.read(locationServiceProvider).stopShift();
     } on ApiException catch (_) {
@@ -95,8 +119,12 @@ class ShiftSummaryScreen extends ConsumerWidget {
     }
     ref.read(onShiftProvider.notifier).state = false;
     Hap.success();
-    Analytics.capture('shift_ended');
-    if (!context.mounted) return;
+    final s = ref.read(shiftSummaryProvider).valueOrNull;
+    Analytics.capture('shift_ended', properties: {
+      if (s != null) 'completedOrders': s.completedOrders,
+      if (s != null) 'collectedCashIqd': s.collectedCashIqd,
+    });
+    if (!mounted) return;
     showSnack(context, 'أُنهيت الوردية — عمل موفّق!');
     context.go('/home');
   }
@@ -244,7 +272,8 @@ class _KindRow extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: Text(
-            kind.label,
+            // وسم الاسترجاع «سحب خزان» في هذا التفصيل (يطابق Expo).
+            kind == RefillOrderKind.tankReclaim ? 'سحب خزان' : kind.label,
             textAlign: TextAlign.right,
             style: const TextStyle(
               fontSize: 14,

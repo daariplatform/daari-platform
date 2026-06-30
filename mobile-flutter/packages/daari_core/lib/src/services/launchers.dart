@@ -32,6 +32,14 @@ class Launchers {
     );
   }
 
+  /// ملاحة بنصّ العنوان حين تغيب الإحداثيات (بحث خرائط Google) — بديل تنازلي.
+  static Future<bool> navigateToAddress(String query) {
+    final q = Uri.encodeComponent(query);
+    return _open(
+      Uri.parse('https://www.google.com/maps/search/?api=1&query=$q'),
+    );
+  }
+
   /// فتح رابط خارجي عام (الشروط / الخصوصية / الأسئلة).
   static Future<bool> openUrl(String url) => _open(Uri.parse(url));
 

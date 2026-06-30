@@ -33,7 +33,8 @@ class _ProfileBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final perfAsync = ref.watch(perfProvider('month'));
+    final period = ref.watch(profilePerfPeriodProvider);
+    final perfAsync = ref.watch(perfProvider(period));
     final name = profile.fullName?.trim().isNotEmpty == true
         ? profile.fullName!.trim()
         : (ref.watch(currentUserProvider)?.phone ?? 'سائق');
@@ -65,9 +66,9 @@ class _ProfileBody extends ConsumerWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _HeaderChip(
+                    const _HeaderChip(
                       icon: Icons.verified_user,
-                      label: profile.status.label,
+                      label: 'سائق معمل',
                     ),
                     if (profile.vehiclePlate != null &&
                         profile.vehiclePlate!.isNotEmpty)
@@ -90,7 +91,7 @@ class _ProfileBody extends ConsumerWidget {
               SectionCard(
                 child: AsyncView<DriverPerf>(
                   value: perfAsync,
-                  onRetry: () => ref.invalidate(perfProvider('month')),
+                  onRetry: () => ref.invalidate(perfProvider(period)),
                   // داخل بطاقة لها حشوتها — هيكل مدمج بلا حشوة مكرّرة.
                   skeleton: const SkeletonList(
                     count: 2,
@@ -100,9 +101,23 @@ class _ProfileBody extends ConsumerWidget {
                   data: (perf) => Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const _CardTitle(
-                        icon: Icons.insights,
-                        title: 'أداء هذا الشهر',
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _CardTitle(
+                              icon: Icons.insights,
+                              title: period == 'week'
+                                  ? 'أداء هذا الأسبوع'
+                                  : 'أداء هذا الشهر',
+                            ),
+                          ),
+                          _PeriodToggle(
+                            period: period,
+                            onChanged: (p) => ref
+                                .read(profilePerfPeriodProvider.notifier)
+                                .state = p,
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 14),
                       Row(
@@ -123,7 +138,7 @@ class _ProfileBody extends ConsumerWidget {
                               color: AppColors.water600,
                               bg: AppColors.water100,
                               label: 'الإيراد',
-                              value: Fmt.iqdShort(perf.revenueIqd),
+                              value: Fmt.iqd(perf.revenueIqd),
                             ),
                           ),
                         ],
@@ -137,7 +152,7 @@ class _ProfileBody extends ConsumerWidget {
                               color: AppColors.warn600,
                               bg: const Color(0xFFFEF3C7),
                               label: 'المكافأة',
-                              value: Fmt.iqdShort(perf.bonusIqd),
+                              value: Fmt.iqd(perf.bonusIqd),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -196,6 +211,14 @@ class _ProfileBody extends ConsumerWidget {
 
               // ── روابط الخدمة الذاتية ──
               _ActionRow(
+                icon: Icons.assignment_turned_in,
+                iconBg: AppColors.navy50,
+                iconFg: AppColors.navy600,
+                label: 'ملخّص الوردية وإنهاؤها',
+                onTap: () => context.push('/shift-summary'),
+              ),
+              const SizedBox(height: 10),
+              _ActionRow(
                 icon: Icons.payments,
                 iconBg: AppColors.turquoise100,
                 iconFg: AppColors.turquoise700,
@@ -245,6 +268,37 @@ class _ProfileBody extends ConsumerWidget {
                 label: 'حذف الحساب نهائياً',
                 danger: true,
                 onTap: () => _confirmDelete(context, ref),
+              ),
+              const SizedBox(height: 16),
+              // تذييل الشروط/الخصوصية (عنصر متجر) — يطابق Expo.
+              Center(
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: () => Launchers.openUrl(
+                          'https://daari-admin.phi-bit.com/legal/terms'),
+                      child: const Text('الشروط والأحكام',
+                          style: TextStyle(fontSize: 12)),
+                    ),
+                    const Text('·', style: TextStyle(color: AppColors.muted)),
+                    TextButton(
+                      onPressed: () => Launchers.openUrl(
+                          'https://daari-admin.phi-bit.com/legal/privacy'),
+                      child: const Text('سياسة الخصوصية',
+                          style: TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(top: 2),
+                child: Text(
+                  'موقعك يُستخدم أثناء الوردية فقط لإظهار وصولك للزبون.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 11, color: AppColors.muted),
+                ),
               ),
             ],
           ),
@@ -553,12 +607,18 @@ class _StatTile extends StatelessWidget {
             style: const TextStyle(color: AppColors.slate, fontSize: 11.5),
           ),
           const SizedBox(height: 2),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: AppColors.ink,
+          // FittedBox كي يتّسع المبلغ الكامل (د.ع) دون فيض في البلاطة الضيّقة.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                color: AppColors.ink,
+              ),
             ),
           ),
         ],
@@ -690,6 +750,49 @@ class _NotificationsRowState extends ConsumerState<_NotificationsRow>
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// مبدّل فترة الأداء (أسبوع/شهر) — حبّتان صغيرتان داخل حاوية مستديرة.
+class _PeriodToggle extends StatelessWidget {
+  const _PeriodToggle({required this.period, required this.onChanged});
+
+  final String period;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget seg(String value, String label) {
+      final active = period == value;
+      return GestureDetector(
+        onTap: () => onChanged(value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          decoration: BoxDecoration(
+            color: active ? AppColors.navy600 : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: active ? Colors.white : AppColors.slate)),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: AppColors.bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [seg('week', 'أسبوع'), seg('month', 'شهر')],
       ),
     );
   }
