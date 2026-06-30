@@ -5,31 +5,41 @@ import 'package:url_launcher/url_launcher.dart';
 class Launchers {
   Launchers._();
 
-  /// اتصال هاتفي.
-  static Future<void> call(String phone) =>
+  /// اتصال هاتفي. يُرجِع false إن تعذّر فتح التطبيق المناسب.
+  static Future<bool> call(String phone) =>
       _open(Uri(scheme: 'tel', path: _clean(phone)));
 
   /// فتح محادثة واتساب. [phone] محلّي (07..) أو دولي.
-  static Future<void> whatsapp(String phone, {String? text}) {
+  static Future<bool> whatsapp(String phone, {String? text}) {
     final intl = _toIntl(phone);
     final query = text != null ? '?text=${Uri.encodeComponent(text)}' : '';
     return _open(Uri.parse('https://wa.me/$intl$query'));
   }
 
+  /// فتح بريد إلكتروني (mailto) مع موضوع/نصّ اختياريين.
+  static Future<bool> email(String to, {String? subject, String? body}) {
+    final params = <String>[];
+    if (subject != null) params.add('subject=${Uri.encodeComponent(subject)}');
+    if (body != null) params.add('body=${Uri.encodeComponent(body)}');
+    final query = params.isEmpty ? '' : '?${params.join('&')}';
+    return _open(Uri.parse('mailto:$to$query'));
+  }
+
   /// فتح الملاحة الخارجية إلى وجهة (خرائط Google).
-  static Future<void> navigate({required double lat, required double lng}) {
+  static Future<bool> navigate({required double lat, required double lng}) {
     return _open(
       Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng'),
     );
   }
 
   /// فتح رابط خارجي عام (الشروط / الخصوصية / الأسئلة).
-  static Future<void> openUrl(String url) => _open(Uri.parse(url));
+  static Future<bool> openUrl(String url) => _open(Uri.parse(url));
 
-  static Future<void> _open(Uri uri) async {
+  static Future<bool> _open(Uri uri) async {
     if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+      return launchUrl(uri, mode: LaunchMode.externalApplication);
     }
+    return false;
   }
 
   static String _clean(String phone) => phone.replaceAll(RegExp(r'[^\d+]'), '');

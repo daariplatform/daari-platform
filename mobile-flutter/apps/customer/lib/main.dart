@@ -50,8 +50,44 @@ class DaariCustomerApp extends ConsumerWidget {
       ],
       builder: (context, child) => Directionality(
         textDirection: TextDirection.rtl,
-        child: child ?? const SizedBox.shrink(),
+        child: _OfflineWrapper(child: child ?? const SizedBox.shrink()),
       ),
+    );
+  }
+}
+
+/// يضع شريطاً أحمر أعلى التطبيق (فوق كل الشاشات) عند انقطاع الاتصال.
+class _OfflineWrapper extends ConsumerWidget {
+  const _OfflineWrapper({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final online = ref.watch(isOnlineProvider).valueOrNull ?? true;
+    return Column(
+      children: [
+        if (!online)
+          Material(
+            color: const Color(0xFFDC2626),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.wifi_off, color: Colors.white, size: 16),
+                    SizedBox(width: 8),
+                    Text('أنت غير متصل بالإنترنت — تُعرض بيانات محفوظة',
+                        style: TextStyle(color: Colors.white, fontSize: 12.5)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        Expanded(child: child),
+      ],
     );
   }
 }

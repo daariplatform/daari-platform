@@ -342,8 +342,105 @@ class _BlastCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final b = blast;
-    return SectionCard(
+    return InkWell(
+      borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+      onTap: () => showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (_) => _BlastStatusSheet(initial: b),
+      ),
+      child: SectionCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                    b.channel == PromoChannel.whatsapp
+                        ? Icons.chat
+                        : Icons.notifications_active_outlined,
+                    size: 18,
+                    color: AppColors.navy600),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(b.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w800)),
+                ),
+                _BlastStatusChip(status: b.status),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(b.body,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: AppColors.slate, fontSize: 13)),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                      'الجمهور: ${b.audienceCount} · أُرسِل: ${b.sentCount} · فشل: ${b.failedCount} · ${Fmt.arabicDate(b.createdAt)}',
+                      style: const TextStyle(
+                          color: AppColors.muted, fontSize: 11)),
+                ),
+                const Icon(Icons.chevron_left,
+                    size: 18, color: AppColors.muted),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// شريحة حالة البثّ بلون دلالي.
+class _BlastStatusChip extends StatelessWidget {
+  const _BlastStatusChip({required this.status});
+  final PromoStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (status) {
+      PromoStatus.sent => AppColors.water600,
+      PromoStatus.queued => AppColors.warning,
+      PromoStatus.failed => AppColors.danger,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(status.label,
+          style: TextStyle(
+              color: color, fontSize: 11, fontWeight: FontWeight.w800)),
+    );
+  }
+}
+
+/// ورقة سفلية لمتابعة حالة بثّ حيّة — تستقصي تلقائياً ما دام في الطابور.
+class _BlastStatusSheet extends ConsumerWidget {
+  const _BlastStatusSheet({required this.initial});
+  final PromoNotification initial;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final value = ref.watch(blastStatusProvider(initial.id));
+    // اعرض البيانات المعروفة فوراً، ثم استبدلها بالحيّة عند وصولها.
+    final b = value.asData?.value ?? initial;
+    final processed = b.sentCount + b.failedCount;
+    final fraction = b.audienceCount > 0
+        ? (processed / b.audienceCount).clamp(0.0, 1.0)
+        : (b.status == PromoStatus.sent ? 1.0 : 0.0);
+    final live = b.status == PromoStatus.queued;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -352,33 +449,94 @@ class _BlastCard extends StatelessWidget {
                   b.channel == PromoChannel.whatsapp
                       ? Icons.chat
                       : Icons.notifications_active_outlined,
-                  size: 18,
                   color: AppColors.navy600),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(b.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w800)),
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w900)),
               ),
-              Text(b.status.label,
-                  style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.slate)),
+              _BlastStatusChip(status: b.status),
             ],
           ),
+          const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: fraction,
+              minHeight: 10,
+              backgroundColor: AppColors.line,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                b.failedCount > 0 && b.sentCount == 0
+                    ? AppColors.danger
+                    : AppColors.water600,
+              ),
+            ),
+          ),
           const SizedBox(height: 6),
-          Text(b.body,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AppColors.slate, fontSize: 13)),
-          const SizedBox(height: 6),
-          Text(
-              'الجمهور: ${b.audienceCount} · أُرسِل: ${b.sentCount} · فشل: ${b.failedCount} · ${Fmt.arabicDate(b.createdAt)}',
-              style: const TextStyle(color: AppColors.muted, fontSize: 11)),
+          Text('$processed من ${b.audienceCount} عولِجوا',
+              style: const TextStyle(color: AppColors.slate, fontSize: 12)),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _StatCell(
+                  label: 'الجمهور',
+                  value: '${b.audienceCount}',
+                  color: AppColors.navy600),
+              _StatCell(
+                  label: 'أُرسِل',
+                  value: '${b.sentCount}',
+                  color: AppColors.water600),
+              _StatCell(
+                  label: 'فشل',
+                  value: '${b.failedCount}',
+                  color: AppColors.danger),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Icon(live ? Icons.sync : Icons.check_circle_outline,
+                  size: 16, color: AppColors.muted),
+              const SizedBox(width: 6),
+              Text(
+                live ? 'يُحدَّث تلقائياً…' : 'اكتمل · ${Fmt.arabicDateTime(b.createdAt)}',
+                style: const TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: () => ref.invalidate(blastStatusProvider(initial.id)),
+                child: const Text('تحديث'),
+              ),
+            ],
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _StatCell extends StatelessWidget {
+  const _StatCell(
+      {required this.label, required this.value, required this.color});
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(value,
+            style: TextStyle(
+                fontSize: 22, fontWeight: FontWeight.w900, color: color)),
+        const SizedBox(height: 2),
+        Text(label,
+            style: const TextStyle(color: AppColors.slate, fontSize: 12)),
+      ],
     );
   }
 }

@@ -59,16 +59,30 @@ class NotificationsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final value = ref.watch(notificationsProvider);
+    final unread = value.valueOrNull?.unreadCount ?? 0;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('الإشعارات'),
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('الإشعارات'),
+            Text(
+              unread > 0 ? '$unread غير مقروء' : 'كل شيء محدّث',
+              style: const TextStyle(
+                  fontSize: 11.5, fontWeight: FontWeight.normal),
+            ),
+          ],
+        ),
         actions: [
-          TextButton.icon(
-            onPressed: () => _markAllRead(context, ref),
-            icon: const Icon(Icons.checklist_rtl, size: 18),
-            label: const Text('تعليم الكل مقروء'),
-          ),
+          // يظهر فقط عند وجود غير مقروء.
+          if (unread > 0)
+            TextButton.icon(
+              onPressed: () => _markAllRead(context, ref),
+              icon: const Icon(Icons.checklist_rtl, size: 18),
+              label: const Text('تعليم الكل مقروء'),
+            ),
         ],
       ),
       body: RefreshIndicator(

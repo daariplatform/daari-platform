@@ -8,6 +8,67 @@ class SupportScreen extends ConsumerWidget {
   const SupportScreen({super.key});
 
   static const String _phone = '07752222558';
+  static const String _email = 'info@phi-bit.com';
+
+  Future<void> _whatsapp(BuildContext context, String text) async {
+    final ok = await Launchers.whatsapp(_phone, text: text);
+    if (!ok && context.mounted) {
+      showSnack(context,
+          'تعذّر فتح واتساب — تأكّد من تثبيته أو راسلنا عبر البريد.',
+          error: true);
+    }
+  }
+
+  Future<void> _emailSupport(
+      BuildContext context, String subject, String body) async {
+    final ok = await Launchers.email(_email, subject: subject, body: body);
+    if (!ok && context.mounted) {
+      showSnack(context, 'تعذّر فتح تطبيق البريد. حاول لاحقاً.', error: true);
+    }
+  }
+
+  /// «أبلغ عن مشكلة» — ورقة سفلية باختيار القناة (واتساب / بريد).
+  void _reportProblem(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 16, 20, 4),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Text('أبلغ عن مشكلة',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w800)),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.chat, color: AppColors.success),
+              title: const Text('عبر واتساب'),
+              onTap: () {
+                Navigator.pop(sheetCtx);
+                _whatsapp(context,
+                    'أرغب بالإبلاغ عن مشكلة في تطبيق داري:\n\n(صف المشكلة هنا)');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.email_outlined,
+                  color: AppColors.navy600),
+              title: const Text('عبر البريد الإلكتروني'),
+              onTap: () {
+                Navigator.pop(sheetCtx);
+                _emailSupport(context, 'مشكلة في تطبيق داري',
+                    'صف المشكلة هنا:\n\n');
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -35,13 +96,25 @@ class SupportScreen extends ConsumerWidget {
                   title: 'واتساب',
                   subtitle: 'رد سريع',
                   color: AppColors.success,
-                  onTap: () => Launchers.whatsapp(
-                    _phone,
-                    text: 'مرحباً، أحتاج مساعدة',
-                  ),
+                  onTap: () => _whatsapp(context, 'مرحباً، أحتاج مساعدة'),
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _reportProblem(context),
+              icon: const Icon(Icons.report_problem_outlined,
+                  color: AppColors.warn600),
+              label: const Text('أبلغ عن مشكلة',
+                  style: TextStyle(color: AppColors.warn600)),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.warn600),
+                minimumSize: const Size.fromHeight(48),
+              ),
+            ),
           ),
           const SizedBox(height: 24),
           const Text(
@@ -77,12 +150,27 @@ class SupportScreen extends ConsumerWidget {
                 'من «حسابي» → «عناويني المحفوظة» يمكنك إضافة عناوين متعددة (البيت، '
                 'العمل) وتعيين العنوان الافتراضي الذي يصل إليه السائق.',
           ),
+          const _FaqCard(
+            question: 'هل يمكنني إلغاء الطلب؟',
+            answer:
+                'نعم، ما دام الطلب قيد الانتظار أو قبل وصول السائق. افتح الطلب من '
+                '«طلباتي» واضغط «إلغاء الطلب». بعد التسليم لا يمكن الإلغاء.',
+          ),
+          const _FaqCard(
+            question: 'ما هي التعبئة التلقائية؟',
+            answer:
+                'جدولة تُنشئ طلب تعبئة تلقائياً كل فترة تختارها (أسبوعياً/شهرياً) '
+                'حتى لا تنسى. فعّلها من «حسابي» → «الجدولة التلقائية».',
+          ),
+          const _FaqCard(
+            question: 'نسيت كلمة المرور، ماذا أفعل؟',
+            answer:
+                'من شاشة تسجيل الدخول اضغط «نسيت كلمة السر؟»، أدخل رقمك ليصلك رمز '
+                'عبر واتساب/رسالة، ثم عيّن كلمة سر جديدة وستدخل تلقائياً.',
+          ),
           const SizedBox(height: 24),
           _StillNeedHelp(
-            onTap: () => Launchers.whatsapp(
-              _phone,
-              text: 'مرحباً، أحتاج مساعدة',
-            ),
+            onTap: () => _whatsapp(context, 'مرحباً، أحتاج مساعدة'),
           ),
         ],
       ),

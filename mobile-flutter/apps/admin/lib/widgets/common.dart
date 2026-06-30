@@ -2,6 +2,8 @@ import 'package:daari_core/daari_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers.dart';
+
 /// زرّ أساسي مع حالة تحميل (يعطّل نفسه ويُظهر دوّاراً).
 class LoadingButton extends StatelessWidget {
   const LoadingButton({
@@ -224,4 +226,72 @@ void showSnack(BuildContext context, String message, {bool error = false}) {
       backgroundColor: error ? AppColors.danger : AppColors.ink,
       behavior: SnackBarBehavior.floating,
     ));
+}
+
+/// شريط اختيار مدى التقارير — يقرأ/يضبط [reportWindowProvider] المشترك.
+/// عند ضبط مدى تتحدّث كل مزوّدات التقارير تلقائياً (تراقب نفس الحالة).
+class ReportWindowBar extends ConsumerWidget {
+  const ReportWindowBar({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final w = ref.watch(reportWindowProvider);
+    final hasRange = w.from != null && w.to != null;
+    final label = hasRange
+        ? '${Fmt.arabicDate(w.from)} — ${Fmt.arabicDate(w.to)}'
+        : 'الفترة الافتراضية';
+
+    return SectionCard(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          const Icon(Icons.date_range, color: AppColors.navy600, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('الفترة',
+                    style: TextStyle(fontSize: 11, color: AppColors.muted)),
+                Text(label,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w800, fontSize: 13)),
+              ],
+            ),
+          ),
+          if (hasRange)
+            IconButton(
+              tooltip: 'مسح',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.close, size: 18, color: AppColors.muted),
+              onPressed: () => ref.read(reportWindowProvider.notifier).state =
+                  (from: null, to: null),
+            ),
+          TextButton(
+            onPressed: () => _pick(context, ref, w),
+            child: Text(hasRange ? 'تغيير' : 'اختر فترة'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pick(
+      BuildContext context, WidgetRef ref, ReportWindow current) async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 3),
+      lastDate: now,
+      initialDateRange: (current.from != null && current.to != null)
+          ? DateTimeRange(start: current.from!, end: current.to!)
+          : null,
+      locale: const Locale('ar'),
+      helpText: 'اختر الفترة',
+      saveText: 'تطبيق',
+    );
+    if (picked == null) return;
+    ref.read(reportWindowProvider.notifier).state =
+        (from: picked.start, to: picked.end);
+  }
 }

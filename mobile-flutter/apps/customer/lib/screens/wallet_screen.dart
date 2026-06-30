@@ -167,21 +167,11 @@ class _BalanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isCredit = balanceIqd > 0;
     final isZero = balanceIqd == 0;
+    final isDue = balanceIqd < 0;
     final color =
         isZero ? AppColors.slate : (isCredit ? AppColors.water600 : AppColors.danger);
-
-    final String label;
-    final String amountText;
-    if (isZero) {
-      label = 'رصيد الحساب';
-      amountText = 'مدفوع بالكامل';
-    } else if (isCredit) {
-      label = 'رصيد لك';
-      amountText = Fmt.iqd(balanceIqd);
-    } else {
-      label = 'مبلغ مستحق عليك';
-      amountText = Fmt.iqd(balanceIqd.abs());
-    }
+    // الوسم موحّد دائماً «رصيد الحساب»؛ الدَّين يظهر كملاحظة ثانوية فقط.
+    final amountText = isZero ? 'مدفوع بالكامل' : Fmt.iqd(balanceIqd.abs());
 
     return SectionCard(
       child: Row(
@@ -200,9 +190,9 @@ class _BalanceCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: const TextStyle(color: AppColors.slate, fontSize: 12),
+                const Text(
+                  'رصيد الحساب',
+                  style: TextStyle(color: AppColors.slate, fontSize: 12),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -213,6 +203,13 @@ class _BalanceCard extends StatelessWidget {
                     color: color,
                   ),
                 ),
+                if (isDue) ...[
+                  const SizedBox(height: 2),
+                  const Text(
+                    'مبلغ مستحق عليك',
+                    style: TextStyle(color: AppColors.danger, fontSize: 11.5),
+                  ),
+                ],
               ],
             ),
           ),
@@ -256,7 +253,7 @@ class _PointsInfo extends StatelessWidget {
   }
 }
 
-/// سجلّ الدفعات: الطلبات المكتملة ذات [RefillOrder.paidAmountIqd] أكبر من صفر.
+/// سجلّ الدفعات: الطلبات ذات [RefillOrder.paidAmountIqd] أكبر من صفر.
 class _PaymentHistory extends ConsumerWidget {
   const _PaymentHistory();
 
@@ -280,10 +277,8 @@ class _PaymentHistory extends ConsumerWidget {
         );
       },
       data: (orders) {
-        final paid = orders
-            .where((o) =>
-                o.status == RefillOrderStatus.completed && o.paidAmountIqd > 0)
-            .toList();
+        // أيّ طلب دُفِع منه مبلغ (حتى لو لم يكتمل بعد) — يطابق مرجع Expo.
+        final paid = orders.where((o) => o.paidAmountIqd > 0).toList();
 
         if (paid.isEmpty) {
           return const EmptyState(

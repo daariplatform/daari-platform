@@ -70,6 +70,8 @@ class SchedulesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final schedulesAsync = ref.watch(mySchedulesProvider);
+    final addresses =
+        ref.watch(myAddressesProvider).valueOrNull ?? const <SavedAddress>[];
 
     return Scaffold(
       appBar: AppBar(title: const Text('الجدولة التلقائية')),
@@ -105,6 +107,7 @@ class SchedulesScreen extends ConsumerWidget {
                       padding: const EdgeInsets.only(bottom: 12),
                       child: _ScheduleCard(
                         schedule: s,
+                        addresses: addresses,
                         onToggle: (v) => _toggle(context, ref, s, v),
                         onDelete: () => _delete(context, ref, s),
                       ),
@@ -148,21 +151,95 @@ class _ExplainerBanner extends StatelessWidget {
   }
 }
 
+/// منتقي عنوان التوصيل (اختياري) في نموذج إنشاء الجدولة — «الافتراضي» = null.
+class _AddressPicker extends StatelessWidget {
+  const _AddressPicker({
+    required this.addresses,
+    required this.selectedId,
+    required this.onSelected,
+  });
+
+  final List<SavedAddress> addresses;
+  final String? selectedId;
+  final ValueChanged<String?> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (addresses.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+        const Text('عنوان التوصيل (اختياري)',
+            style: TextStyle(
+                color: AppColors.slate,
+                fontSize: 12,
+                fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              ChoiceChip(
+                label: const Text('الافتراضي'),
+                selected: selectedId == null,
+                onSelected: (_) => onSelected(null),
+              ),
+              for (final a in addresses) ...[
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  avatar: Icon(_addressLabelIcon(a.label), size: 16),
+                  label: Text(a.title),
+                  selected: selectedId == a.id,
+                  onSelected: (_) => onSelected(a.id),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// أيقونة تسمية العنوان (البيت/العمل/مخصّص).
+IconData _addressLabelIcon(AddressLabel label) {
+  switch (label) {
+    case AddressLabel.home:
+      return Icons.home_outlined;
+    case AddressLabel.work:
+      return Icons.work_outline;
+    case AddressLabel.custom:
+      return Icons.place_outlined;
+  }
+}
+
 /// بطاقة جدولة واحدة.
 class _ScheduleCard extends StatelessWidget {
   const _ScheduleCard({
     required this.schedule,
+    required this.addresses,
     required this.onToggle,
     required this.onDelete,
   });
 
   final RefillSchedule schedule;
+  final List<SavedAddress> addresses;
   final ValueChanged<bool> onToggle;
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
     final active = schedule.active;
+    SavedAddress? addr;
+    if (schedule.addressId != null) {
+      for (final a in addresses) {
+        if (a.id == schedule.addressId) {
+          addr = a;
+          break;
+        }
+      }
+    }
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -197,6 +274,25 @@ class _ScheduleCard extends StatelessWidget {
                       'التعبئة القادمة: ${Fmt.arabicDate(schedule.nextRunAt)}',
                       style: const TextStyle(color: AppColors.slate, fontSize: 13),
                     ),
+                    if (addr != null) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(_addressLabelIcon(addr.label),
+                              size: 14, color: AppColors.water600),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(addr.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    color: AppColors.water600,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700)),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -232,14 +328,39 @@ class _CreateScheduleSheet extends StatefulWidget {
 class _CreateScheduleSheetState extends State<_CreateScheduleSheet> {
   Cadence _cadence = Cadence.monthly;
   bool _saving = false;
+  String? _addressId; // null = العنوان الافتراضي للحساب.
+  late DateTime _nextDate;
 
-  DateTime _nextRunAt() => DateTime.now().add(Duration(days: _cadence.days));
+  @override
+  void initState() {
+    super.initState();
+    _nextDate = DateTime.now().add(Duration(days: _cadence.days));
+  }
+
+  void _selectCadence(Cadence c) {
+    setState(() {
+      _cadence = c;
+      _nextDate = DateTime.now().add(Duration(days: c.days));
+    });
+  }
+
+  /// تعديل أوّل تعبئة بمقدار يوم (لا يُسمح بتاريخ في الماضي).
+  void _nudge(int delta) {
+    final candidate = _nextDate.add(Duration(days: delta));
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    if (candidate.isBefore(today)) return;
+    setState(() => _nextDate = candidate);
+  }
 
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
       await widget.ref.read(customerRepositoryProvider).createSchedule(
-            ScheduleInput(cadence: _cadence, nextRunAt: _nextRunAt()),
+            ScheduleInput(
+                cadence: _cadence,
+                nextRunAt: _nextDate,
+                addressId: _addressId),
           );
       widget.ref.invalidate(mySchedulesProvider);
       if (mounted) {
@@ -297,12 +418,17 @@ class _CreateScheduleSheetState extends State<_CreateScheduleSheet> {
                     (c) => ChoiceChip(
                       label: Text(c.text),
                       selected: _cadence == c,
-                      onSelected: _saving
-                          ? null
-                          : (_) => setState(() => _cadence = c),
+                      onSelected:
+                          _saving ? null : (_) => _selectCadence(c),
                     ),
                   )
                   .toList(),
+            ),
+            _AddressPicker(
+              addresses: widget.ref.read(myAddressesProvider).valueOrNull ??
+                  const <SavedAddress>[],
+              selectedId: _addressId,
+              onSelected: (id) => setState(() => _addressId = id),
             ),
             const SizedBox(height: 16),
             Container(
@@ -325,12 +451,24 @@ class _CreateScheduleSheetState extends State<_CreateScheduleSheet> {
                                 color: AppColors.slate, fontSize: 12)),
                         const SizedBox(height: 2),
                         Text(
-                          Fmt.arabicDate(_nextRunAt()),
+                          Fmt.arabicDate(_nextDate),
                           style:
                               const TextStyle(fontWeight: FontWeight.w800),
                         ),
                       ],
                     ),
+                  ),
+                  IconButton(
+                    onPressed: _saving ? null : () => _nudge(-1),
+                    icon: const Icon(Icons.remove_circle_outline),
+                    color: AppColors.navy600,
+                    tooltip: 'يوم أقل',
+                  ),
+                  IconButton(
+                    onPressed: _saving ? null : () => _nudge(1),
+                    icon: const Icon(Icons.add_circle_outline),
+                    color: AppColors.navy600,
+                    tooltip: 'يوم أكثر',
                   ),
                 ],
               ),

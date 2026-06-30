@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../widgets/common.dart';
 import '../widgets/otp_field.dart';
@@ -69,13 +68,29 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     }
   }
 
+  /// منتقي الخريطة من خطوة تحديد الموقع → يحدّث الإحداثية ثمّ يكتشف المعامل.
   Future<void> _pickOnMap() async {
-    final result = await context.push<LatLng>('/map-picker',
+    final result = await context.push<MapPickResult>('/map-picker',
         extra: _lat == null ? null : MapPickerArgs(lat: _lat!, lng: _lng!));
     if (result == null) return;
-    _lat = result.latitude;
-    _lng = result.longitude;
+    _lat = result.lat;
+    _lng = result.lng;
+    if (result.address.isNotEmpty && _address.text.trim().isEmpty) {
+      _address.text = result.address;
+    }
     await _loadPlants();
+  }
+
+  /// منتقي الخريطة من خطوة إدخال البيانات → يصحّح الموقع/العنوان دون مغادرة الخطوة.
+  Future<void> _pickOnMapForInfo() async {
+    final result = await context.push<MapPickResult>('/map-picker',
+        extra: _lat == null ? null : MapPickerArgs(lat: _lat!, lng: _lng!));
+    if (result == null || !mounted) return;
+    setState(() {
+      _lat = result.lat;
+      _lng = result.lng;
+      if (result.address.isNotEmpty) _address.text = result.address;
+    });
   }
 
   Future<void> _loadPlants() async {
@@ -242,16 +257,21 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                             style: TextStyle(
                                 color: within ? AppColors.slate : AppColors.danger,
                                 fontSize: 12.5)),
+                        const SizedBox(height: 2),
+                        Text('${Fmt.iqd(p.refillPriceIqd)} للتعبئة',
+                            style: const TextStyle(
+                                color: AppColors.navy700,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12.5)),
                       ],
                     ),
                   ),
                   ElevatedButton(
-                    onPressed: within
-                        ? () => setState(() {
-                              _picked = p;
-                              _step = _Step.info;
-                            })
-                        : null,
+                    // يُسمح باختيار أي معمل مكتشَف؛ «خارج النطاق» شارة إعلامية فقط.
+                    onPressed: () => setState(() {
+                      _picked = p;
+                      _step = _Step.info;
+                    }),
                     style: ElevatedButton.styleFrom(
                         minimumSize: const Size(72, 40)),
                     child: const Text('اختر'),
@@ -279,11 +299,32 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             controller: _phone,
             hint: '07XXXXXXXXX',
             keyboardType: TextInputType.phone,
-            maxLength: 11),
+            maxLength: 11,
+            digitsOnly: true),
         const SizedBox(height: 12),
         LabeledField(label: 'المنطقة / الحيّ', controller: _district),
         const SizedBox(height: 12),
         LabeledField(label: 'العنوان التفصيلي', controller: _address),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: _loading ? null : _pickOnMapForInfo,
+          icon: const Icon(Icons.map_outlined),
+          label: const Text('حدّد موقعك على الخريطة'),
+        ),
+        if (_lat != null) ...[
+          const SizedBox(height: 8),
+          const Row(
+            children: [
+              Icon(Icons.location_on, size: 16, color: AppColors.water600),
+              SizedBox(width: 6),
+              Text('موقعك مُحدَّد ✓',
+                  style: TextStyle(
+                      color: AppColors.water600,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700)),
+            ],
+          ),
+        ],
         const SizedBox(height: 20),
         LoadingButton(label: 'إرسال رمز التحقّق', loading: _loading, onPressed: _requestOtp),
       ],
@@ -310,19 +351,31 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           onPressed: _loading ? null : _requestOtp,
           child: const Text('إعادة إرسال الرمز'),
         ),
+        TextButton(
+          // الرجوع لخطوة البيانات لتصحيح الاسم/الهاتف/العنوان.
+          onPressed: _loading
+              ? null
+              : () => setState(() {
+                    _step = _Step.info;
+                    _otp.clear();
+                    _otpError = false;
+                  }),
+          child: const Text('تعديل المعلومات'),
+        ),
       ],
     );
   }
 
   Widget _submittedStep() {
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          const SizedBox(height: 16),
           const Icon(Icons.hourglass_top, size: 72, color: AppColors.warn500),
           const SizedBox(height: 20),
           const Text('طلبك قيد المراجعة',
+              textAlign: TextAlign.center,
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),
           const Text(
@@ -330,13 +383,78 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               'ثم يمكنك تسجيل الدخول والطلب.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.slate, height: 1.7)),
-          const SizedBox(height: 28),
+          const SizedBox(height: 12),
+          Text('سنتواصل معك عبر واتساب على ${_phone.text} خلال 24 ساعة.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  color: AppColors.navy700,
+                  fontWeight: FontWeight.w700,
+                  height: 1.6)),
+          const SizedBox(height: 20),
+          const SectionCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('ماذا يحدث الآن؟',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                SizedBox(height: 12),
+                _NumberedStep(n: 1, text: 'يراجع المعمل بياناتك ويوافق على طلبك.'),
+                _NumberedStep(
+                    n: 2, text: 'يُجدوِل توصيل الخزان إلى عنوانك.'),
+                _NumberedStep(
+                    n: 3, text: 'يصل السائق بالخزان وكلمة المرور الخاصّة بك.'),
+                _NumberedStep(
+                    n: 4,
+                    text: 'تسجّل الدخول وتطلب التعبئة وقتما تشاء.'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () => context.go('/welcome'),
               child: const Text('حسناً'),
             ),
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+}
+
+/// بند خطوة مرقّم لقائمة «ماذا يحدث الآن؟» في شاشة نجاح التسجيل.
+class _NumberedStep extends StatelessWidget {
+  const _NumberedStep({required this.n, required this.text});
+  final int n;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+                color: AppColors.navy50, shape: BoxShape.circle),
+            child: Text('$n',
+                style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.navy700,
+                    fontSize: 12)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(text,
+                style: const TextStyle(
+                    color: AppColors.slate, height: 1.6, fontSize: 13)),
           ),
         ],
       ),

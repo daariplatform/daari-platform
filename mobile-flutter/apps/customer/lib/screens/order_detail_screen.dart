@@ -49,8 +49,15 @@ class _OrderBody extends ConsumerWidget {
             order.deliveryLng != null) ...[
           const SizedBox(height: 12),
           _TrackingMap(order: order),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => Launchers.navigate(
+                lat: order.deliveryLat!, lng: order.deliveryLng!),
+            icon: const Icon(Icons.navigation_outlined),
+            label: const Text('افتح في خرائط Google'),
+          ),
         ],
-        if (order.etaMinutes != null) ...[
+        if (status == RefillOrderStatus.enRoute && order.etaMinutes != null) ...[
           const SizedBox(height: 12),
           _EtaCard(minutes: order.etaMinutes!),
         ],
@@ -68,9 +75,13 @@ class _OrderBody extends ConsumerWidget {
           else
             _RatingForm(orderId: orderId),
           const SizedBox(height: 12),
-          _ConfirmButton(orderId: orderId),
-          const SizedBox(height: 10),
-          _DisputeButton(orderId: orderId),
+          // التأكيد/الإبلاغ يظهران فقط قبل تأكيد الزبون؛ بعده تظهر لافتة شكر.
+          if (order.customerConfirmedAt == null) ...[
+            _ConfirmButton(orderId: orderId),
+            const SizedBox(height: 10),
+            _DisputeButton(orderId: orderId),
+          ] else
+            const _ConfirmedBanner(),
         ],
         const SizedBox(height: 24),
       ],
@@ -216,6 +227,34 @@ class _CancelledBanner extends StatelessWidget {
             child: Text(label,
                 style: const TextStyle(
                     color: AppColors.danger, fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// لافتة شكر تظهر بعد تأكيد الزبون استلامَه (بدل أزرار التأكيد/الإبلاغ).
+class _ConfirmedBanner extends StatelessWidget {
+  const _ConfirmedBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.success.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(AppTheme.radiusInput),
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.35)),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.check_circle, color: AppColors.success, size: 26),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text('تأكّد استلام التعبئة. شكراً لك!',
+                style: TextStyle(
+                    color: AppColors.success, fontWeight: FontWeight.w800)),
           ),
         ],
       ),
@@ -490,9 +529,21 @@ class _DriverCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(driver.fullName,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w800, fontSize: 15)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(driver.fullName,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 15)),
+                    if (driver.vehiclePlate != null &&
+                        driver.vehiclePlate!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text('المركبة: ${driver.vehiclePlate}',
+                          style: const TextStyle(
+                              color: AppColors.muted, fontSize: 12)),
+                    ],
+                  ],
+                ),
               ),
               IconButton.filledTonal(
                 onPressed: driver.hasPhone
@@ -518,6 +569,8 @@ class _PriceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasCompleted = order.completedAt != null;
+    final hasNotes = order.notes != null && order.notes!.trim().isNotEmpty;
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -532,15 +585,34 @@ class _PriceCard extends StatelessWidget {
           _Row(label: 'سعر التعبئة', value: Fmt.iqd(order.priceIqd)),
           if (order.paidAmountIqd > 0)
             _Row(label: 'المدفوع', value: Fmt.iqd(order.paidAmountIqd)),
-          if (order.completedAt != null)
+          _Row(
+            label: 'طريقة الدفع',
+            value: _paymentLabel(order.paymentMethod),
+            last: !hasCompleted && !hasNotes,
+          ),
+          if (hasCompleted)
             _Row(
               label: 'وقت التسليم',
               value: Fmt.arabicDateTime(order.completedAt),
-              last: true,
+              last: !hasNotes,
             ),
+          if (hasNotes)
+            _Row(label: 'ملاحظات', value: order.notes!.trim(), last: true),
         ],
       ),
     );
+  }
+}
+
+/// تسمية طريقة الدفع للعرض (الافتراضي نقداً عند الاستلام).
+String _paymentLabel(String? method) {
+  switch (method) {
+    case 'CASH':
+    case null:
+    case '':
+      return 'نقداً عند الاستلام';
+    default:
+      return method;
   }
 }
 

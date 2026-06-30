@@ -39,7 +39,10 @@ class _ForgotScreenState extends ConsumerState<ForgotScreen> {
     setState(() => _loading = true);
     try {
       await ref.read(authRepositoryProvider).forgotPassword(phone);
-      if (mounted) setState(() => _step = 2);
+      if (mounted) {
+        setState(() => _step = 2);
+        showSnack(context, 'أُرسِل الرمز عبر واتساب/رسالة. صالح لمدّة 10 دقائق.');
+      }
     } on ApiException catch (e) {
       if (mounted) showSnack(context, e.message, error: true);
     } finally {
@@ -61,14 +64,15 @@ class _ForgotScreenState extends ConsumerState<ForgotScreen> {
       _otpError = false;
     });
     try {
-      await ref.read(authRepositoryProvider).resetPassword(
+      // الخادم يُصدر توكنات بعد إعادة التعيين → دخول تلقائي مباشرةً للرئيسية.
+      await ref.read(authControllerProvider.notifier).resetPasswordAndLogin(
             phone: _phone.text.trim(),
             otp: _otp.text.trim(),
             newPassword: _newPassword.text,
           );
       if (mounted) {
-        showSnack(context, 'تم تغيير كلمة السر. سجّل الدخول الآن.');
-        context.go('/login');
+        showSnack(context, 'تم تغيير كلمة السر ودخولك تلقائياً.');
+        context.go('/home');
       }
     } on ApiException catch (e) {
       if (mounted) {
@@ -101,6 +105,7 @@ class _ForgotScreenState extends ConsumerState<ForgotScreen> {
                 hint: '07XXXXXXXXX',
                 keyboardType: TextInputType.phone,
                 maxLength: 11,
+                digitsOnly: true,
                 prefixIcon: Icons.phone_outlined,
               ),
               const SizedBox(height: 16),
@@ -110,7 +115,14 @@ class _ForgotScreenState extends ConsumerState<ForgotScreen> {
               Text('أرسلنا رمزاً إلى ${_phone.text}',
                   style: const TextStyle(color: AppColors.slate, height: 1.6)),
               const SizedBox(height: 16),
-              OtpCodeField(controller: _otp, error: _otpError),
+              OtpCodeField(
+                controller: _otp,
+                error: _otpError,
+                onCompleted: (_) {
+                  // اكتمل الرمز: أرسِل تلقائياً إن كانت كلمة السر صالحة.
+                  if (Validators.isPassword(_newPassword.text)) _reset();
+                },
+              ),
               const SizedBox(height: 8),
               LabeledField(
                 label: 'كلمة السر الجديدة',
@@ -122,8 +134,16 @@ class _ForgotScreenState extends ConsumerState<ForgotScreen> {
               LoadingButton(
                   label: 'تعيين كلمة السر', loading: _loading, onPressed: _reset),
               TextButton(
-                onPressed: _loading ? null : _requestCode,
-                child: const Text('إعادة إرسال الرمز'),
+                // يرجع للخطوة 1 ويمسح الإدخال لطلب رمز جديد (يطابق Expo).
+                onPressed: _loading
+                    ? null
+                    : () => setState(() {
+                          _step = 1;
+                          _otp.clear();
+                          _newPassword.clear();
+                          _otpError = false;
+                        }),
+                child: const Text('لم يصلك الرمز؟ أعِد المحاولة'),
               ),
             ],
           ],

@@ -22,7 +22,8 @@ class ProfileScreen extends ConsumerWidget {
           value: profileAsync,
           onRetry: () => ref.invalidate(myProfileProvider),
           data: (profile) {
-            final credit = profile.balanceIqd >= 0;
+            final isZero = profile.balanceIqd == 0;
+            final credit = profile.balanceIqd > 0;
             return ListView(
               padding: EdgeInsets.zero,
               children: [
@@ -69,17 +70,51 @@ class ProfileScreen extends ConsumerWidget {
                                 width: 1, height: 44, color: AppColors.line),
                             Expanded(
                               child: _StatTile(
-                                icon: Icons.account_balance_wallet_outlined,
-                                color: credit
+                                icon: isZero
+                                    ? Icons.verified_outlined
+                                    : Icons.account_balance_wallet_outlined,
+                                color: (isZero || credit)
                                     ? AppColors.success
                                     : AppColors.danger,
-                                label: credit ? 'رصيدك' : 'عليك',
-                                value: Fmt.iqd(profile.balanceIqd.abs()),
+                                label: isZero
+                                    ? 'الرصيد'
+                                    : (credit ? 'رصيدك' : 'عليك'),
+                                value: isZero
+                                    ? 'مدفوع'
+                                    : Fmt.iqd(profile.balanceIqd.abs()),
                               ),
                             ),
                           ],
                         ),
                       ),
+                      if (profile.addressLine.trim().isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        SectionCard(
+                          child: Row(
+                            children: [
+                              const Icon(Icons.place_outlined,
+                                  color: AppColors.navy600, size: 22),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('العنوان',
+                                        style: TextStyle(
+                                            color: AppColors.muted,
+                                            fontSize: 12)),
+                                    const SizedBox(height: 2),
+                                    Text(profile.addressLine,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            height: 1.5)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 16),
 
                       // روابط الأقسام.

@@ -1,5 +1,6 @@
 import 'package:daari_core/daari_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// زرّ أساسي مع حالة تحميل (يعطّل نفسه ويُظهر دوّاراً).
@@ -44,7 +45,8 @@ class LoadingButton extends StatelessWidget {
 }
 
 /// حقل إدخال موحّد بعنوان.
-class LabeledField extends StatelessWidget {
+/// عند [obscure] = true يمكن تفعيل [obscureToggle] لإظهار زرّ عين يبدّل الرؤية.
+class LabeledField extends StatefulWidget {
   const LabeledField({
     super.key,
     required this.label,
@@ -52,6 +54,8 @@ class LabeledField extends StatelessWidget {
     this.hint,
     this.keyboardType,
     this.obscure = false,
+    this.obscureToggle = false,
+    this.digitsOnly = false,
     this.maxLength,
     this.prefixIcon,
     this.textInputAction,
@@ -63,31 +67,57 @@ class LabeledField extends StatelessWidget {
   final String? hint;
   final TextInputType? keyboardType;
   final bool obscure;
+
+  /// يُظهر زرّ إظهار/إخفاء (يُفعَّل فقط مع [obscure] = true).
+  final bool obscureToggle;
+
+  /// ترشيح الأرقام لحظياً (يحذف غير الأرقام أثناء الكتابة).
+  final bool digitsOnly;
   final int? maxLength;
   final IconData? prefixIcon;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
 
   @override
+  State<LabeledField> createState() => _LabeledFieldState();
+}
+
+class _LabeledFieldState extends State<LabeledField> {
+  late bool _obscured = widget.obscure;
+
+  @override
   Widget build(BuildContext context) {
+    final showEye = widget.obscure && widget.obscureToggle;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
+        Text(widget.label,
             style: const TextStyle(
                 fontWeight: FontWeight.w700, color: AppColors.slate, fontSize: 13)),
         const SizedBox(height: 6),
         TextField(
-          controller: controller,
-          keyboardType: keyboardType,
-          obscureText: obscure,
-          maxLength: maxLength,
-          textInputAction: textInputAction,
-          onSubmitted: onSubmitted,
+          controller: widget.controller,
+          keyboardType: widget.keyboardType,
+          obscureText: _obscured,
+          maxLength: widget.maxLength,
+          textInputAction: widget.textInputAction,
+          onSubmitted: widget.onSubmitted,
+          inputFormatters: widget.digitsOnly
+              ? [FilteringTextInputFormatter.digitsOnly]
+              : null,
           decoration: InputDecoration(
-            hintText: hint,
+            hintText: widget.hint,
             counterText: '',
-            prefixIcon: prefixIcon == null ? null : Icon(prefixIcon),
+            prefixIcon:
+                widget.prefixIcon == null ? null : Icon(widget.prefixIcon),
+            suffixIcon: showEye
+                ? IconButton(
+                    icon: Icon(_obscured
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined),
+                    onPressed: () => setState(() => _obscured = !_obscured),
+                  )
+                : null,
           ),
         ),
       ],

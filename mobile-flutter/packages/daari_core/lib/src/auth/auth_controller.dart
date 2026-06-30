@@ -56,6 +56,23 @@ class AuthController extends Notifier<AuthState> {
     Analytics.identify(me.id, properties: {'role': me.role});
   }
 
+  /// إعادة تعيين كلمة السر ثم دخول تلقائي (الخادم يُصدر توكنات). يرمي عند الفشل.
+  Future<void> resetPasswordAndLogin({
+    required String phone,
+    required String otp,
+    required String newPassword,
+  }) async {
+    // امسح كاش الإقلاع البارد لمستخدم سابق على نفس الجهاز (كما في login).
+    await ref.read(responseCacheProvider).clear();
+    final me = await ref.read(authRepositoryProvider).resetPassword(
+          phone: phone,
+          otp: otp,
+          newPassword: newPassword,
+        );
+    state = AuthState(user: me, status: AuthStatus.authenticated);
+    Analytics.identify(me.id, properties: {'role': me.role});
+  }
+
   Future<void> logout() async {
     await ref.read(authRepositoryProvider).logout();
     // امسح كاش الإقلاع البارد كي لا تتسرّب بيانات هذا المستخدم لمن يسجّل بعده.

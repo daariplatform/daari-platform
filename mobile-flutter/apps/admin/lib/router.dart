@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'screens/advanced_reports_screen.dart';
+import 'screens/audit_log_screen.dart';
+import 'screens/driver_heatmap_screen.dart';
+import 'screens/driver_performance_screen.dart';
 import 'screens/fleet_map_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/lock_screen.dart';
@@ -85,6 +88,15 @@ final adminRouterProvider = Provider<GoRouter>((ref) {
         path: '/onboarding',
         builder: (_, __) => const OnboardingScreen(),
       ),
+      GoRoute(
+        path: '/drivers/performance',
+        builder: (_, __) => const DriverPerformanceScreen(),
+      ),
+      GoRoute(
+        path: '/reports/heatmap',
+        builder: (_, __) => const DriverHeatmapScreen(),
+      ),
+      GoRoute(path: '/audit', builder: (_, __) => const AuditLogScreen()),
     ],
   );
 });

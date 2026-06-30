@@ -1,9 +1,11 @@
 import 'package:daari_core/daari_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../providers.dart';
 import '../widgets/common.dart';
+import 'map_picker_screen.dart';
 
 /// شاشة «عناويني» — عرض العناوين المحفوظة مع إضافة/تعديل/حذف وتعيين الافتراضي.
 class AddressesScreen extends ConsumerWidget {
@@ -12,8 +14,22 @@ class AddressesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final addresses = ref.watch(myAddressesProvider);
+    final count = addresses.valueOrNull?.length;
     return Scaffold(
-      appBar: AppBar(title: const Text('عناويني')),
+      appBar: AppBar(
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('عناويني'),
+            Text(
+              count == null ? 'إدارة عناوين التوصيل' : '$count عنوان محفوظ',
+              style: const TextStyle(
+                  fontSize: 11.5, fontWeight: FontWeight.normal),
+            ),
+          ],
+        ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openForm(context, ref),
         icon: const Icon(Icons.add_location_alt_outlined),
@@ -215,6 +231,19 @@ class _AddressCard extends StatelessWidget {
                         style: const TextStyle(color: AppColors.muted, fontSize: 12),
                       ),
                     ],
+                    if (address.hasPin) ...[
+                      const SizedBox(height: 4),
+                      const Row(
+                        children: [
+                          Icon(Icons.location_on,
+                              size: 12, color: AppColors.water600),
+                          SizedBox(width: 4),
+                          Text('موقع محدد على الخريطة',
+                              style: TextStyle(
+                                  color: AppColors.water600, fontSize: 11)),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -308,6 +337,8 @@ class _AddressFormSheetState extends State<_AddressFormSheet> {
   late final TextEditingController _title;
   late final TextEditingController _addressLine;
   late final TextEditingController _district;
+  double? _lat;
+  double? _lng;
 
   @override
   void initState() {
@@ -317,6 +348,26 @@ class _AddressFormSheetState extends State<_AddressFormSheet> {
     _title = TextEditingController(text: e?.title ?? '');
     _addressLine = TextEditingController(text: e?.addressLine ?? '');
     _district = TextEditingController(text: e?.district ?? '');
+    _lat = e?.lat;
+    _lng = e?.lng;
+  }
+
+  Future<void> _pickOnMap() async {
+    final result = await context.push<MapPickResult>(
+      '/map-picker',
+      extra: (_lat != null && _lng != null)
+          ? MapPickerArgs(lat: _lat!, lng: _lng!)
+          : null,
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _lat = result.lat;
+      _lng = result.lng;
+      // املأ السطر التفصيلي تلقائياً إن كان فارغاً.
+      if (result.address.isNotEmpty && _addressLine.text.trim().isEmpty) {
+        _addressLine.text = result.address;
+      }
+    });
   }
 
   @override
@@ -342,6 +393,8 @@ class _AddressFormSheetState extends State<_AddressFormSheet> {
         title: title,
         addressLine: addressLine,
         district: district.isEmpty ? null : district,
+        lat: _lat,
+        lng: _lng,
       ),
     );
   }
@@ -419,6 +472,20 @@ class _AddressFormSheetState extends State<_AddressFormSheet> {
                 hint: 'الحيّ أو المنطقة',
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _submit(),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _pickOnMap,
+                  icon: Icon(
+                    _lat != null ? Icons.check_circle : Icons.map_outlined,
+                    color: _lat != null ? AppColors.water600 : null,
+                  ),
+                  label: Text(_lat != null
+                      ? 'تم تحديد الموقع على الخريطة'
+                      : 'حدّد الموقع على الخريطة (اختياري)'),
+                ),
               ),
               const SizedBox(height: 20),
               SizedBox(

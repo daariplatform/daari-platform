@@ -41,6 +41,13 @@ class Fmt {
     return DateFormat.yMMMd('ar').add_jm().format(date.toLocal());
   }
 
+  /// شهر + سنة عربيان («حزيران ٢٠٢٦») — لترويسات تجميع القوائم.
+  static String arabicMonthYear(Object? d) {
+    final date = _parse(d);
+    if (date == null) return '—';
+    return DateFormat.yMMMM('ar').format(date.toLocal());
+  }
+
   /// عدد الأيام بين تاريخين (الافتراضي للثاني = الآن).
   static int daysBetween(DateTime a, [DateTime? b]) {
     final end = b ?? DateTime.now();

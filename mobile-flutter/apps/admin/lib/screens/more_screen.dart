@@ -126,9 +126,24 @@ class MoreScreen extends ConsumerWidget {
                     route: '/fleet'),
                 Divider(height: 1),
                 _NavTile(
+                    icon: Icons.leaderboard_outlined,
+                    label: 'أداء السائقين',
+                    route: '/drivers/performance'),
+                Divider(height: 1),
+                _NavTile(
+                    icon: Icons.local_fire_department_outlined,
+                    label: 'الخريطة الحرارية',
+                    route: '/reports/heatmap'),
+                Divider(height: 1),
+                _NavTile(
                     icon: Icons.insights_outlined,
                     label: 'تقارير متقدّمة',
                     route: '/reports/advanced'),
+                Divider(height: 1),
+                _NavTile(
+                    icon: Icons.history,
+                    label: 'سجلّ التدقيق',
+                    route: '/audit'),
                 Divider(height: 1),
                 _NavTile(
                     icon: Icons.checklist_outlined,

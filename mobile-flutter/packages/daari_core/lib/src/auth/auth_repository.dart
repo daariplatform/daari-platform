@@ -79,16 +79,23 @@ class AuthRepository {
   }
 
   /// استعادة كلمة السر — الخطوة 2: التحقّق من الرمز وتعيين كلمة سر جديدة.
-  Future<void> resetPassword({
+  /// الخادم يُصدر توكنات (مثل login) فنخزّنها ونُرجِع الهوية لتسجيل دخول تلقائي.
+  Future<MeResponse> resetPassword({
     required String phone,
     required String otp,
     required String newPassword,
   }) async {
     try {
-      await dio.post<void>(
+      final res = await dio.post<Map<String, dynamic>>(
         '/auth/verify-otp',
         data: {'phone': phone, 'otp': otp, 'newPassword': newPassword},
       );
+      final auth = AuthResponse.fromJson(res.data ?? const {});
+      await tokens.setTokens(
+        access: auth.accessToken,
+        refresh: auth.refreshToken,
+      );
+      return me();
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }

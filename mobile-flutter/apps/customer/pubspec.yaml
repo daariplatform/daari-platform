@@ -35,6 +35,9 @@ dependencies:
   # الموقع (منتقي العنوان في التسجيل)
   geolocator: ^13.0.1
 
+  # عكس الترميز الجغرافي (إحداثيات → نصّ عنوان في منتقي الخريطة)
+  geocoding: ^3.0.0
+
   cupertino_icons: ^1.0.8
 
 dev_dependencies:

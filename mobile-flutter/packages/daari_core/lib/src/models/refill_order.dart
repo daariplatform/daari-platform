@@ -11,6 +11,7 @@ class OrderDriverRef {
     required this.id,
     required this.fullName,
     this.phone,
+    this.vehiclePlate,
     this.currentLat,
     this.currentLng,
   });
@@ -18,6 +19,7 @@ class OrderDriverRef {
   final String id;
   final String fullName;
   final String? phone;
+  final String? vehiclePlate;
   final double? currentLat;
   final double? currentLng;
 
@@ -32,6 +34,7 @@ class OrderDriverRef {
       id: P.str(json['id']),
       fullName: P.str(user?['fullName']),
       phone: (user?['phone'] ?? json['phone']) as String?,
+      vehiclePlate: json['vehiclePlate'] as String?,
       currentLat: lat == null ? null : P.dbl(lat),
       currentLng: lng == null ? null : P.dbl(lng),
     );
@@ -49,6 +52,9 @@ class RefillOrder {
     required this.paidAmountIqd,
     this.requestedAt,
     this.completedAt,
+    this.customerConfirmedAt,
+    this.paymentMethod,
+    this.notes,
     this.driver,
     this.rating,
     this.deliveryLat,
@@ -62,6 +68,16 @@ class RefillOrder {
   final int paidAmountIqd;
   final DateTime? requestedAt;
   final DateTime? completedAt;
+
+  /// وقت تأكيد الزبون للاستلام (null = لم يؤكّد بعد) — يحكم إظهار أزرار التأكيد/الإبلاغ.
+  final DateTime? customerConfirmedAt;
+
+  /// طريقة الدفع (مثل `CASH`)؛ null إن لم تُرسَل.
+  final String? paymentMethod;
+
+  /// ملاحظات الطلب (اختيارية).
+  final String? notes;
+
   final OrderDriverRef? driver;
 
   /// تقييم الزبون (يأتي فقط مع تفاصيل الطلب، null إن لم يُقيَّم بعد).
@@ -112,6 +128,9 @@ class RefillOrder {
       paidAmountIqd: P.intv(json['paidAmountIqd']),
       requestedAt: P.date(json['requestedAt']),
       completedAt: P.date(json['completedAt']),
+      customerConfirmedAt: P.date(json['customerConfirmedAt']),
+      paymentMethod: json['paymentMethod'] as String?,
+      notes: json['notes'] as String?,
       driver: driverJson == null ? null : OrderDriverRef.fromJson(driverJson),
       rating: ratingJson == null ? null : OrderRating.fromJson(ratingJson),
       deliveryLat: dLat == null ? null : P.dbl(dLat),

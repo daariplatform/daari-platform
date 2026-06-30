@@ -22,6 +22,8 @@ class AdvancedReportsScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            const ReportWindowBar(),
+            const SizedBox(height: 20),
             const _Title('ساعات الذروة'),
             const SizedBox(height: 10),
             const _PeakHoursCard(),
@@ -247,9 +249,12 @@ class _ExportCardState extends ConsumerState<_ExportCard> {
   Future<void> _export() async {
     setState(() => _loading = true);
     try {
+      final w = ref.read(reportWindowProvider);
       final res = await ref.read(reportsRepositoryProvider).exportReport(
             type: _type,
             report: _report,
+            from: w.fromIso,
+            to: w.toIso,
           );
       await Launchers.openUrl(res.url);
       if (mounted) showSnack(context, 'تمّ توليد الملف وفتحه');

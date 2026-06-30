@@ -11,12 +11,14 @@ class _Slide {
 }
 
 const _slides = [
-  _Slide(Icons.touch_app, 'اطلب بضغطة زر',
-      'مياه شرب نقية من معملك المحلّي تصلك إلى باب البيت.'),
+  _Slide(Icons.water_drop, 'ماؤك يصل إليك',
+      'لا داعي لحمل القناني الثقيلة. اطلب تعبئة خزانك بضغطة واحدة ونحن نوصلها لباب بيتك.'),
   _Slide(Icons.local_shipping, 'تتبّع سائقك مباشرةً',
       'شاهد موقع السائق على الخريطة ووقت الوصول المتوقّع.'),
   _Slide(Icons.payments, 'ادفع نقداً عند التسليم',
       'لا بطاقات ولا تعقيد — تدفع فقط عند استلام التعبئة.'),
+  _Slide(Icons.event_repeat, 'لا تنسَ ماءك أبداً',
+      'فعّل التعبئة التلقائية الدورية، واحفظ عناوينك، واكسب نقاط ولاء مع كل تعبئة.'),
 ];
 
 /// شاشة التعريف الأولى (تُعرض مرّة واحدة).
@@ -53,10 +55,14 @@ class _IntroScreenState extends ConsumerState<IntroScreen> {
             children: [
               Align(
                 alignment: AlignmentDirectional.centerEnd,
-                child: TextButton(
-                  onPressed: _finish,
-                  child: const Text('تخطّي', style: TextStyle(color: Colors.white)),
-                ),
+                // يختفي «تخطّي» في الشريحة الأخيرة (يطابق Expo).
+                child: isLast
+                    ? const SizedBox(height: 48)
+                    : TextButton(
+                        onPressed: _finish,
+                        child: const Text('تخطّي',
+                            style: TextStyle(color: Colors.white)),
+                      ),
               ),
               Expanded(
                 child: PageView.builder(

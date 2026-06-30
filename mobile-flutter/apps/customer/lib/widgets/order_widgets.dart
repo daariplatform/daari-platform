@@ -39,6 +39,24 @@ class OrderStatusPill extends StatelessWidget {
   }
 }
 
+/// أيقونة تمثّل حالة الطلب (للمؤشّر البصري الملوّن في بطاقة الطلب).
+IconData orderStatusIcon(RefillOrderStatus s) {
+  switch (s) {
+    case RefillOrderStatus.pending:
+      return Icons.schedule;
+    case RefillOrderStatus.assigned:
+      return Icons.person_outline;
+    case RefillOrderStatus.enRoute:
+      return Icons.local_shipping;
+    case RefillOrderStatus.completed:
+      return Icons.check_circle;
+    case RefillOrderStatus.cancelled:
+      return Icons.cancel_outlined;
+    case RefillOrderStatus.failed:
+      return Icons.error_outline;
+  }
+}
+
 /// شارة دائرية صغيرة لأيقونة نوع الطلب.
 IconData orderKindIcon(RefillOrderKind kind) {
   switch (kind) {
