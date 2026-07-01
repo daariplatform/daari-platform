@@ -82,7 +82,7 @@ class OrdersRepository {
 
   /// تقييم نجمي بعد التوصيل.
   Future<OrderRating> rate(String id,
-      {required int stars, String? comment}) async {
+      {required int stars, String? comment,}) async {
     try {
       final body = <String, dynamic>{'stars': stars};
       if (comment != null && comment.isNotEmpty) body['comment'] = comment;

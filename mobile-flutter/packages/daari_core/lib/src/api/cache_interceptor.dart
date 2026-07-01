@@ -56,7 +56,7 @@ class CacheInterceptor extends Interceptor {
 
   @override
   void onResponse(
-      Response<dynamic> response, ResponseInterceptorHandler handler) {
+      Response<dynamic> response, ResponseInterceptorHandler handler,) {
     final code = response.statusCode ?? 0;
     if (_isCacheable(response.requestOptions) && code >= 200 && code < 300) {
       // حفظ دون انتظار — لا نؤخّر تسليم الاستجابة للواجهة.

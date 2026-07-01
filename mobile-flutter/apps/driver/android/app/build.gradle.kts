@@ -76,3 +76,12 @@ dependencies {
     // — يتطلّبها flutter_local_notifications.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
+
+// ─── Firebase (FCM) ───────────────────────────────────────────────────────────
+// يُطبَّق مكوّن Google Services فقط عند وجود google-services.json، فيبقى
+// `flutter run`/البناء يعملان قبل تهيئة Firebase. لتفعيل الإشعارات: ضع ملفّ
+// google-services.json الخاصّ بالتطبيق (من كونسول Firebase) في android/app/ ثم أعِد البناء.
+// التفاصيل: mobile-flutter/FIREBASE_SETUP.md
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}

@@ -68,3 +68,12 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+// ─── Firebase (FCM) ───────────────────────────────────────────────────────────
+// يُطبَّق مكوّن Google Services فقط عند وجود google-services.json، فيبقى
+// `flutter run`/البناء يعملان قبل تهيئة Firebase. لتفعيل الإشعارات: ضع ملفّ
+// google-services.json الخاصّ بالتطبيق (من كونسول Firebase) في android/app/ ثم أعِد البناء.
+// التفاصيل: mobile-flutter/FIREBASE_SETUP.md
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}

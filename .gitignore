@@ -15,7 +15,13 @@ package-lock.json.bak
 *.key
 *.cert
 google-service-account.json
+# مفاتيح حساب خدمة Firebase (اعتماد الخادم) — أي اسم، لا تلتزمها أبداً.
+# الاسم الافتراضي من الكونسول مثل: daariplatform-xxxxx-firebase-adminsdk-xxxxx.json
+*firebase-adminsdk*.json
+*service-account*.json
+*serviceaccount*.json
 GoogleService-Info.plist
+google-services.json
 secrets/
 keys/
 

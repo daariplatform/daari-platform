@@ -120,7 +120,7 @@ class DriverRepository {
         '/drivers/me/van-inventory',
         data: {
           'tanksFullOnVan': tanksFullOnVan,
-          'tanksEmptyOnVan': tanksEmptyOnVan
+          'tanksEmptyOnVan': tanksEmptyOnVan,
         },
       );
     } on DioException catch (e) {

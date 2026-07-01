@@ -41,7 +41,7 @@ class TaskCustomer {
 /// خزان مضمَّن داخل المهمة (للمسح/التحقّق).
 class TaskTank {
   const TaskTank(
-      {required this.id, required this.qrCode, required this.capacity});
+      {required this.id, required this.qrCode, required this.capacity,});
 
   final String id;
   final String qrCode;

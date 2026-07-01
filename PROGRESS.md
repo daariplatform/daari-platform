@@ -5,7 +5,7 @@
 >
 > للهيكلية العامة للمشروع → [`STRUCTURE.md`](STRUCTURE.md).
 
-**آخر تحديث:** 2026-06-30 · **الجلسة:** #16
+**آخر تحديث:** 2026-07-01 · **الجلسة:** #17
 
 ---
 
@@ -43,6 +43,21 @@ Next.js**. الإشعارات على الخادم تحوّلت من Expo Push إ
 ---
 
 ## 3) ✅ ما أُنجِز
+
+**جلسة #17 — 2026-07-01**
+- ✅ **تجهيز نشر `prisma db push` (السلامة المالية 6ب) — runbook + تحقّق من الواقع.** لا كود جديد؛ تحقّق وتوثيق.
+  - **تحقّق من أرض الواقع:** المخطّط مُودَع فعلاً ([schema.prisma:504/567](backend/prisma/schema.prisma#L504) لـ`RefillOrder`، [652/657](backend/prisma/schema.prisma#L652) لـ`CashHandover`)، ومنطق الخادم المستهلك للمفتاح مُودَع (`createWalkinRefill` [orders.service.ts:1189](backend/src/orders/orders.service.ts#L1189) · `createForDriver` مع التقاط `P2002` [cash-handover.service.ts:34-59](backend/src/cash-handover/cash-handover.service.ts#L34) + حقول DTO). **`git status` نظيف** → كل ذلك في commits (آخرها `eb8ff2e`).
+  - 🔎 **اكتشاف مهمّ:** `prisma db push` **ليس خطوة يدوية منفصلة** — [`deploy/deploy.sh:79`](deploy/deploy.sh#L79) يشغّله تلقائياً في كل نشر API (`npx prisma db push --skip-generate` + `generate` + إعادة تشغيل الخدمة). فأوّل `./deploy/deploy.sh api` يطبّق العمود/القيد. المستودع **بلا مجلّد migrations** ويستخدم `db push` حصراً (`migrate deploy` يُعطّل الـ API — تحذير صريح في السكربت).
+  - 📄 **الناتج:** [`deploy/RUNBOOK-clientRequestId-db-push.md`](deploy/RUNBOOK-clientRequestId-db-push.md) — نسخة احتياطية (`pg_dump`) → معاينة SQL الدقيق (`prisma migrate diff --script`، توقّف عند أي انحراف هدّام) → تطبيق (نشر متكامل أو `db push` جراحي) → تحقّق بعدي (أعمدة/فهارس + اختبار idempotency وظيفي) → خطة تراجع. يشمل معطيات البيئة (VPS/دليل/خدمة) وتنبيه مسار `.env` القديم في `backup-db.sh`.
+  - ✅ **تصحيح توثيقي:** سطر «لم يُنشأ commit بعد» كان قديماً — صُحِّح ليعكس أنّ العمل مُودَع وأنّ المعلّق هو تطبيق `db push` على DB الخادم فقط.
+- ✅ **بوّابة جاهزية للنشر — تحقّق بناء/تحليل عبر المكدّس كلّه** (Flutter 3.44.1 · Dart 3.12.1 · Node 24.15، على جهاز المطوّر):
+  - **Flutter:** `flutter pub get` نجح؛ `flutter analyze` = **No issues found** على `apps/customer` و`apps/driver` و`apps/admin`. القلب `packages/daari_core` أظهر 11 ملاحظة `info` موروثة (فواصل ذيلية × 10 + قوس `if` × 1) → طُبِّق `dart fix --apply` (فحص جافّ أولاً، 11 إصلاحاً تجميلياً بحتاً في 7 ملفات، لا تغيير سلوكي) → **daari_core صار No issues found أيضاً**. الآن **الوحدات الأربع نظيفة 100%**.
+  - **الخادم:** `npm ci` (exit 0) + `npx prisma generate` + **`npx tsc --noEmit` = 0 أخطاء**. مؤكَّد أنّ كود idempotency (6ب) يبني نظيفاً مع عميل Prisma المتضمّن `clientRequestId`.
+  - **الخلاصة:** الشيفرة في حالة **قابلة للشحن**؛ لا حواجز بناء متبقّية قبل النشر/التوقيع. الحواجز المتبقّية تشغيلية/بشرية فقط (نشر DB · جهاز فعلي · Firebase/توقيع).
+- ✅ **تجهيز Firebase (FCM) — ربط برمجي مسبق + دليل.** فحص من الواقع: حزم `firebase_core`/`firebase_messaging` وتهيئة best-effort و`push_service.dart` والصلاحيات كلّها موجودة؛ والخادم `firebase-admin` جاهز (no-op بلا اعتماد). **الناقص كان ربط Gradle** — أُضيف مكوّن `com.google.gms.google-services` **مشروطاً** في التطبيقات الثلاثة (`settings.gradle.kts` بـ`apply false` + `app/build.gradle.kts` بـ`if (file("google-services.json").exists())`) → **يُفعَّل تلقائياً عند إسقاط الملفّ، ولا يكسر البناء بدونه.** الناتج: [`mobile-flutter/FIREBASE_SETUP.md`](mobile-flutter/FIREBASE_SETUP.md) (خطوات الكونسول + معرّفات الحِزَم الثلاثة ومسارات الملفّات + iOS/APNs + متغيّرات اعتماد الخادم `FIREBASE_SERVICE_ACCOUNT_JSON`/`_PATH` + تحقّق). **يتبقّى عملك:** إنشاء مشروع Firebase وتنزيل الملفّات + ضبط اعتماد الخادم. (الأسرار مُتجاهَلة في `.gitignore` أصلاً.)
+  - **تقدّم لاحق في #17:** ✅ أنشأ المستخدم مشروع `daariplatform` وسجّل التطبيقات الثلاثة وأسقط `google-services.json` في أماكنها (مؤكَّد: `package_name` مطابق لكل تطبيق؛ تعدّد الإدخالات طبيعي والمكوّن يختار المطابق). ✅ نزّل مفتاح حساب الخدمة (محفوظ لديه، بلا خادم بعد). صُلّبت `.gitignore` بأنماط `*firebase-adminsdk*.json`/`*service-account*.json` (الاسم الافتراضي لا يطابق النمط القديم). صُحِّح مسار الخادم في الدليل إلى `/etc/daari-water/` (خارج مجلّد النشر — `rsync --delete` يحذف ما بداخله).
+  - **⚠️ الخادم `45.84.138.119` أُلغي نهائياً (#17):** أُزيل الـ IP المثبّت من [`deploy.sh`](deploy/deploy.sh) (صار يتطلّب `SSH_TARGET` ويجهض بلا دونه — أماناً من إعادة تعيين العنوان لغير) وعُمِّم في الـ runbook. **يلزم خادم جديد** (القسم 5).
+- ✅ **خطّة اختبار QA للجهاز الفعلي — جاهزة.** الناتج: [`mobile-flutter/DEVICE_QA_CHECKLIST.md`](mobile-flutter/DEVICE_QA_CHECKLIST.md) — قائمة فحص منظّمة تغطّي ما لا يُثبته `analyze`: **(أ)** idempotency طابور المال (5 حالات، الإثبات الأهمّ — يتطلّب القيد مُطبَّقاً) · **(ب)** GPS/خرائط السائق (حاجز 50م · فرز الأقرب · خريطة حيّة) · **(ج)** تدفّقات السائق · **(د)** الزبون (map-picker/ترميز عكسي · دورة الطلب) · **(هـ)** الإدارة + قفل البصمة · **(و)** إشعارات FCM (محجوبة حتى Firebase) · **(ز)** اختبار شامل E2E عبر التطبيقات + جدول اعتماد. مبنيّة على المسارات/الميزات الفعلية للتطبيقات الثلاثة وسجلّات التكافؤ. تُعلّم الحواجز البشرية (مفتاح خرائط/Firebase) صراحةً.
 
 **جلسة #16 — 2026-06-30**
 - ✅ **بدء المرحلة 2 (السائق) — جرد التكافؤ الكامل** (`apps/driver` ↔ `mobile-worker`) عبر **workflow متعدّد الوكلاء** (تدقيق ← تحقّق خصومي، 12 زوج شاشة) + **وكيل مخصّص لطابور المال**. لا تغيير على الكود بعد (جرد فقط).
@@ -228,7 +243,9 @@ Next.js**. الإشعارات على الخادم تحوّلت من Expo Push إ
   - أُضيف `firebase-admin@^13` وثُبِّت — **`tsc --noEmit` ينجح (0 أخطاء)**.
 - ✅ تحديث `STRUCTURE.md` ليعكس التوجّه الجديد + إنشاء هذا الملف.
 
-> **لم يُنشأ commit بعد** — كل ما سبق في شجرة العمل (working tree).
+> **ملاحظة (مُصحَّحة #17):** العمل مُودَع في commits (`git status` نظيف؛ آخرها `eb8ff2e Form Home`) — كان هذا السطر
+> يقول «لم يُنشأ commit بعد» وهو قديم. **لم يُطبَّق `prisma db push` على قاعدة بيانات الخادم بعد** (يُطبَّق تلقائياً
+> عند أوّل `./deploy/deploy.sh api` — انظر القسم 4 و[`deploy/RUNBOOK-clientRequestId-db-push.md`](deploy/RUNBOOK-clientRequestId-db-push.md)).
 
 ---
 
@@ -244,15 +261,23 @@ Next.js**. الإشعارات على الخادم تحوّلت من Expo Push إ
 
 > ✅ **تكافؤ السائق مكتمل عملياً** — **55 بنداً مُغلقاً (52 من الـ56 + MS‑1/2/3)** عبر 6أ/ج/د/هـ + history‑1 + 6و + 6ب ([السجلّ](mobile-flutter/DRIVER_PARITY_BACKLOG.md)). **كل العالية/المتوسّطة + التجميل + الثغرة المالية مُغلق.** `tsc` exit 0 · `flutter analyze` نظيف.
 
-1. **(⚠️ خطوة نشر) `prisma db push`:** تطبيق عمود/قيد `clientRequestId` (6ب) على قاعدة بيانات الخادم — الكود جاهز، والتغيير غير هدّام (عمود nullable + فهرس على صفوف كلها NULL). بدونها يبقى الحقل بلا أثر فعلي.
-2. **(لا يحتاج حسابك) اختبار ميداني + QA على جهاز فعلي:** ميزات GPS/الخريطة (6د) + البصمة + **طابور المال idempotency** (إثبات أن إعادة الإرسال لا تُكرّر البيع). ثم تقاعد `mobile-worker`. (المتبقّي 3 مؤجَّلة منخفضة: home‑4/7 · splash-routing‑4 · + MS‑4/5.)
+1. **(⚠️ خطوة نشر — جاهزة للتنفيذ) `prisma db push`:** تطبيق عمود/قيد `clientRequestId` (6ب) على قاعدة بيانات الخادم — الكود جاهز، والتغيير غير هدّام (عمود nullable + فهرس على صفوف كلها NULL). **الـ runbook جاهز:** [`deploy/RUNBOOK-clientRequestId-db-push.md`](deploy/RUNBOOK-clientRequestId-db-push.md) (نسخة احتياطية → معاينة SQL → تطبيق → تحقّق → تراجع). **مؤتمَت أصلاً:** أوّل `./deploy/deploy.sh api` يطبّقه تلقائياً ([deploy.sh:79](deploy/deploy.sh#L79)). بدونه يبقى الحقل بلا أثر فعلي.
+2. **(لا يحتاج حسابك) اختبار ميداني + QA على جهاز فعلي:** ميزات GPS/الخريطة (6د) + البصمة + **طابور المال idempotency** (إثبات أن إعادة الإرسال لا تُكرّر البيع). **الخطّة جاهزة:** [`mobile-flutter/DEVICE_QA_CHECKLIST.md`](mobile-flutter/DEVICE_QA_CHECKLIST.md) (اتّبعها على جهاز). ثم تقاعد `mobile-worker`. (المتبقّي 3 مؤجَّلة منخفضة: home‑4/7 · splash-routing‑4 · + MS‑4/5.)
 3. **(يحتاج حسابك — انظر القسم 5)** تجهيز Firebase + توقيع Android، لتمكين أوّل بناء موقّع.
+
+> ✅ **بوّابة الجاهزية (#17) مجتازة:** الوحدات الأربع (customer/driver/admin/core) `flutter analyze` نظيفة 100%، والخادم `tsc --noEmit` = 0 أخطاء. **لا حواجز بناء متبقّية** — أيّ نشر/توقيع لن يتعثّر بسبب الشيفرة.
 
 ---
 
 ## 5) 🔑 بانتظارك (عناصر بشرية تحجب التقدّم)
 
-- [ ] **مشروع Firebase**: سجّل 3 تطبيقات Android بأسماء الحِزَم أعلاه (+ iOS إن لزم)، ونزّل:
+- [ ] **🖥️ خادم/VPS (حاجب رئيسي جديد #17):** الخادم السابق `45.84.138.119` **أُلغي نهائياً**. يلزم **تجهيز خادم جديد** ليكون هدف النشر (`SSH_TARGET`) — أُزيل الـ IP المثبّت من [`deploy.sh`](deploy/deploy.sh) (صار يتطلّب `SSH_TARGET`) وعُمِّم في الـ runbook. بدون خادم: لا `prisma db push`، لا إرسال FCM، ولا API إنتاجي للتطبيقات. (للتطوير: شغّل `backend` محلياً ووجّه التطبيقات إليه. لتجهيز خادم: [`deploy/vps-bootstrap.sh`](deploy/vps-bootstrap.sh).)
+- [x] **مشروع Firebase (طرف التطبيقات) — مُنجَز #17:** سُجِّلت 3 تطبيقات Android وأُسقِط `google-services.json` لكلٍّ في مكانه (مؤكَّد: `package_name` مطابق لكل تطبيق). طرف الخادم (مفتاح حساب الخدمة) بانتظار الخادم.
+
+> 📄 **الربط البرمجي جاهز (#17)** — اتّبع [`mobile-flutter/FIREBASE_SETUP.md`](mobile-flutter/FIREBASE_SETUP.md). المتبقّي: **اعتماد الخادم فقط** (مفتاح حساب الخدمة عند توفّر خادم). المفتاح مُنزَّل ومحفوظ لديك.
+
+- [ ] **مفتاح حساب خدمة Firebase (طرف الخادم):** مُنزَّل — يُضبط في `.env` الخادم عند تجهيزه (خارج مجلّد النشر، `/etc/daari-water/`).
+- [ ] ~~مشروع Firebase~~ ✅ (أعلاه) — للمرجع، الملفّات المطلوبة كانت:
   - `google-services.json` → `android/app/` لكل تطبيق
   - `GoogleService-Info.plist` → `ios/Runner/` لكل تطبيق
   - **مفتاح حساب خدمة** → للخادم عبر `FIREBASE_SERVICE_ACCOUNT_JSON` أو `FIREBASE_SERVICE_ACCOUNT_PATH`
@@ -266,7 +291,7 @@ Next.js**. الإشعارات على الخادم تحوّلت من Expo Push إ
 
 ## 6) 📋 المتبقّي (المراحل)
 
-- **المرحلة 0 — الأساس:** أسماء الحِزَم ✅ · Firebase ⏳ · توقيع ⏳ · سكربت بناء محلّي ⏳ · قناة FCM بالخادم ✅
+- **المرحلة 0 — الأساس:** أسماء الحِزَم ✅ · Firebase: ربط برمجي (Gradle مشروط + دليل) ✅ / أصول الكونسول ⏳ · توقيع ⏳ · سكربت بناء محلّي ⏳ · قناة FCM بالخادم ✅
 - **المرحلة 1 — الزبون:** جرد التكافؤ ✅ · **إغلاق 74/75 عبر 7 دفعات (#9–#15) ✅ → مكتمل التكافؤ** (الوحيد المتبقّي قرار منتج) · يبقى QA شامل → إصدار → تقاعد `mobile-customer`.
 - **المرحلة 2 — السائق:** جرد التكافؤ ✅ (56 فجوة + 5 سلامة مالية، [السجلّ](mobile-flutter/DRIVER_PARITY_BACKLOG.md)) · 6أ/ج/د/هـ + history‑1 + 6و + **6ب (idempotency خادم) ✅** — **55 بنداً مُغلقاً (52 من الـ56 + MS‑1/2/3)** · ✅ **الثغرة المالية مُغلقة جذرياً** (يتطلّب `prisma db push` عند النشر) · المتبقّي 3 مؤجَّلة منخفضة + MS‑4/5 · يبقى **اختبار ميداني + QA** → تقاعد `mobile-worker`.
 - **المرحلة 3 — الإدارة (الأكبر):** طبقة بيانات `/plant/*` في core ✅ · `apps/admin` بـ 14 شاشة (مؤشّرات + تقارير أساسية/متقدّمة **بفلاتر تاريخ** + فريق بإجراءاته + عروض + مخزون + onboarding + خريطة أسطول حيّة + أداء السائقين + خريطة حرارية + سجلّ تدقيق + متابعة بثّ حيّة) ✅ · فلاتر تاريخ ✅ · بصمة (`local_auth`) ✅ (يتبقّى اختبار ميداني فقط) → **مكتملة وظيفياً** · تبقّى تقاعد `mobile-admin`.
@@ -276,7 +301,7 @@ Next.js**. الإشعارات على الخادم تحوّلت من Expo Push إ
 
 ## 7) ⚠️ مخاطر يجب تذكّرها
 
-- **طابور المال للسائق:** ✅ **مُعالَج (#16).** الإكمال/reclaim محميّان بـ `updateMany` الشرطي، وwalk-in/تسليم النقد صارا idempotent بـ `clientRequestId` + قيد UNIQUE (الدفعة 6ب) + dedupe العميل (MS‑3). ⚠️ **يتطلّب `prisma db push` عند النشر** ليفعّل القيد.
+- **طابور المال للسائق:** ✅ **مُعالَج (#16).** الإكمال/reclaim محميّان بـ `updateMany` الشرطي، وwalk-in/تسليم النقد صارا idempotent بـ `clientRequestId` + قيد UNIQUE (الدفعة 6ب) + dedupe العميل (MS‑3). ⚠️ **يتطلّب `prisma db push` عند النشر** ليفعّل القيد — **الإجراء موثّق ومجهّز في** [`deploy/RUNBOOK-clientRequestId-db-push.md`](deploy/RUNBOOK-clientRequestId-db-push.md)، ويُطبَّق تلقائياً عند أوّل `./deploy/deploy.sh api`.
 - **عقد الـ API مُجمَّد:** Flutter يستهلك نفس `/api/v1` — لا تغيّر العقد أثناء التحويل. استخدم اختبارات تكافؤ.
 - **اللمسة الوحيدة المسموحة بالخادم:** قناة الإشعارات (FCM) — أُنجِزت. لا تغييرات معمارية أخرى.
 
@@ -296,6 +321,7 @@ Next.js**. الإشعارات على الخادم تحوّلت من Expo Push إ
 
 | # | التاريخ | الخلاصة |
 |---|---|---|
+| 17 | 2026-07-01 | **(أ) تجهيز نشر `prisma db push` (السلامة المالية 6ب):** تحقّق من الواقع أنّ المخطّط (عمود `clientRequestId` + قيدا `@@unique` على `RefillOrder`/`CashHandover`) ومنطق الخادم (`createWalkinRefill`/`createForDriver` + التقاط `P2002`) **مُودَعان** و`git status` نظيف. 🔎 اكتشاف: `db push` مؤتمَت في [`deploy.sh:79`](deploy/deploy.sh#L79) (يُطبَّق تلقائياً عند أوّل نشر API؛ المستودع بلا migrations). الناتج: [`deploy/RUNBOOK-clientRequestId-db-push.md`](deploy/RUNBOOK-clientRequestId-db-push.md) (نسخة احتياطية→معاينة SQL→تطبيق→تحقّق idempotency→تراجع). صُحِّح سطر «لم يُنشأ commit بعد» القديم. **(ب) بوّابة جاهزية للنشر:** `flutter analyze` = No issues على customer/driver/admin؛ `daari_core` نُظّف بـ`dart fix` (11 إصلاح تجميلي/7 ملفات) → الوحدات الأربع نظيفة 100%؛ الخادم `npm ci`+`prisma generate`+`tsc --noEmit` = 0 أخطاء. **الشيفرة قابلة للشحن؛ الحواجز المتبقّية تشغيلية/بشرية فقط.** **(ج) خطّة QA للجهاز الفعلي:** [`DEVICE_QA_CHECKLIST.md`](mobile-flutter/DEVICE_QA_CHECKLIST.md) (7 أقسام: idempotency المال · GPS/خرائط · تدفّقات · الزبون · الإدارة/البصمة · FCM محجوب · E2E + جدول اعتماد). **(د) تجهيز Firebase:** ربط `google-services` **مشروط** في التطبيقات الثلاثة (يُفعَّل عند إسقاط الملفّ، لا يكسر البناء) + دليل [`FIREBASE_SETUP.md`](mobile-flutter/FIREBASE_SETUP.md) — يتبقّى أصول الكونسول + اعتماد الخادم (عملك). |
 | 1 | 2026-06-28 | تحليل (FastAPI/Flutter) → قرار: إبقاء الخادم، اعتماد Flutter، حذف Expo، إشعارات FCM. تنفيذ: توحيد أسماء الحِزَم (customer/driver)، تحويل إشعارات الخادم إلى FCM (يبني نظيفاً)، تحديث STRUCTURE + إنشاء هذا الملف. |
 | 2 | 2026-06-29 | بناء طبقة بيانات الإدارة في `daari_core`: 5 repositories + 12 ملف نماذج (+enums بقيم Prisma) تغطّي 28 نقطة `/plant/*`، رُبِطت بـ providers وصُدِّرت من barrel. `dart analyze` نظيف + تحقّق خصومي بـ workflow (كلها faithful). لا تغيير على الخادم. |
 | 3 | 2026-06-29 | هيكلة تطبيق الإدارة `apps/admin` (`com.phibit.daariadmin`): بنية المنصّات + ضبط معرّف الحزمة + تسجيل في workspace + `main/router(حارس مصادقة)/providers` + 6 شاشات (splash/login/home-KPIs/reports/team/more) + قشرة تبويبات. `dart analyze`: No issues found. لا تغيير على الخادم. |

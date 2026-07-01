@@ -8,7 +8,9 @@
 #   ./deploy/deploy.sh both         # both
 #
 # Assumes:
-#  - VPS is reachable as root@45.84.138.119 via ~/.ssh/phibit_deploy
+#  - SSH_TARGET is set to your server (e.g. root@1.2.3.4) via ~/.ssh/phibit_deploy
+#    NOTE: the previous VPS (45.84.138.119) was decommissioned — there is no
+#    hardcoded default anymore, so you MUST pass SSH_TARGET explicitly.
 #  - /root/PROJECTS.md already has the "Daari Water" entry
 #  - First-time setup (vps-bootstrap.sh) has already run on the server
 #
@@ -29,7 +31,15 @@ if [[ -z "$TARGET" ]]; then
 fi
 
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/phibit_deploy}"
-SSH_TARGET="${SSH_TARGET:-root@45.84.138.119}"
+# The previous VPS (45.84.138.119) was decommissioned. There is deliberately NO
+# default target — set SSH_TARGET to your current server so we never rsync/ssh to
+# a stale IP that the hosting provider may have reassigned to someone else.
+SSH_TARGET="${SSH_TARGET:-}"
+if [[ -z "$SSH_TARGET" ]]; then
+  echo "[ABORT] SSH_TARGET is not set (the old VPS was decommissioned)." >&2
+  echo "        Example:  SSH_TARGET=root@YOUR_SERVER_IP ./deploy/deploy.sh api" >&2
+  exit 1
+fi
 SSH="ssh -i $SSH_KEY $SSH_TARGET"
 RSYNC_SSH="ssh -i $SSH_KEY"
 

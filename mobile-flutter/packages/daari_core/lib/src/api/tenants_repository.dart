@@ -11,7 +11,7 @@ class TenantsRepository {
 
   /// أقرب معمل للإحداثيات (شاشة التسجيل/الرئيسية).
   Future<NearestPlant?> nearest(
-      {required double lng, required double lat}) async {
+      {required double lng, required double lat,}) async {
     try {
       final res = await _dio.get<dynamic>(
         '/tenants/nearest',
@@ -29,7 +29,7 @@ class TenantsRepository {
 
   /// كل المعامل ضمن النطاق (شاشة اختيار المعمل في التسجيل).
   Future<List<NearestPlant>> discover(
-      {required double lng, required double lat}) async {
+      {required double lng, required double lat,}) async {
     try {
       final res = await _dio.get<List<dynamic>>(
         '/tenants/discover',

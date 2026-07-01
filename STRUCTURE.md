@@ -157,13 +157,18 @@ mobile-flutter/
   (سجلّ الفجوات الـ75 مقابل Expo + حالة الإغلاق) و`mobile-flutter/.parity/` (التقرير الخام للجرد متعدّد الوكلاء).
 - **تتبّع تكافؤ السائق:** [`mobile-flutter/DRIVER_PARITY_BACKLOG.md`](mobile-flutter/DRIVER_PARITY_BACKLOG.md)
   (56 فجوة + 5 نتائج سلامة مالية + خطّة دفعات) و`mobile-flutter/.parity/driver-audit-2026-06-30.json` (الخام).
+- **خطّة اختبار الجهاز الفعلي (QA):** [`mobile-flutter/DEVICE_QA_CHECKLIST.md`](mobile-flutter/DEVICE_QA_CHECKLIST.md)
+  (7 أقسام: idempotency المال · GPS/خرائط · تدفّقات السائق/الزبون · الإدارة/البصمة · FCM · E2E + جدول اعتماد) — البوّابة قبل تقاعد Expo.
+- **تهيئة Firebase (FCM):** [`mobile-flutter/FIREBASE_SETUP.md`](mobile-flutter/FIREBASE_SETUP.md) — الربط البرمجي جاهز (حزم + `push_service` + مكوّن
+  `google-services` **مربوط مشروطاً** في التطبيقات الثلاثة: يُفعَّل عند إسقاط `google-services.json`، ولا يكسر البناء بدونه). المتبقّي أصول الكونسول + اعتماد الخادم.
 
 > **التوجّه المعتمَد:** تطبيقات Flutter هي **الواجهة الرسمية** للجوّال؛ وتطبيقات Expo
 > (`mobile-customer/worker/admin`) **قديمة قيد الإيقاف** وتُحذف بعد اكتمال التحويل. تطبيق **الزبون** جُرِد بدقّة
 > (75 فجوة داخلية، **أُغلِق 74 → مكتمل التكافؤ**؛ الوحيد المتبقّي قرار منتج — [السجلّ](mobile-flutter/CUSTOMER_PARITY_BACKLOG.md))،
 > و**السائق** **جُرِد** (12 زوج شاشة): التطابق على مستوى الشاشات كامل، **56 فجوة داخلية + 5 نتائج سلامة مالية** ([السجلّ](mobile-flutter/DRIVER_PARITY_BACKLOG.md))،
 > **تكافؤ السائق مكتمل عملياً** — **55 بنداً مُغلقاً (52 من الـ56 + MS‑1/2/3)** عبر 7 دفعات (6أ/ج/د/هـ + history‑1 + 6و + 6ب): سلامة مالية + تدفّقات حرجة + GPS/خريطة + لمسات الشاشات + اسم الزبون + تجميل شامل + **idempotency الخادم لإغلاق الثغرة المالية**. `tsc` exit 0 · `flutter analyze` نظيف. المتبقّي 3 مؤجَّلة منخفضة.
-> ✅ **الثغرة المالية مُغلقة:** walk-in/تسليم النقد صارا idempotent عبر `clientRequestId` + قيد `@@unique([tenantId, clientRequestId])` (إضافة **متوافقة رجعياً** — Expo بلا مفتاح يبقى كما هو). ⚠️ **خطوة نشر:** `prisma db push`. ويبقى **اختبار ميداني** (GPS/خريطة/بصمة/طابور المال).
+> ✅ **بوّابة جاهزية (#17):** أُعيد التحقّق أنّ الوحدات الأربع (customer · driver · admin · daari_core) تُحلَّل **بلا أي ملاحظة** (نُظّفت 11 ملاحظة `info` موروثة في core بـ`dart fix`)، والخادم `tsc --noEmit` = 0 أخطاء → **الشيفرة قابلة للشحن، لا حواجز بناء.**
+> ✅ **الثغرة المالية مُغلقة:** walk-in/تسليم النقد صارا idempotent عبر `clientRequestId` + قيد `@@unique([tenantId, clientRequestId])` (إضافة **متوافقة رجعياً** — Expo بلا مفتاح يبقى كما هو). ⚠️ **خطوة نشر:** `prisma db push` (مؤتمَتة في `deploy.sh`؛ الإجراء الآمن موثّق في [`deploy/RUNBOOK-clientRequestId-db-push.md`](deploy/RUNBOOK-clientRequestId-db-push.md)). ويبقى **اختبار ميداني** (GPS/خريطة/بصمة/طابور المال).
 > أمّا **لوحة الإدارة بـ Flutter (`com.phibit.daariadmin`)** فتطبيق `apps/admin` **مكتمل التكافؤ الوظيفي بـ 14 شاشة**
 > (مصادقة + **قفل بصمة (`local_auth`)** + لوحة مؤشّرات حيّة + التقارير الأساسية والمتقدّمة **بفلاتر تاريخ** + الفريق بإجراءاته + العروض **مع متابعة بثّ حيّة** + المخزون + تهيئة المعمل + **خريطة أسطول حيّة** + **أداء السائقين** + **خريطة حرارية** + **سجلّ تدقيق مرقّم**)،
 > ولم يبقَ عليه سوى **اختبار البصمة ميدانياً** (+ مفتاح خرائط للإنتاج). الحالة التفصيلية في **[`PROGRESS.md`](PROGRESS.md)**.
@@ -172,7 +177,7 @@ mobile-flutter/
 
 ## 5) النشر والأدوات
 
-- **`deploy/`** — `deploy.sh`, `vps-bootstrap.sh`, و إعدادات `nginx/`, `systemd/`, `logrotate/`.
+- **`deploy/`** — `deploy.sh` (نشر API/dashboard؛ يشغّل `prisma db push` تلقائياً؛ **يتطلّب `SSH_TARGET`** — الخادم السابق `45.84.138.119` أُلغي، لا هدف افتراضي), `vps-bootstrap.sh` (تجهيز VPS جديد), `RUNBOOK-clientRequestId-db-push.md` (إجراء نشر قيد idempotency), و إعدادات `nginx/`, `systemd/`, `logrotate/`.
 - **`scripts/`** — `backup-db.sh`, `eas-setup-and-build.sh`, `generate-icons.py`, `github-setup.sh`.
 - **`legal/`** — سياسة الخصوصية (EN/AR)، شروط الخدمة (AR)، قوائم متجر Play (الزبون/العامل).
 - **`store-assets/`** — حزمة تقديم Google Play Console.

@@ -120,7 +120,7 @@ class CustomerRepository {
 
   /// تعديل جدولة (تبديل التفعيل أو الحقول).
   Future<RefillSchedule> updateSchedule(
-      String id, Map<String, dynamic> patch) async {
+      String id, Map<String, dynamic> patch,) async {
     try {
       final res = await _dio.patch<Map<String, dynamic>>(
         '/customers/me/schedules/$id',
@@ -170,7 +170,7 @@ class CustomerRepository {
   Future<void> registerByDriver(RegisterCustomerInput input) async {
     try {
       await _dio.post<void>('/customers/register-by-driver',
-          data: input.toJson());
+          data: input.toJson(),);
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -179,7 +179,7 @@ class CustomerRepository {
   /// «انتقلت لبيت جديد»: يحدّث إحداثيات منزل الزبون. الباك إند يقصر العملية على
   /// سجلّ الزبون نفسه (يمنع IDOR). يطابق `POST /customers/:id/move` في Expo.
   Future<void> move(String customerId,
-      {required double lng, required double lat}) async {
+      {required double lng, required double lat,}) async {
     try {
       await _dio.post<void>(
         '/customers/$customerId/move',
