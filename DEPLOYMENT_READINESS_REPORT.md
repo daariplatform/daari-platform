@@ -9,6 +9,18 @@
 
 ---
 
+> ## ✅ تحديث #18 (2026-07-01): الحواجز الأربعة أُغلقت كوداً
+> عولِجت **جميع** حواجز الكود الأربعة أدناه (تحقّق مستقل من الكود الفعلي + `npx tsc --noEmit` = 0 أخطاء + `node --check`):
+> - **#1** أُضيف `location /uploads/` (alias + `try_files`) في [nginx conf](deploy/nginx/daari-water-api.conf) → صور الإثبات والتقارير تُخدَم.
+> - **#2** كان **مبالغاً فيه**: [`.env.production.example:72`](backend/.env.production.example) يضبط `UPLOADS_DIR=/var/www/daari-water-api/uploads` أصلاً (داخل `ReadWritePaths`)، والتطبيق ينشئ المجلّد ذاتياً → لا 500. أُضيف تحصين `mkdir uploads` + chown في [deploy.sh](deploy/deploy.sh) فقط.
+> - **#3** `BREAK → ON_BREAK` في [drivers/page.tsx](dashboard/src/app/dashboard/drivers/page.tsx) + حارس `?? STATUS.OFFLINE`.
+> - **#4** [`prisma/seed-prod.cjs`](backend/prisma/seed-prod.cjs) (JS صِرف، يعمل مع `--omit=dev`) مربوط في [deploy.sh](deploy/deploy.sh) + عزل الديمو خلف `NODE_ENV` في [seed.ts](backend/prisma/seed.ts) + `PLATFORM_ADMIN_*` في القالب.
+> - **مكافأة:** صُحّح اسم متغيّر FCM في القالب (`FCM_SERVICE_ACCOUNT_PATH` → `FIREBASE_SERVICE_ACCOUNT_PATH`).
+>
+> **النتيجة: 4 حواجز كود → 0.** المتبقّي حاجب للإطلاق لكنه **تشغيلي/بشري فقط**: تجهيز الخادم الجديد + المهام في القسمين الأخيرين. التفاصيل في [`PROGRESS.md`](PROGRESS.md) جلسة #18.
+
+---
+
 ## 🧭 الخلاصة التنفيذية
 
 **المشروع قريب جداً من الجاهزية لكنه ليس قابلاً للنشر كما هو.** الشيفرة **تُبنى نظيفة تماماً** (لا مشكلة
@@ -18,7 +30,8 @@
 أهمّ نتيجة مطمئنة: أخطر ما رُصد (تسميم معاملة `WaterStock`) **ثبت أنه ليس مشكلة** عند القراءة الدقيقة
 (Prisma يقرأ قبل الكتابة)، وكثير من «الحواجز» تبخّرت بعد التحقّق الخصومي.
 
-**الحكم:** `readyToDeploy = false` — أصلِح الحواجز الأربعة، أكمِل المهام التشغيلية، ثم انشر.
+**الحكم (الأصلي):** `readyToDeploy = false` — أصلِح الحواجز الأربعة، أكمِل المهام التشغيلية، ثم انشر.
+**الحكم (بعد #18):** الحواجز الأربعة أُغلقت كوداً ✅ — **لا حواجز كود متبقّية**؛ الإطلاق محجوب الآن بالمهام التشغيلية/البشرية فقط (خادم جديد أولاً).
 
 ### ✅ حالة البناء (تحقّق مستقل)
 
@@ -33,7 +46,7 @@
 
 ## 🔴 الحواجز الحقيقية قبل النشر (٤ — كلها كود/إعداد بسيط)
 
-### 1) لا أحد يخدم `/uploads/` → كل صور إثبات التسليم وملفات التقارير تُرجع 404
+### ✅ 1) [عولِج #18] لا أحد يخدم `/uploads/` → كل صور إثبات التسليم وملفات التقارير تُرجع 404
 الخادم يُصدر روابط `${APP_URL}/uploads/proof/…` و`/uploads/reports/…`
 ([uploads.controller.ts:122](backend/src/uploads/uploads.controller.ts#L122)،
 [reports.controller.ts:703](backend/src/plant/reports.controller.ts#L703))، لكن
@@ -43,7 +56,7 @@
 **الحل:** أضف `location /uploads/ { alias /var/www/daari-water-api/uploads/; add_header Cache-Control "private, max-age=86400"; access_log off; }` (نفس مسار `UPLOADS_DIR`).
 التقارير تحمل PII فالأفضل تقديمها عبر مسار Nest مصادَق يعيد فحص `tenantId`.
 
-### 2) رفع الصور يكتب في مجلّد يجعله sandbox للقراءة فقط → كل رفع سائق يُرجع 500
+### ✅ 2) [عولِج #18 — كان مبالغاً فيه] رفع الصور يكتب في مجلّد يجعله sandbox للقراءة فقط → كل رفع سائق يُرجع 500
 [uploads.controller.ts:35](backend/src/uploads/uploads.controller.ts#L35) يكتب في
 `${UPLOADS_DIR ?? '/var/uploads'}`، لكن [systemd unit](deploy/systemd/daari-water-api.service#L29)
 يعمل بـ`ProtectSystem=strict` مع `ReadWritePaths` = مجلّد النشر واللوغ فقط، و`UPLOADS_DIR`
@@ -52,7 +65,7 @@
 **الحل:** اضبط `UPLOADS_DIR=/var/www/daari-water-api/uploads` صراحةً في `.env` الإنتاج + أنشئ/امنح
 ملكية المجلّد في [vps-bootstrap.sh](deploy/vps-bootstrap.sh). (توأم الحاجز #1 — أصلِحهما معاً بنفس المسار.)
 
-### 3) صفحة السائقين في لوحة التحكّم تنهار عند أي سائق `ON_BREAK`
+### ✅ 3) [عولِج #18] صفحة السائقين في لوحة التحكّم تنهار عند أي سائق `ON_BREAK`
 [dashboard/.../drivers/page.tsx:52](dashboard/src/app/dashboard/drivers/page.tsx#L52) يبني خريطة
 `STATUS` بمفتاح `BREAK`، بينما enum الحقيقي في [schema.prisma:406](backend/prisma/schema.prisma#L406)
 هو `ON_BREAK` (يُكتب فعلاً في [drivers.service.ts:165](backend/src/drivers/drivers.service.ts#L165)).
@@ -60,7 +73,7 @@
 يقع في حدث يومي عادي.
 **الحل (سطر واحد):** `const s = STATUS[d.status] ?? STATUS.OFFLINE;` أو أعد تسمية المفتاح `BREAK → ON_BREAK`.
 
-### 4) خط النشر لا يزرع `PLATFORM_ADMIN` أبداً → لوحة المنصّة معطّلة ولا يمكن إنشاء أي مستأجِر
+### ✅ 4) [عولِج #18] خط النشر لا يزرع `PLATFORM_ADMIN` أبداً → لوحة المنصّة معطّلة ولا يمكن إنشاء أي مستأجِر
 [deploy.sh:89](deploy/deploy.sh#L89) يشغّل `db push` + إعادة تشغيل لكن **لا seed**. الكيان الوحيد الذي
 ينشئ `PLATFORM_ADMIN` هو [seed.ts:31](backend/prisma/seed.ts#L31). على قاعدة بيانات جديدة: الجداول
 موجودة لكن **صفر platform-admin** → كل `/platform/*` غير قابل للوصول، وإنشاء المستأجِرين ميت =
@@ -86,7 +99,7 @@
 - **حارس JWT يقبل النموذج الظاهر** في `.env.example` (`replace-with-a-strong-secret…`) ([auth.module.ts:21](backend/src/auth/auth.module.ts#L21)).
 
 ### نشر/إعداد
-- **عدم تطابق اسم متغيّر FCM** — القالب يستخدم `FCM_SERVICE_ACCOUNT_PATH` والكود يقرأ `FIREBASE_SERVICE_ACCOUNT_PATH` ([.env.production.example:55](backend/.env.production.example#L55)) → الدفع مُعطَّل بصمت.
+- **عدم تطابق اسم متغيّر FCM** — القالب يستخدم `FCM_SERVICE_ACCOUNT_PATH` والكود يقرأ `FIREBASE_SERVICE_ACCOUNT_PATH` ([.env.production.example:55](backend/.env.production.example#L55)) → الدفع مُعطَّل بصمت. **✅ صُحِّح (#18).**
 - **إضافة `postgis` مُعلَنة وغير مستخدمة** ([schema.prisma:13](backend/prisma/schema.prisma#L13)) → قد تُفشِل `db push` على Postgres عادي. احذفها (المسافة Haversine داخل التطبيق).
 - **بذور الديمو تنشئ 4 حسابات بـ`password123`** ([seed.ts:20](backend/prisma/seed.ts#L20)) — اعزلها خلف `NODE_ENV`.
 - **`backup-db.sh` مسار `.env` خاطئ** (`daari-api` بدل `daari-water-api`) ([scripts/backup-db.sh:23](scripts/backup-db.sh#L23)) → النسخ الاحتياطي يفشل بصمت.
@@ -139,18 +152,17 @@ Throttler في الذاكرة بدل Redis · نماذج tenant-scoped بلا FK
 | backend-financial | 0 | معالجة مال إنتاجية؛ should-fix (رواتب/walk-in/assign) |
 | backend-domain | 0 | عزل مستأجِرين قوي؛ vendors مغلق بعلَم |
 | backend-admin-plant | 0 | جيّد؛ تنزيل تقارير يندمج بحاجز /uploads |
-| **backend-infra-integrations** | **2** | حاجزا الرفع (كتابة + خدمة) |
-| **backend-schema** | **1** | حاجز زرع platform-admin |
-| **web-dashboard** | **1** | انهيار صفحة السائقين (ON_BREAK) |
+| backend-infra-integrations | **0 ✅** | حاجزا الرفع عولِجا (#18): `/uploads` بـnginx + `UPLOADS_DIR` القالب صحيح |
+| backend-schema | **0 ✅** | زرع platform-admin عولِج (#18): `seed-prod.cjs` في `deploy.sh` |
+| web-dashboard | **0 ✅** | انهيار `ON_BREAK` عولِج (#18) |
 | web-console | 0 | يُبنى نظيفاً؛ لا هدف نشر |
 | flutter-core/customer/driver/admin | 0 | هندسة جيّدة؛ should-fix متفرّقة |
 | flutter-build-signing | 0 | توقيع/iOS = مهام بشرية |
-| **deploy-infra** | **2** | /uploads بنginx + الخادم الجديد |
+| **deploy-infra** | **1** | `/uploads` عولِج (#18)؛ يبقى تجهيز الخادم الجديد |
 | secrets-hygiene | 0 | لا أسرار حقيقية مُودَعة |
 | publishing-assets | 0 | أساس قانوني قوي؛ تصحيحات مستندات |
 
 ---
 
-**المتبقّي فعلياً كوداً = ٤ حواجز + مجموعة should-fix**، وثلاثة من الحواجز إصلاحات صغيرة جداً (سطر
-`ON_BREAK`، `location /uploads/`، `UPLOADS_DIR`+`ReadWritePaths`، خطوة seed للإنتاج). البقية مهام
-تشغيلية معروفة.
+**تحديث #18: الحواجز الأربعة أُغلقت كوداً → المتبقّي كوداً = 0 حواجز** (تبقى مجموعة should-fix
+اختيارية للتصلّب). البقية مهام تشغيلية معروفة (خادم جديد، توقيع، Firebase طرف الخادم، خرائط، QA ميداني).

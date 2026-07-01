@@ -5,7 +5,7 @@
 >
 > للهيكلية العامة للمشروع → [`STRUCTURE.md`](STRUCTURE.md).
 
-**آخر تحديث:** 2026-07-01 · **الجلسة:** #17
+**آخر تحديث:** 2026-07-01 · **الجلسة:** #18
 
 ---
 
@@ -24,7 +24,7 @@ Next.js**. الإشعارات على الخادم تحوّلت من Expo Push إ
 (نقاط `create()` كانت بلا حارس) **أُغلقت في 6ب** عبر `clientRequestId` + قيد UNIQUE — يبقى تشغيل `prisma db push` عند النشر. تطبيق الإدارة بـ Flutter **مكتمل التكافؤ الوظيفي** — **14 شاشة** (`apps/admin`:
 مؤشّرات حيّة + تقارير أساسية ومتقدّمة **مع فلاتر تاريخ** + فريق بإجراءاته + عروض (مع **متابعة بثّ حيّة**) + مخزون + تهيئة +
 **خريطة أسطول حيّة** + **أداء السائقين** + **خريطة حرارية** + **سجلّ تدقيق مرقّم**) + قفل بصمة. لم يبقَ على الإدارة سوى **اختبار
-البصمة ميدانياً** (يحتاج جهازاً). **التركيز التالي (غداً):** `prisma db push` + **اختبار ميداني على جهاز فعلي** (GPS/خريطة/بصمة/idempotency طابور المال) + عناصرك البشرية (القسم 5).
+البصمة ميدانياً** (يحتاج جهازاً). **التركيز التالي:** أُغلقت **الحواجز الأربعة للنشر كوداً (#18)** → **صفر حواجز كود**. الخطوة: **تجهيز خادم جديد** ثم **أوّل `./deploy/deploy.sh api`** (يطبّق `db push` + يزرع مالك المنصّة + ينشئ uploads تلقائياً) ثم **اختبار ميداني** (GPS/خريطة/بصمة/idempotency طابور المال) + عناصرك البشرية (القسم 5).
 
 ---
 
@@ -43,6 +43,15 @@ Next.js**. الإشعارات على الخادم تحوّلت من Expo Push إ
 ---
 
 ## 3) ✅ ما أُنجِز
+
+**جلسة #18 — 2026-07-01**
+- ✅ **إغلاق الحواجز الأربعة الحقيقية من [`DEPLOYMENT_READINESS_REPORT.md`](DEPLOYMENT_READINESS_REPORT.md)** — كلها كود/إعداد **لا تحتاج حسابك**. تحقّق مستقل من الكود الفعلي قبل كل تعديل، ثم `npx tsc --noEmit` = **0 أخطاء** و`node --check` نظيف.
+  - **الحاجز #3 — لوحة التحكّم تنهار على أي سائق `ON_BREAK`:** enum الحقيقي `ON_BREAK` ([schema.prisma:410](backend/prisma/schema.prisma#L410)) بينما اللوحة تستخدم مفتاح `BREAK` → `STATUS[d.status].klass` = `undefined.klass` يرمي ويُسقط الجدول كاملاً في error boundary (حدث يومي عادي). أُعيدت التسمية `BREAK→ON_BREAK` في اتحاد النوع وخريطة `STATUS` + **حارس احتياطي** `(STATUS[d.status] ?? STATUS.OFFLINE)` يقاوم أي حالة مستقبلية ([drivers/page.tsx](dashboard/src/app/dashboard/drivers/page.tsx)).
+  - **الحاجز #1 — لا أحد يخدم `/uploads/` (صور الإثبات + ملفات التقارير 404):** NestJS لا يخدم static و`location /` يمرّرها للخادم → 404. أُضيف `location /uploads/ { alias /var/www/daari-water-api/uploads/; try_files $uri =404; ... }` في [nginx conf](deploy/nginx/daari-water-api.conf) — يخدم proof + reports من نفس `UPLOADS_DIR`. ملاحظة PII للتقارير موثّقة (روابط UUID تنتهي خلال 24س؛ بديل مصادَق لاحقاً إن لزم).
+  - **الحاجز #4 — النشر لا يزرع `PLATFORM_ADMIN` أبداً (لوحة المنصّة معطّلة + لا إنشاء مستأجِرين):** (أ) عُزلت بيانات الديمو (`password123`) خلف `NODE_ENV !== 'production'` بإرجاع مبكر بعد زرع مالك المنصّة في [seed.ts](backend/prisma/seed.ts). (ب) سكربت إنتاجي مستقلّ [`prisma/seed-prod.cjs`](backend/prisma/seed-prod.cjs) بـ JS صِرف **يعمل مع `--omit=dev`** (لأن `@prisma/client`+`argon2` إنتاجيان، بخلاف `prisma`/`ts-node` التطويريين) — يزرع مالك المنصّة فقط بشكل idempotent + يحمّل `.env` بنفسه (عميل Prisma وقت التشغيل لا يحمّله). (ج) رُبط `node prisma/seed-prod.cjs` في [deploy.sh](deploy/deploy.sh) بعد `prisma generate`. (د) أُضيف `PLATFORM_ADMIN_PHONE/PASSWORD` إلى [`.env.production.example`](backend/.env.production.example) — **فشل صريح إن غاب الباسورد** (لا اعتماد افتراضي)، وإعادة النشر لا تُعيد تعيين باسورد قائم.
+  - **الحاجز #2 — «رفع السائق يُرجع 500» كان مبالغاً فيه:** القالب [`.env.production.example:72`](backend/.env.production.example) **يضبط `UPLOADS_DIR=/var/www/daari-water-api/uploads` أصلاً** (داخل `ReadWritePaths` بـ systemd)، والتطبيق ينشئ المجلّد ذاتياً عند الإقلاع → لا 500 عند استخدام القالب. أُضيف تحصين فقط: `mkdir -p .../uploads/{proof,reports}` + chown في [deploy.sh](deploy/deploy.sh).
+  - **مكافأة (should-fix):** صُحّح اسم متغيّر FCM في القالب `FCM_SERVICE_ACCOUNT_PATH` → `FIREBASE_SERVICE_ACCOUNT_PATH` (الكود يقرأ `FIREBASE_SERVICE_ACCOUNT_JSON`/`_PATH` — [push.service.ts:40-42](backend/src/notifications/push.service.ts#L40)) — كان الدفع يتعطّل بصمت.
+  - **الأثر:** `readyToDeploy` انتقل من **4 حواجز كود → 0**؛ المتبقّي مهام تشغيلية/بشرية فقط (خادم جديد، توقيع، Firebase طرف الخادم، مفتاح خرائط، QA ميداني — القسم 5).
 
 **جلسة #17 — 2026-07-01**
 - ✅ **تجهيز نشر `prisma db push` (السلامة المالية 6ب) — runbook + تحقّق من الواقع.** لا كود جديد؛ تحقّق وتوثيق.
@@ -261,7 +270,9 @@ Next.js**. الإشعارات على الخادم تحوّلت من Expo Push إ
 
 > ✅ **تكافؤ السائق مكتمل عملياً** — **55 بنداً مُغلقاً (52 من الـ56 + MS‑1/2/3)** عبر 6أ/ج/د/هـ + history‑1 + 6و + 6ب ([السجلّ](mobile-flutter/DRIVER_PARITY_BACKLOG.md)). **كل العالية/المتوسّطة + التجميل + الثغرة المالية مُغلق.** `tsc` exit 0 · `flutter analyze` نظيف.
 
-1. **(⚠️ خطوة نشر — جاهزة للتنفيذ) `prisma db push`:** تطبيق عمود/قيد `clientRequestId` (6ب) على قاعدة بيانات الخادم — الكود جاهز، والتغيير غير هدّام (عمود nullable + فهرس على صفوف كلها NULL). **الـ runbook جاهز:** [`deploy/RUNBOOK-clientRequestId-db-push.md`](deploy/RUNBOOK-clientRequestId-db-push.md) (نسخة احتياطية → معاينة SQL → تطبيق → تحقّق → تراجع). **مؤتمَت أصلاً:** أوّل `./deploy/deploy.sh api` يطبّقه تلقائياً ([deploy.sh:79](deploy/deploy.sh#L79)). بدونه يبقى الحقل بلا أثر فعلي.
+> ✅ **الحواجز الأربعة للنشر أُغلقت كوداً (#18):** `/uploads` بـnginx · انهيار `ON_BREAK` في اللوحة · زرع `PLATFORM_ADMIN` (`seed-prod.cjs` في `deploy.sh`) · تحصين `UPLOADS_DIR` + تصحيح متغيّر FCM. **صفر حواجز كود متبقّية** — الباقي تشغيلي/بشري (القسم 5). التفاصيل في [`DEPLOYMENT_READINESS_REPORT.md`](DEPLOYMENT_READINESS_REPORT.md).
+
+1. **(⚠️ يحتاج الخادم الجديد) أوّل نشر متكامل:** أوّل `./deploy/deploy.sh api` **يطبّق `prisma db push`** (عمود/قيد `clientRequestId` 6ب) **+ يزرع مالك المنصّة** (`seed-prod.cjs`، الحاجز #4) **+ ينشئ مجلّد uploads** — كلها مؤتمتة الآن. التغيير غير هدّام (عمود nullable + فهرس على صفوف كلها NULL). الـ runbook لقيد idempotency: [`deploy/RUNBOOK-clientRequestId-db-push.md`](deploy/RUNBOOK-clientRequestId-db-push.md) (نسخة احتياطية → معاينة SQL → تطبيق → تحقّق → تراجع).
 2. **(لا يحتاج حسابك) اختبار ميداني + QA على جهاز فعلي:** ميزات GPS/الخريطة (6د) + البصمة + **طابور المال idempotency** (إثبات أن إعادة الإرسال لا تُكرّر البيع). **الخطّة جاهزة:** [`mobile-flutter/DEVICE_QA_CHECKLIST.md`](mobile-flutter/DEVICE_QA_CHECKLIST.md) (اتّبعها على جهاز). ثم تقاعد `mobile-worker`. (المتبقّي 3 مؤجَّلة منخفضة: home‑4/7 · splash-routing‑4 · + MS‑4/5.)
 3. **(يحتاج حسابك — انظر القسم 5)** تجهيز Firebase + توقيع Android، لتمكين أوّل بناء موقّع.
 
@@ -271,7 +282,7 @@ Next.js**. الإشعارات على الخادم تحوّلت من Expo Push إ
 
 ## 5) 🔑 بانتظارك (عناصر بشرية تحجب التقدّم)
 
-- [ ] **🖥️ خادم/VPS (حاجب رئيسي جديد #17):** الخادم السابق `45.84.138.119` **أُلغي نهائياً**. يلزم **تجهيز خادم جديد** ليكون هدف النشر (`SSH_TARGET`) — أُزيل الـ IP المثبّت من [`deploy.sh`](deploy/deploy.sh) (صار يتطلّب `SSH_TARGET`) وعُمِّم في الـ runbook. بدون خادم: لا `prisma db push`، لا إرسال FCM، ولا API إنتاجي للتطبيقات. (للتطوير: شغّل `backend` محلياً ووجّه التطبيقات إليه. لتجهيز خادم: [`deploy/vps-bootstrap.sh`](deploy/vps-bootstrap.sh).)
+- [ ] **🖥️ خادم/VPS (حاجب رئيسي #17):** الخادم السابق `45.84.138.119` **أُلغي نهائياً**. (حواجز الكود الأربعة أُغلقت #18 — يبقى الخادم نفسه.) يلزم **تجهيز خادم جديد** ليكون هدف النشر (`SSH_TARGET`) — أُزيل الـ IP المثبّت من [`deploy.sh`](deploy/deploy.sh) (صار يتطلّب `SSH_TARGET`) وعُمِّم في الـ runbook. بدون خادم: لا `prisma db push`، لا إرسال FCM، ولا API إنتاجي للتطبيقات. (للتطوير: شغّل `backend` محلياً ووجّه التطبيقات إليه. لتجهيز خادم: [`deploy/vps-bootstrap.sh`](deploy/vps-bootstrap.sh).)
 - [x] **مشروع Firebase (طرف التطبيقات) — مُنجَز #17:** سُجِّلت 3 تطبيقات Android وأُسقِط `google-services.json` لكلٍّ في مكانه (مؤكَّد: `package_name` مطابق لكل تطبيق). طرف الخادم (مفتاح حساب الخدمة) بانتظار الخادم.
 
 > 📄 **الربط البرمجي جاهز (#17)** — اتّبع [`mobile-flutter/FIREBASE_SETUP.md`](mobile-flutter/FIREBASE_SETUP.md). المتبقّي: **اعتماد الخادم فقط** (مفتاح حساب الخدمة عند توفّر خادم). المفتاح مُنزَّل ومحفوظ لديك.
@@ -321,6 +332,7 @@ Next.js**. الإشعارات على الخادم تحوّلت من Expo Push إ
 
 | # | التاريخ | الخلاصة |
 |---|---|---|
+| 18 | 2026-07-01 | **إغلاق الحواجز الأربعة الحقيقية من تقرير الجاهزية** (كلها كود، لا تحتاج حساب المستخدم؛ تحقّق مستقل + `tsc --noEmit`=0 + `node --check`): **#3** انهيار لوحة السائقين على `ON_BREAK` — أُعيدت التسمية `BREAK→ON_BREAK` + حارس `?? STATUS.OFFLINE` ([drivers/page.tsx](dashboard/src/app/dashboard/drivers/page.tsx)). **#1** `/uploads/` بلا خدمة (صور الإثبات/التقارير 404) — أُضيف `location /uploads/` بـ alias في [nginx](deploy/nginx/daari-water-api.conf). **#4** لا زرع `PLATFORM_ADMIN` — سكربت [`prisma/seed-prod.cjs`](backend/prisma/seed-prod.cjs) JS صِرف (يعمل مع `--omit=dev`) مربوط في [deploy.sh](deploy/deploy.sh) + عزل الديمو خلف `NODE_ENV` في [seed.ts](backend/prisma/seed.ts) + `PLATFORM_ADMIN_*` في القالب. **#2** كان مبالغاً فيه (القالب يضبط `UPLOADS_DIR` أصلاً داخل `ReadWritePaths`) — أُضيف تحصين `mkdir uploads` + chown. مكافأة: صُحّح اسم متغيّر FCM في القالب (`FIREBASE_SERVICE_ACCOUNT_PATH`). **النتيجة: 4 حواجز كود → 0؛ يبقى الخادم الجديد + المهام البشرية.** |
 | 17 | 2026-07-01 | **(أ) تجهيز نشر `prisma db push` (السلامة المالية 6ب):** تحقّق من الواقع أنّ المخطّط (عمود `clientRequestId` + قيدا `@@unique` على `RefillOrder`/`CashHandover`) ومنطق الخادم (`createWalkinRefill`/`createForDriver` + التقاط `P2002`) **مُودَعان** و`git status` نظيف. 🔎 اكتشاف: `db push` مؤتمَت في [`deploy.sh:79`](deploy/deploy.sh#L79) (يُطبَّق تلقائياً عند أوّل نشر API؛ المستودع بلا migrations). الناتج: [`deploy/RUNBOOK-clientRequestId-db-push.md`](deploy/RUNBOOK-clientRequestId-db-push.md) (نسخة احتياطية→معاينة SQL→تطبيق→تحقّق idempotency→تراجع). صُحِّح سطر «لم يُنشأ commit بعد» القديم. **(ب) بوّابة جاهزية للنشر:** `flutter analyze` = No issues على customer/driver/admin؛ `daari_core` نُظّف بـ`dart fix` (11 إصلاح تجميلي/7 ملفات) → الوحدات الأربع نظيفة 100%؛ الخادم `npm ci`+`prisma generate`+`tsc --noEmit` = 0 أخطاء. **الشيفرة قابلة للشحن؛ الحواجز المتبقّية تشغيلية/بشرية فقط.** **(ج) خطّة QA للجهاز الفعلي:** [`DEVICE_QA_CHECKLIST.md`](mobile-flutter/DEVICE_QA_CHECKLIST.md) (7 أقسام: idempotency المال · GPS/خرائط · تدفّقات · الزبون · الإدارة/البصمة · FCM محجوب · E2E + جدول اعتماد). **(د) تجهيز Firebase:** ربط `google-services` **مشروط** في التطبيقات الثلاثة (يُفعَّل عند إسقاط الملفّ، لا يكسر البناء) + دليل [`FIREBASE_SETUP.md`](mobile-flutter/FIREBASE_SETUP.md) — يتبقّى أصول الكونسول + اعتماد الخادم (عملك). |
 | 1 | 2026-06-28 | تحليل (FastAPI/Flutter) → قرار: إبقاء الخادم، اعتماد Flutter، حذف Expo، إشعارات FCM. تنفيذ: توحيد أسماء الحِزَم (customer/driver)، تحويل إشعارات الخادم إلى FCM (يبني نظيفاً)، تحديث STRUCTURE + إنشاء هذا الملف. |
 | 2 | 2026-06-29 | بناء طبقة بيانات الإدارة في `daari_core`: 5 repositories + 12 ملف نماذج (+enums بقيم Prisma) تغطّي 28 نقطة `/plant/*`، رُبِطت بـ providers وصُدِّرت من barrel. `dart analyze` نظيف + تحقّق خصومي بـ workflow (كلها faithful). لا تغيير على الخادم. |

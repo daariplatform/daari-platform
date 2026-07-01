@@ -40,6 +40,18 @@ async function main() {
     },
   });
 
+  // Everything below is DEMO data — a sample tenant plus users that share the
+  // well-known `password123`. It exists only for local/staging development.
+  // In production we seed ONLY the platform admin (above); shipping demo
+  // accounts into a live plant would hand out known credentials. The dedicated
+  // production seed (prisma/seed-prod.cjs, run by deploy.sh) also stops here.
+  if (process.env.NODE_ENV === 'production') {
+    console.log('Seed complete (production — platform admin only):', {
+      platformAdmin: platformAdmin.phone,
+    });
+    return;
+  }
+
   const tenant = await prisma.tenant.upsert({
     where: { id: 'demo-tenant' },
     update: {},

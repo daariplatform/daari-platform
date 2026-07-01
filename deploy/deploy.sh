@@ -88,7 +88,22 @@ npm ci --omit=dev
 # creates ZERO tables and crashes the API on first query.)
 npx prisma db push --skip-generate
 npx prisma generate
-mkdir -p /var/log/daari-water
+# Seed the PLATFORM_ADMIN (idempotent). Without this row /platform/* is
+# unreachable and no tenant can be created — a fresh DB has zero platform
+# admins. Uses a plain-JS script (not `prisma db seed`/ts-node, which are
+# devDependencies absent under --omit=dev). Requires PLATFORM_ADMIN_PHONE +
+# PLATFORM_ADMIN_PASSWORD in .env; fails loud (set -e) if the password is unset
+# rather than shipping a known default. It seeds NO demo data.
+node prisma/seed-prod.cjs
+# Ensure the log dir and the uploads tree exist and are owned by the service
+# user. UPLOADS_DIR in .env must point at .../uploads (see
+# .env.production.example) — it lives inside the systemd ReadWritePaths so the
+# app can write proof photos + report files that nginx then serves from
+# /uploads/. The app also mkdirs these at boot; this is belt-and-suspenders so
+# a fresh box has them with the right owner from the first request.
+mkdir -p /var/log/daari-water \
+         /var/www/daari-water-api/uploads/proof \
+         /var/www/daari-water-api/uploads/reports
 chown -R daari-water:daari-water /var/log/daari-water /var/www/daari-water-api
 systemctl restart daari-water-api
 sleep 2

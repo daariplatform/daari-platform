@@ -18,7 +18,7 @@ import {
 
 interface Driver {
   id: string;
-  status: 'OFFLINE' | 'AVAILABLE' | 'ON_ROUTE' | 'BREAK';
+  status: 'OFFLINE' | 'AVAILABLE' | 'ON_ROUTE' | 'ON_BREAK';
   vehiclePlate: string | null;
   baseSalaryIqd: number;
   commissionPerRefillIqd: number;
@@ -49,10 +49,13 @@ interface DriversPage {
 
 const PAGE_SIZE = 50;
 
+// Keys MUST match the Prisma DriverStatus enum exactly (OFFLINE / AVAILABLE /
+// ON_ROUTE / ON_BREAK). The enum value is `ON_BREAK`, not `BREAK` — a driver
+// taking a break used to blow up the whole table via `undefined.klass`.
 const STATUS: Record<Driver['status'], { label: string; klass: string }> = {
   AVAILABLE: { label: 'متاح', klass: 'bg-emerald-50 text-emerald-700' },
   ON_ROUTE: { label: 'في جولة', klass: 'bg-sky-50 text-sky-700' },
-  BREAK: { label: 'استراحة', klass: 'bg-amber-50 text-amber-700' },
+  ON_BREAK: { label: 'استراحة', klass: 'bg-amber-50 text-amber-700' },
   OFFLINE: { label: 'غير متصل', klass: 'bg-slate-100 text-slate-700' },
 };
 
@@ -178,8 +181,10 @@ export default function DriversPage() {
                 <td className="px-4 py-3" dir="ltr">{d.user.phone}</td>
                 <td className="px-4 py-3">{d.vehiclePlate ?? '—'}</td>
                 <td className="px-4 py-3">
-                  <span className={`px-2 py-1 rounded text-xs ${STATUS[d.status].klass}`}>
-                    {STATUS[d.status].label}
+                  <span
+                    className={`px-2 py-1 rounded text-xs ${(STATUS[d.status] ?? STATUS.OFFLINE).klass}`}
+                  >
+                    {(STATUS[d.status] ?? STATUS.OFFLINE).label}
                   </span>
                 </td>
                 <td className="px-4 py-3">{d.baseSalaryIqd.toLocaleString('ar-IQ')} د.ع</td>

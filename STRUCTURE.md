@@ -68,7 +68,7 @@
   `customer-address`, `scheduled-orders`, `cash-handover`, `accounting`, `platform-admin`, `ai`,
   `vendors`, `uploads`, `health`, `notifications` (SMS/WhatsApp + Push عبر **FCM/firebase-admin**)، و `plant/` (العروض + المحفظة +
   الإعداد + التقارير + الفريق).
-- **قاعدة البيانات:** `prisma/schema.prisma` (≈37 نموذجاً) — تُطبَّق عبر `prisma db push`؛ بذور أولية `prisma/seed.ts`.
+- **قاعدة البيانات:** `prisma/schema.prisma` (≈37 نموذجاً) — تُطبَّق عبر `prisma db push`؛ بذور التطوير `prisma/seed.ts` (ديمو، معزول خلف `NODE_ENV !== 'production'`)، وبذرة الإنتاج `prisma/seed-prod.cjs` (مالك المنصّة فقط، idempotent، JS صِرف يعمل مع `--omit=dev`).
 - **الاختبارات:** `test/` — Jest e2e (مصادقة، طلبات، عزل المستأجِرين، رفع…).
 
 ```
@@ -177,7 +177,7 @@ mobile-flutter/
 
 ## 5) النشر والأدوات
 
-- **`deploy/`** — `deploy.sh` (نشر API/dashboard؛ يشغّل `prisma db push` تلقائياً؛ **يتطلّب `SSH_TARGET`** — الخادم السابق `45.84.138.119` أُلغي، لا هدف افتراضي), `vps-bootstrap.sh` (تجهيز VPS جديد), `RUNBOOK-clientRequestId-db-push.md` (إجراء نشر قيد idempotency), و إعدادات `nginx/`, `systemd/`, `logrotate/`.
+- **`deploy/`** — `deploy.sh` (نشر API/dashboard؛ يشغّل `prisma db push` **+ يزرع مالك المنصّة** عبر `backend/prisma/seed-prod.cjs` **+ ينشئ مجلّد `uploads`** تلقائياً؛ **يتطلّب `SSH_TARGET`** — الخادم السابق `45.84.138.119` أُلغي، لا هدف افتراضي), `vps-bootstrap.sh` (تجهيز VPS جديد), `RUNBOOK-clientRequestId-db-push.md` (إجراء نشر قيد idempotency), و إعدادات `nginx/` (**تخدم `/uploads/` — صور الإثبات + التقارير — عبر `alias`**), `systemd/`, `logrotate/`.
 - **`scripts/`** — `backup-db.sh`, `eas-setup-and-build.sh`, `generate-icons.py`, `github-setup.sh`.
 - **`legal/`** — سياسة الخصوصية (EN/AR)، شروط الخدمة (AR)، قوائم متجر Play (الزبون/العامل).
 - **`store-assets/`** — حزمة تقديم Google Play Console.
