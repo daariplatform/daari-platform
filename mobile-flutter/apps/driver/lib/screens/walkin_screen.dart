@@ -305,6 +305,7 @@ class _WalkinFormState extends ConsumerState<_WalkinForm> {
 
     setState(() => _submitting = true);
     Map<String, dynamic>? pendingBody;
+    String? clientRequestId;
     try {
       final coords = await ref.read(locationServiceProvider).currentCoords();
       if (!mounted) return;
@@ -313,6 +314,10 @@ class _WalkinFormState extends ConsumerState<_WalkinForm> {
         return;
       }
 
+      // مفتاح idempotency فريد لكل بيعة مؤكَّدة — يُستعمل للإرسال المباشر
+      // ولمفتاح إزالة تكرار الطابور معاً، فلا تُسقَط بيعة ثانية مشروعة لنفس
+      // الزبون بنفس المبلغ (كان المفتاح السابق customer+amount يُسقطها بصمت).
+      clientRequestId = newClientRequestId();
       final input = WalkinRefillInput(
         customerId: widget.customer.id,
         paymentMethod: PaymentMethod.cash,
@@ -320,8 +325,7 @@ class _WalkinFormState extends ConsumerState<_WalkinForm> {
         completionLng: coords.lng,
         completionLat: coords.lat,
         walkinLiters: liters,
-        // مفتاح ثابت للإرسال المباشر وللطابور معاً → الخادم يُزيل أي تكرار.
-        clientRequestId: newClientRequestId(),
+        clientRequestId: clientRequestId,
       );
       pendingBody = input.toJson();
       await ref.read(ordersRepositoryProvider).walkinRefill(input);
@@ -335,13 +339,14 @@ class _WalkinFormState extends ConsumerState<_WalkinForm> {
     } on ApiException catch (e) {
       // فشل شبكة → احفظ البيع في الطابور (لا يُفقَد).
       if (e.isNetwork && pendingBody != null) {
-        // مفتاح إزالة التكرار = الزبون + المبلغ → بيعان متطابقان أوفلاين لنفس
-        // الزبون لا يُدرَجان مرّتين (منع مزدوج شحن البيع الفوري على العميل).
+        // مفتاح إزالة التكرار = clientRequestId الفريد → إعادة إدراج نفس البيعة
+        // بالذات تُقمَع، بينما بيعتان متمايزتان (لكلٍّ مفتاحها) تُحفَظان معاً؛
+        // والخادم يُزيل أي تكرار عبر @@unique([tenantId, clientRequestId]).
         await ref.read(offlineQueueProvider).enqueue(
               'POST',
               '/orders/walkin-refill',
               pendingBody,
-              dedupeKey: 'walkin:${widget.customer.id}:$amount',
+              dedupeKey: 'walkin:$clientRequestId',
             );
         if (!mounted) return;
         ref.invalidate(historyProvider);

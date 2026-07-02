@@ -60,18 +60,27 @@ class AuthInterceptor extends Interceptor {
       return handler.next(err);
     }
 
+    String? newToken;
     try {
-      final newToken = await _refreshSingleFlight();
-      if (newToken == null) {
-        await onAuthFailure?.call();
-        return handler.next(err);
-      }
-      req.extra['__retried'] = true;
-      req.headers['Authorization'] = 'Bearer $newToken';
+      newToken = await _refreshSingleFlight();
+    } catch (_) {
+      // التجديد نفسه فشل → فشل مصادقة حقيقي.
+      await onAuthFailure?.call();
+      return handler.next(err);
+    }
+    if (newToken == null) {
+      await onAuthFailure?.call();
+      return handler.next(err);
+    }
+
+    req.extra['__retried'] = true;
+    req.headers['Authorization'] = 'Bearer $newToken';
+    try {
       final clone = await _dio.fetch<dynamic>(req);
       return handler.resolve(clone);
     } catch (_) {
-      await onAuthFailure?.call();
+      // نجح التجديد لكن فشلت إعادة الطلب (مهلة/5xx/انقطاع اتصال على شبكة
+      // متذبذبة). هذا ليس فشل مصادقة — لا تُسجِّل الخروج، فقط مرّر الخطأ الأصلي.
       return handler.next(err);
     }
   }

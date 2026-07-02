@@ -24,6 +24,11 @@ import 'screens/welcome_screen.dart';
 import 'widgets/home_shell.dart';
 
 const _authRoutes = {'/welcome', '/login', '/signup', '/forgot', '/intro'};
+// Routes reachable in ANY auth state — neither bounced to /welcome when logged
+// out nor to /home when logged in. /map-picker is pushed from both the signup
+// flow (logged out) and the addresses screen (logged in) and holds no session
+// data, so it must not be caught by either redirect.
+const _neutralRoutes = {'/map-picker'};
 
 /// راوتر تطبيق الزبون — go_router مع حارس مصادقة.
 final customerRouterProvider = Provider<GoRouter>((ref) {
@@ -46,6 +51,9 @@ final customerRouterProvider = Provider<GoRouter>((ref) {
       if (auth.status == AuthStatus.unknown || auth.status == AuthStatus.hydrating) {
         return null;
       }
+
+      // مسارات محايدة (مثل منتقي الخريطة) متاحة في أي حالة مصادقة
+      if (_neutralRoutes.contains(loc)) return null;
 
       final loggedIn = auth.isAuthenticated;
       if (!loggedIn) {
