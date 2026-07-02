@@ -12,7 +12,6 @@ class Analytics {
   Analytics._();
 
   static bool _enabled = false;
-  static bool get isEnabled => _enabled;
 
   static Future<void> init({required String appId}) async {
     if (Env.posthogKey.isEmpty) return;

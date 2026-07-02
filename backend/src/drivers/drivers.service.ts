@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { DriverStatus, RefillOrderStatus, UserRole } from '@prisma/client';
-import * as argon2 from 'argon2';
 import { randomBytes } from 'crypto';
 import { paginated, type PaginatedResult } from '../common/dto/pagination.dto';
 import { hashPassword } from '../common/crypto';

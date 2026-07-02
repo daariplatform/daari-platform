@@ -59,11 +59,6 @@ final adminUsageProvider = FutureProvider.autoDispose<PlantUsage>((ref) {
   return ref.watch(plantRepositoryProvider).usage();
 });
 
-/// مخزون المياه.
-final waterStockProvider = FutureProvider.autoDispose<WaterStock>((ref) {
-  return ref.watch(plantRepositoryProvider).getStock();
-});
-
 /// إيراد المدى المختار (الافتراضي: آخر 7 أيام).
 final revenue7dProvider = FutureProvider.autoDispose<List<RevenueDay>>((ref) {
   final w = ref.watch(reportWindowProvider);
@@ -94,7 +89,7 @@ final teamListProvider = FutureProvider.autoDispose<List<TeamMember>>((ref) {
   return ref.watch(teamRepositoryProvider).list();
 });
 
-/// مخزون المياه (للشاشة المخصّصة — منفصل عن [waterStockProvider] في الرئيسية).
+/// مخزون المياه.
 final stockProvider = FutureProvider.autoDispose<WaterStock>((ref) {
   return ref.watch(plantRepositoryProvider).getStock();
 });

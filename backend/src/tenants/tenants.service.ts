@@ -1,6 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import * as argon2 from 'argon2';
 import { SubscriptionPlan, SubscriptionStatus, TenantStatus, UserRole } from '@prisma/client';
 import { hashPassword } from '../common/crypto';
 

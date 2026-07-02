@@ -48,12 +48,6 @@ class Fmt {
     return DateFormat.yMMMM('ar').format(date.toLocal());
   }
 
-  /// عدد الأيام بين تاريخين (الافتراضي للثاني = الآن).
-  static int daysBetween(DateTime a, [DateTime? b]) {
-    final end = b ?? DateTime.now();
-    return end.difference(a).inDays;
-  }
-
   static DateTime? _parse(Object? d) {
     if (d == null) return null;
     if (d is DateTime) return d;

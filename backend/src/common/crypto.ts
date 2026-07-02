@@ -23,7 +23,3 @@ const ARGON2_OPTS: argon2.Options = {
 export function hashPassword(plain: string): Promise<string> {
   return argon2.hash(plain, ARGON2_OPTS);
 }
-
-export function verifyPassword(hash: string, plain: string): Promise<boolean> {
-  return argon2.verify(hash, plain);
-}

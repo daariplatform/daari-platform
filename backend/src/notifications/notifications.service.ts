@@ -263,30 +263,4 @@ export class NotificationsService {
     });
     return { ok: true, updated: res.count };
   }
-
-  /**
-   * Insert a "system message" into the tenant inbox without sending an
-   * external WhatsApp/SMS. Other modules call this to surface things like
-   * "Stock dropped below threshold" or "New customer lead". Always
-   * channel=PUSH, status=SENT (it's not really an outbound message).
-   */
-  async createInboxMessage(
-    tenantId: string,
-    kind: NotificationKind,
-    title: string,
-    body: string,
-  ) {
-    return this.prisma.notificationLog.create({
-      data: {
-        tenantId,
-        kind,
-        channel: NotificationChannel.PUSH,
-        recipient: 'inbox',
-        title,
-        body,
-        status: NotificationStatus.SENT,
-        sentAt: new Date(),
-      },
-    });
-  }
 }

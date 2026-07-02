@@ -11,6 +11,8 @@ package-lock.json.bak
 .env
 .env.local
 .env.*.local
+.env.test
+backend/.env.production
 *.pem
 *.key
 *.cert
@@ -50,6 +52,18 @@ expo-env.d.ts
 out/
 build/
 
+# ─── PWA (next-pwa build output — regenerated on every build) ──
+# These are Workbox artifacts emitted by `next build`; committing them just
+# causes churn and risks shipping a stale service worker.
+dashboard/public/sw.js
+dashboard/public/sw.js.map
+dashboard/public/workbox-*.js
+dashboard/public/workbox-*.js.map
+platform-console/public/sw.js
+platform-console/public/sw.js.map
+platform-console/public/workbox-*.js
+platform-console/public/workbox-*.js.map
+
 # ─── TypeScript ─────────────────────────────────────
 *.tsbuildinfo
 
@@ -66,6 +80,9 @@ backend/prisma/*.db-journal
 # ─── IDE / Editor ──────────────────────────────────
 .vscode/
 .idea/
+# Claude Code per-machine settings (never committed) + any stray backups.
+.claude/settings.local.json
+*.bak
 *.swp
 *.swo
 .DS_Store

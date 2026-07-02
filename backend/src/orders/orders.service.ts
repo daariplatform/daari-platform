@@ -190,8 +190,7 @@ export class OrdersService {
     // The order is created PENDING + unassigned and enters the offer pool; the
     // first driver to call POST /orders/:id/claim wins it (atomic, race-safe).
     // The plant admin can still assign a specific driver from the dashboard as
-    // a fallback (POST /orders/:id/assign). pickDriverForNewOrder is retained
-    // for that manual/auto fallback path but is no longer used on create.
+    // a fallback (POST /orders/:id/assign).
 
     // Snapshot the chosen saved address (if any) onto the order so the driver
     // routes there. Verified to belong to this customer; ignored otherwise.
@@ -409,29 +408,6 @@ export class OrdersService {
         'وصل المعمل لحدّ خطّته الشهرية. الطلبات الجديدة مغلقة مؤقتاً حتى ترقية الخطّة.',
       );
     }
-  }
-
-  /**
-   * Simplest possible driver picker — first available driver in the tenant.
-   * When traffic grows, replace with "fewest active orders" or geo-nearest
-   * scoring. Returns null when the tenant has zero drivers (rare, but the
-   * caller handles it by leaving the order PENDING for manual triage).
-   */
-  private async pickDriverForNewOrder(tenantId: string) {
-    const available = await this.prisma.driver.findFirst({
-      where: { tenantId, status: 'AVAILABLE' },
-      orderBy: { lastLocationAt: 'desc' },
-    });
-    if (available) return available;
-    const onRoute = await this.prisma.driver.findFirst({
-      where: { tenantId, status: 'ON_ROUTE' },
-      orderBy: { lastLocationAt: 'desc' },
-    });
-    if (onRoute) return onRoute;
-    return this.prisma.driver.findFirst({
-      where: { tenantId },
-      orderBy: { hiredAt: 'asc' },
-    });
   }
 
   async list(
@@ -1033,48 +1009,6 @@ export class OrdersService {
   }
 
   /**
-   * Walk-in sale recorded by a driver in the field — e.g. the neighbour
-   * who flagged them down. No tank, no customer account, just a cash
-   * transaction stored for accounting. GPS + photo are required as proof.
-   */
-  async recordWalkinSale(
-    tenantId: string,
-    driverId: string,
-    input: {
-      liters: number;
-      priceIqd: number;
-      paidAmountIqd: number;
-      buyerName?: string;
-      buyerPhone?: string;
-      completionLng: number;
-      completionLat: number;
-      proofPhotoUrl?: string;
-    },
-  ) {
-    // Photo proof is optional for walk-in sales too (storage/bandwidth opt-out).
-    return this.prisma.refillOrder.create({
-      data: {
-        tenantId,
-        driverId,
-        kind: RefillOrderKind.WALKIN_SALE,
-        status: RefillOrderStatus.COMPLETED,
-        priceIqd: input.priceIqd,
-        paidAmountIqd: input.paidAmountIqd,
-        paymentMethod: 'CASH',
-        paidAt: new Date(),
-        completedAt: new Date(),
-        completionLng: input.completionLng,
-        completionLat: input.completionLat,
-        gpsVerified: true,
-        proofPhotoUrl: input.proofPhotoUrl,
-        walkinBuyerName: input.buyerName,
-        walkinBuyerPhone: input.buyerPhone,
-        walkinLiters: input.liters,
-      },
-    });
-  }
-
-  /**
    * Customer-side confirmation. Triggered when the customer taps the
    * WhatsApp button (or the in-app card) after a refill is marked complete.
    * The plant sees an unconfirmed-refill list on the dashboard to chase.
@@ -1168,17 +1102,11 @@ export class OrdersService {
   }
 
   /**
-   * Walk-in sale — a driver sells water to someone who is NOT in the system
-   * (or a registered customer paying for a one-off out-of-cycle refill).
-   * Creates a WALKIN_SALE order pre-completed in one step.
-   */
-  /**
    * Counter-sale recorded by a plant admin (manager/owner) at the plant
-   * itself. Distinct from `createWalkinRefill` (driver in the field) and
-   * `recordWalkinSale` (driver with GPS + photo): no driver is involved,
-   * no GPS / photo proof is required, payment defaults to CASH. The
-   * `userId` argument is captured into `walkinRecordedByUserId` so the
-   * audit log can answer "who at the counter rang this up?"
+   * itself. Distinct from `createWalkinRefill` (driver in the field): no
+   * driver is involved, no GPS / photo proof is required, payment defaults
+   * to CASH. The `userId` argument is captured into `walkinRecordedByUserId`
+   * so the audit log can answer "who at the counter rang this up?"
    */
   async createAdminWalkinSale(
     tenantId: string,

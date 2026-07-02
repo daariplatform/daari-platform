@@ -9,7 +9,6 @@ import {
 } from 'lucide-react';
 import {
   LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid,
-  BarChart, Bar,
 } from 'recharts';
 import Link from 'next/link';
 

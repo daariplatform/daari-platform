@@ -5,8 +5,8 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { iqd } from '@/lib/format';
 import {
-  BarChart, Bar, LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis,
-  CartesianGrid, PieChart, Pie, Cell, Legend,
+  BarChart, Bar, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  CartesianGrid, PieChart, Pie, Cell,
 } from 'recharts';
 import { Download, Calendar, TrendingUp, ShoppingCart, Users, FileText, FileSpreadsheet } from 'lucide-react';
 

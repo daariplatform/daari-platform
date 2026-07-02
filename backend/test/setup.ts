@@ -75,24 +75,6 @@ export async function truncateAll(prisma: PrismaService): Promise<void> {
 }
 
 /**
- * Detects whether the test DB is reachable. Used by every suite at the
- * top so we skip instead of bombing when the dev hasn't set up the DB.
- *
- * The first call boots the app; subsequent calls reuse the cached one.
- */
-export async function isTestDbReady(): Promise<{ ok: boolean; reason?: string }> {
-  if (!process.env.DATABASE_URL) {
-    return { ok: false, reason: 'DATABASE_URL not set' };
-  }
-  try {
-    await createTestApp();
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, reason: (err as Error).message };
-  }
-}
-
-/**
  * Jest helper — replaces `describe(...)` with a version that skips the
  * whole suite when the DB isn't reachable. Resolves the readiness check
  * once at module load.

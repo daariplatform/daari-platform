@@ -12,7 +12,6 @@ import type { Cache } from 'cache-manager';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../notifications/push.service';
 import { CustomerStatus, LocationSource, Prisma, UserRole } from '@prisma/client';
-import * as argon2 from 'argon2';
 import { randomBytes } from 'crypto';
 import type { ImportRow } from './bulk-import.service';
 import { paginated, type PaginatedResult } from '../common/dto/pagination.dto';
@@ -572,13 +571,6 @@ export class CustomersService {
     }
     const { tenant, ...rest } = customer;
     return { ...rest, refillPriceIqd: tenant.refillPriceIqd };
-  }
-
-  listPendingApprovals(tenantId: string) {
-    return this.prisma.customer.findMany({
-      where: { tenantId, status: CustomerStatus.PENDING_APPROVAL },
-      orderBy: { onboardedAt: 'desc' },
-    });
   }
 
   async list(

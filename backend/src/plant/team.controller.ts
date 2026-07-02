@@ -22,7 +22,6 @@ import {
   Matches,
   MinLength,
 } from 'class-validator';
-import * as argon2 from 'argon2';
 import { randomBytes } from 'crypto';
 import { UserRole } from '@prisma/client';
 

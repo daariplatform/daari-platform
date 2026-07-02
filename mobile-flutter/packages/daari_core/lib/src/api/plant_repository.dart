@@ -103,27 +103,6 @@ class PlantRepository {
     }
   }
 
-  /// سجلّ التدقيق — الشكل القديم (مصفوفة مسطّحة). افتراضي ٥٠، تصفية بـ [action].
-  Future<List<AuditLogEntry>> auditLogRecent({
-    int limit = 50,
-    String? action,
-  }) async {
-    try {
-      final query = <String, dynamic>{'limit': limit};
-      if (action != null && action.isNotEmpty) query['action'] = action;
-      final res = await _dio.get<List<dynamic>>(
-        '/plant/audit-log',
-        queryParameters: query,
-      );
-      return (res.data ?? const [])
-          .whereType<Map<String, dynamic>>()
-          .map(AuditLogEntry.fromJson)
-          .toList();
-    } on DioException catch (e) {
-      throw ApiException.fromDio(e);
-    }
-  }
-
   /// سجلّ التدقيق — مغلّف مرقّم (يُفعَّل بإرسال [page]). تصفية بـ [actor]/[action].
   Future<PagedResult<AuditLogEntry>> auditLogPaged({
     int page = 1,

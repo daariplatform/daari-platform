@@ -64,20 +64,3 @@ class GradientHeader extends StatelessWidget {
     );
   }
 }
-
-/// زرّ رجوع أبيض دائري لاستخدامه ضمن الترويسة المتدرّجة.
-class HeaderBackButton extends StatelessWidget {
-  const HeaderBackButton({super.key, this.onTap});
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: onTap ?? () => Navigator.of(context).maybePop(),
-      icon: const Icon(Icons.arrow_forward, color: Colors.white),
-      style: IconButton.styleFrom(
-        backgroundColor: Colors.white.withValues(alpha: 0.18),
-      ),
-    );
-  }
-}

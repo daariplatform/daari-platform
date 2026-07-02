@@ -56,17 +56,3 @@ IconData orderStatusIcon(RefillOrderStatus s) {
       return Icons.error_outline;
   }
 }
-
-/// شارة دائرية صغيرة لأيقونة نوع الطلب.
-IconData orderKindIcon(RefillOrderKind kind) {
-  switch (kind) {
-    case RefillOrderKind.refill:
-      return Icons.water_drop;
-    case RefillOrderKind.tankDelivery:
-      return Icons.local_shipping;
-    case RefillOrderKind.tankReclaim:
-      return Icons.assignment_return;
-    case RefillOrderKind.walkinSale:
-      return Icons.point_of_sale;
-  }
-}

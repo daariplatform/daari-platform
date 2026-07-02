@@ -21,7 +21,7 @@ import { UserScopedCacheInterceptor } from '../cache/user-scoped-cache.intercept
 import { WHATSAPP_BLAST_QUEUE } from '../queue/queue.constants';
 import { IsEnum, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 import { PromoChannel, UserRole } from '@prisma/client';
-import { PaginationDto, paginated } from '../common/dto/pagination.dto';
+import { paginated } from '../common/dto/pagination.dto';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../notifications/push.service';

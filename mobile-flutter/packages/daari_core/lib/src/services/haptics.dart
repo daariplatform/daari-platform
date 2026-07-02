@@ -18,7 +18,4 @@ class Hap {
 
   /// خطأ — نبضة قويّة.
   static void error() => HapticFeedback.heavyImpact();
-
-  /// تحذير — اهتزاز قصير.
-  static void warning() => HapticFeedback.vibrate();
 }

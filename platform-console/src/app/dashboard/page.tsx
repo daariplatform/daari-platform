@@ -23,7 +23,6 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  Cell,
 } from 'recharts';
 
 // ─── Backend contract shapes ────────────────────────────────────────────

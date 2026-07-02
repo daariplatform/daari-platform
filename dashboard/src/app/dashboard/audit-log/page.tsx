@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { History, Filter } from 'lucide-react';
+import { History } from 'lucide-react';
 import { useState } from 'react';
 
 interface AuditEntry {

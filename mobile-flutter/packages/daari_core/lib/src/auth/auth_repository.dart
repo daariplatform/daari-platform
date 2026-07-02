@@ -33,24 +33,6 @@ class AuthRepository {
     }
   }
 
-  /// تسجيل دخول/تسجيل ذاتي بـ OTP (خلف OTP_SELF_SIGNUP_ENABLED في الباك إند).
-  Future<MeResponse> loginWithOtp({
-    required String phone,
-    required String otp,
-    String? fullName,
-  }) async {
-    try {
-      final body = <String, dynamic>{'phone': phone, 'otp': otp};
-      if (fullName != null && fullName.isNotEmpty) body['fullName'] = fullName;
-      final res = await dio.post<Map<String, dynamic>>('/auth/login/otp', data: body);
-      final auth = AuthResponse.fromJson(res.data ?? const {});
-      await tokens.setTokens(access: auth.accessToken, refresh: auth.refreshToken);
-      return me();
-    } on DioException catch (e) {
-      throw ApiException.fromDio(e);
-    }
-  }
-
   /// طلب رمز OTP للتسجيل الذاتي (الزبون الجديد).
   Future<void> requestSignupOtp(String phone) async {
     try {
