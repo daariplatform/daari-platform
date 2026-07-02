@@ -100,6 +100,52 @@ export default function OrdersPage() {
   const orders = ordersPage?.items;
   const totalPages = ordersPage?.totalPages ?? 0;
 
+  // Kanban board queries each active status directly (not the list's 50-row
+  // page) so PENDING orders older than page 1 stay visible + assignable — the
+  // previous code filtered only the paginated slice, hiding older orders. The
+  // "completed today" column is date-filtered client-side. Runs only in kanban
+  // view; the list view keeps its own paginated query above.
+  const kanbanOn = view === 'kanban';
+  const pendingKanban = useQuery<OrdersPage>({
+    queryKey: ['orders-kanban', 'PENDING'],
+    queryFn: async () =>
+      (await api.get('/orders', { params: { status: 'PENDING', pageSize: 200 } })).data,
+    refetchInterval: 15_000,
+    enabled: kanbanOn,
+  });
+  const assignedKanban = useQuery<OrdersPage>({
+    queryKey: ['orders-kanban', 'ASSIGNED'],
+    queryFn: async () =>
+      (await api.get('/orders', { params: { status: 'ASSIGNED', pageSize: 200 } })).data,
+    refetchInterval: 15_000,
+    enabled: kanbanOn,
+  });
+  const enrouteKanban = useQuery<OrdersPage>({
+    queryKey: ['orders-kanban', 'EN_ROUTE'],
+    queryFn: async () =>
+      (await api.get('/orders', { params: { status: 'EN_ROUTE', pageSize: 200 } })).data,
+    refetchInterval: 15_000,
+    enabled: kanbanOn,
+  });
+  const completedKanban = useQuery<OrdersPage>({
+    queryKey: ['orders-kanban', 'COMPLETED'],
+    queryFn: async () =>
+      (await api.get('/orders', { params: { status: 'COMPLETED', pageSize: 200 } })).data,
+    refetchInterval: 15_000,
+    enabled: kanbanOn,
+  });
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const kanbanOrders: Record<string, Order[]> = {
+    PENDING: pendingKanban.data?.items ?? [],
+    ASSIGNED: assignedKanban.data?.items ?? [],
+    EN_ROUTE: enrouteKanban.data?.items ?? [],
+    COMPLETED: (completedKanban.data?.items ?? []).filter(
+      (o) => o.completedAt && new Date(o.completedAt) >= startOfToday,
+    ),
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -130,7 +176,7 @@ export default function OrdersPage() {
       {view === 'kanban' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {COLUMNS.map((col) => {
-            const colOrders = (orders ?? []).filter((o) => col.statuses.includes(o.status));
+            const colOrders = col.statuses.flatMap((s) => kanbanOrders[s] ?? []);
             return (
               <div key={col.key} className="bg-slate-50 rounded-2xl p-4">
                 <div className="flex items-center justify-between mb-3">

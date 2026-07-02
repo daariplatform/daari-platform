@@ -604,10 +604,11 @@ export class AccountingService {
    * the UI can render a single FlatList.
    *
    * The merge is done in memory (Postgres has no cheap UNION across these
-   * tables without sacrificing pagination correctness). Pulls 5× the
-   * pageSize from each source then sorts/slices — fine for plant-scale
-   * volumes (< 10k tx/month). If a plant ever crosses that we'll move to
-   * a materialised view.
+   * tables without sacrificing pagination correctness). Pulls the top
+   * `page × pageSize` from each source (enough to fill the requested page even
+   * if it's entirely from one source) and reports the real total via a
+   * count() per source — fine for plant-scale volumes (< 10k tx/month). If a
+   * plant ever crosses that we'll move to keyset paging / a materialised view.
    */
   async transactions(
     tenantId: string,
@@ -615,55 +616,69 @@ export class AccountingService {
     pageSize = 50,
     kind: TxKind = 'all',
   ): Promise<PaginatedResult<Transaction>> {
-    const pull = Math.max(pageSize * 5, 200);
-    const sales =
-      kind === 'all' || kind === 'sale'
-        ? await this.prisma.refillOrder.findMany({
-            where: {
-              tenantId,
-              status: RefillOrderStatus.COMPLETED,
-              completedAt: { not: null },
-            },
-            orderBy: { completedAt: 'desc' },
-            take: pull,
-            select: {
-              id: true,
-              completedAt: true,
-              paidAmountIqd: true,
-              kind: true,
-              customer: { select: { fullName: true } },
-            },
-          })
-        : [];
-    const expenses =
-      kind === 'all' || kind === 'expense'
-        ? await this.prisma.expense.findMany({
-            where: { tenantId },
-            orderBy: { occurredAt: 'desc' },
-            take: pull,
-            select: {
-              id: true,
-              occurredAt: true,
-              amountIqd: true,
-              description: true,
-              category: true,
-            },
-          })
-        : [];
-    const salaries =
-      kind === 'all' || kind === 'salary'
-        ? await this.prisma.salaryPayment.findMany({
-            where: { tenantId, paidAt: { not: null } },
-            orderBy: { paidAt: 'desc' },
-            take: pull,
-            select: {
-              id: true,
-              paidAt: true,
-              netIqd: true,
-              driver: { include: { user: { select: { fullName: true } } } },
-            },
-          })
-        : [];
+    const needed = page * pageSize;
+    const wantSale = kind === 'all' || kind === 'sale';
+    const wantExpense = kind === 'all' || kind === 'expense';
+    const wantSalary = kind === 'all' || kind === 'salary';
+
+    const saleWhere: Prisma.RefillOrderWhereInput = {
+      tenantId,
+      status: RefillOrderStatus.COMPLETED,
+      completedAt: { not: null },
+    };
+    const expenseWhere: Prisma.ExpenseWhereInput = { tenantId };
+    const salaryWhere: Prisma.SalaryPaymentWhereInput = {
+      tenantId,
+      paidAt: { not: null },
+    };
+
+    const sales = wantSale
+      ? await this.prisma.refillOrder.findMany({
+          where: saleWhere,
+          orderBy: { completedAt: 'desc' },
+          take: needed,
+          select: {
+            id: true,
+            completedAt: true,
+            paidAmountIqd: true,
+            kind: true,
+            customer: { select: { fullName: true } },
+          },
+        })
+      : [];
+    const expenses = wantExpense
+      ? await this.prisma.expense.findMany({
+          where: expenseWhere,
+          orderBy: { occurredAt: 'desc' },
+          take: needed,
+          select: {
+            id: true,
+            occurredAt: true,
+            amountIqd: true,
+            description: true,
+            category: true,
+          },
+        })
+      : [];
+    const salaries = wantSalary
+      ? await this.prisma.salaryPayment.findMany({
+          where: salaryWhere,
+          orderBy: { paidAt: 'desc' },
+          take: needed,
+          select: {
+            id: true,
+            paidAt: true,
+            netIqd: true,
+            driver: { include: { user: { select: { fullName: true } } } },
+          },
+        })
+      : [];
+
+    const [salesCount, expensesCount, salariesCount] = await Promise.all([
+      wantSale ? this.prisma.refillOrder.count({ where: saleWhere }) : 0,
+      wantExpense ? this.prisma.expense.count({ where: expenseWhere }) : 0,
+      wantSalary ? this.prisma.salaryPayment.count({ where: salaryWhere }) : 0,
+    ]);
 
     const merged: Transaction[] = [
       ...sales.map<Transaction>((s) => ({
@@ -695,7 +710,7 @@ export class AccountingService {
     ];
 
     merged.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
-    const total = merged.length;
+    const total = salesCount + expensesCount + salariesCount;
     const start = (page - 1) * pageSize;
     const items = merged.slice(start, start + pageSize);
     return paginated(items, total, { page, pageSize });
