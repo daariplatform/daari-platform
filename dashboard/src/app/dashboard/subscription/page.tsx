@@ -42,7 +42,11 @@ export default function SubscriptionPage() {
   const qc = useQueryClient();
   const [showCompose, setShowCompose] = useState(false);
 
-  const { data: usage } = useQuery<Usage>({
+  const {
+    data: usage,
+    isError: usageError,
+    refetch: refetchUsage,
+  } = useQuery<Usage>({
     queryKey: ['plant-usage'],
     queryFn: async () => (await api.get('/plant/usage')).data,
     refetchInterval: 60_000,
@@ -68,6 +72,19 @@ export default function SubscriptionPage() {
     },
   });
 
+  if (usageError) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
+        <p className="text-red-700 text-sm mb-3">تعذّر تحميل بيانات الاشتراك.</p>
+        <button
+          onClick={() => refetchUsage()}
+          className="rounded-lg bg-red-600 text-white px-4 py-2 text-sm font-medium hover:bg-red-700"
+        >
+          إعادة المحاولة
+        </button>
+      </div>
+    );
+  }
   if (!usage) return <div className="h-32 bg-slate-100 animate-pulse rounded-2xl" />;
 
   return (

@@ -111,6 +111,16 @@ class _AppChromeState extends ConsumerState<_AppChrome> {
         _flushQueue();
       }
     });
+    // انتهت الجلسة (فشل تجديد التوكن) → أوقف نبض GPS وصفّر حالة الوردية، وإلا
+    // يظلّ مؤقّت الموقع يرسل 401 في حلقة تستنزف البطارية (والواجهة تظنّ السائق
+    // «في وردية»). المسار اليدوي للخروج يعالجه profile_screen بالفعل.
+    ref.listen<AuthState>(authControllerProvider, (prev, next) {
+      if (prev?.status == AuthStatus.authenticated &&
+          next.status == AuthStatus.unauthenticated) {
+        ref.read(locationServiceProvider).stopTracking();
+        ref.read(onShiftProvider.notifier).state = false;
+      }
+    });
     return Column(
       children: [
         if (!online)

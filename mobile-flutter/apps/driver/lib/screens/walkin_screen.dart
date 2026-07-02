@@ -565,9 +565,14 @@ class _RegisterTabState extends ConsumerState<_RegisterTab> {
     } on ApiException catch (e) {
       // فشل شبكة → احفظ التسجيل في الطابور (لا يُفقَد).
       if (e.isNetwork && pendingBody != null) {
-        await ref
-            .read(offlineQueueProvider)
-            .enqueue('POST', '/customers/register-by-driver', pendingBody);
+        // مفتاح إزالة التكرار = الهاتف (يميّز الزبون داخل المعمل) → إعادة إرسال
+        // نفس التسجيل لا تُدرِجه مرّتين في الطابور.
+        await ref.read(offlineQueueProvider).enqueue(
+              'POST',
+              '/customers/register-by-driver',
+              pendingBody,
+              dedupeKey: 'register:$phone',
+            );
         if (!mounted) return;
         showSnack(context,
             'لا يوجد اتصال — حُفظ التسجيل وسيُرسَل تلقائياً عند عودة الشبكة.');

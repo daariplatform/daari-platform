@@ -53,19 +53,17 @@ export class SubscriptionReminderScheduler {
       let kind: NotificationKind | null = null;
       let body: string | null = null;
 
-      if (daysLeft === 14) {
-        kind = NotificationKind.SUBSCRIPTION_REMINDER_14D;
-        body = `تذكير ودّي: اشتراك ${sub.tenant.name} في منصة ماء ينتهي بعد ١٤ يوم. السعر للتجديد: ${fmt(sub.priceIqd)}. لا حاجة لإجراء الآن — هذا للعلم.`;
-      } else if (daysLeft === 7) {
-        kind = NotificationKind.SUBSCRIPTION_REMINDER_7D;
-        body = `تذكير: اشتراك ${sub.tenant.name} ينتهي بعد ٧ أيام. جدّد الآن لتجنّب توقف الخدمة. مبلغ التجديد: ${fmt(sub.priceIqd)}.`;
-      } else if (daysLeft === 3) {
-        kind = NotificationKind.SUBSCRIPTION_EXPIRING_3D;
-        body = `⚠️ تنبيه هام: اشتراك ${sub.tenant.name} ينتهي بعد ٣ أيام. عند الانتهاء سيتم تعليق الحساب تلقائياً. جدّد الآن من اللوحة.`;
-      } else if (daysLeft === -1) {
+      // Threshold CASCADE, most-urgent first, using <= so a missed cron run
+      // still catches the window (exact === would skip the day entirely — and
+      // for expiry that meant a past-due tenant was NEVER suspended). The
+      // per-kind NotificationLog guard below keeps each message single-send.
+      if (daysLeft <= -1) {
         kind = NotificationKind.SUBSCRIPTION_EXPIRED;
-        body = `انتهى اشتراك ${sub.tenant.name} أمس. تم تعليق الحساب. لإعادة التفعيل، جدّد الاشتراك من لوحة المعمل.`;
-        // Side effect: actually suspend the tenant if not already.
+        body = `انتهى اشتراك ${sub.tenant.name} وتم تعليق الحساب. لإعادة التفعيل، جدّد الاشتراك من لوحة المعمل.`;
+        // Side effect: suspend the moment the subscription is past due,
+        // regardless of whether the expiry message was already sent — a missed
+        // run must not leave an expired tenant active. Runs at most once
+        // because a suspended sub leaves this query's status filter next tick.
         if (sub.tenant.status !== TenantStatus.SUSPENDED) {
           await this.prisma.tenant.update({
             where: { id: sub.tenant.id },
@@ -76,6 +74,15 @@ export class SubscriptionReminderScheduler {
             data: { status: SubscriptionStatus.EXPIRED },
           });
         }
+      } else if (daysLeft <= 3) {
+        kind = NotificationKind.SUBSCRIPTION_EXPIRING_3D;
+        body = `⚠️ تنبيه هام: اشتراك ${sub.tenant.name} ينتهي بعد ٣ أيام. عند الانتهاء سيتم تعليق الحساب تلقائياً. جدّد الآن من اللوحة.`;
+      } else if (daysLeft <= 7) {
+        kind = NotificationKind.SUBSCRIPTION_REMINDER_7D;
+        body = `تذكير: اشتراك ${sub.tenant.name} ينتهي بعد ٧ أيام. جدّد الآن لتجنّب توقف الخدمة. مبلغ التجديد: ${fmt(sub.priceIqd)}.`;
+      } else if (daysLeft <= 14) {
+        kind = NotificationKind.SUBSCRIPTION_REMINDER_14D;
+        body = `تذكير ودّي: اشتراك ${sub.tenant.name} في منصة ماء ينتهي بعد ١٤ يوم. السعر للتجديد: ${fmt(sub.priceIqd)}. لا حاجة لإجراء الآن — هذا للعلم.`;
       }
 
       if (!kind || !body) continue;

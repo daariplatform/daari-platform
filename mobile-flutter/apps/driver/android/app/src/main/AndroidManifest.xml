@@ -10,6 +10,8 @@
     <application
         android:label="daari_driver"
         android:name="${applicationName}"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
         android:icon="@mipmap/ic_launcher">
         <!-- مفتاح خرائط جوجل — يُحقَن من manifestPlaceholders (gradle property MAPS_API_KEY).
              يبقى فارغاً في التطوير (الخريطة رمادية بلا تعطّل) ويُضبط للإنتاج. -->

@@ -79,13 +79,31 @@ async function main() {
     );
   }
 
+  const existing = await prisma.user.findUnique({ where: { phone } });
+  if (existing) {
+    // NEVER promote a tenant user to platform admin. If PLATFORM_ADMIN_PHONE was
+    // (mis)set to a number that already belongs to a plant user, upserting the
+    // role would hand that user full control of the whole platform on every
+    // deploy. Only leave an already-correct platform-admin row untouched
+    // (password preserved); otherwise refuse and make the operator pick a clean
+    // number.
+    if (existing.role !== UserRole.PLATFORM_ADMIN || existing.tenantId !== null) {
+      throw new Error(
+        `Refusing to seed platform admin: phone ${phone} already belongs to a ` +
+          `tenant user (role=${existing.role}, tenantId=${existing.tenantId}). ` +
+          `Set PLATFORM_ADMIN_PHONE to a number not used by any plant account.`,
+      );
+    }
+    console.log('Platform admin already present:', {
+      phone: existing.phone,
+      role: existing.role,
+    });
+    return;
+  }
+
   const passwordHash = await argon2.hash(password);
-  const admin = await prisma.user.upsert({
-    where: { phone },
-    // On an existing row keep the current password (only guarantee the role) so
-    // re-deploys never surprise-reset the owner's credentials.
-    update: { role: UserRole.PLATFORM_ADMIN },
-    create: {
+  const admin = await prisma.user.create({
+    data: {
       phone,
       passwordHash,
       fullName: 'مالك المنصّة',
@@ -94,7 +112,7 @@ async function main() {
     },
   });
 
-  console.log('Platform admin ready:', { phone: admin.phone, role: admin.role });
+  console.log('Platform admin created:', { phone: admin.phone, role: admin.role });
 }
 
 main()

@@ -91,8 +91,18 @@ class OfflineQueue {
     return Sqflite.firstIntValue(rows) ?? 0;
   }
 
+  Future<({int ok, int failed})>? _flushing;
+
   /// يحاول إرسال كل ما في الطابور (الأقدم أولاً). يتوقّف عند أول فشل شبكة.
-  Future<({int ok, int failed})> flush() async {
+  ///
+  /// **حارس تزامن:** يُستدعى من ثلاثة مواضع (postFrame + مؤقّت 60ث + عودة
+  /// الاتصال)؛ بلا حارس قد يتداخل تشغيلان فيرسلان نفس الصفّ مرّتين. النداءات
+  /// المتزامنة تشترك في التشغيل الجاري (coalesce) بدل بدء تشغيل ثانٍ.
+  Future<({int ok, int failed})> flush() {
+    return _flushing ??= _flushInner().whenComplete(() => _flushing = null);
+  }
+
+  Future<({int ok, int failed})> _flushInner() async {
     final db = await _open();
     final rows = await db.query('pending_mutations', orderBy: 'id ASC');
     var ok = 0;

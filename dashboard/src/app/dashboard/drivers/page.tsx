@@ -100,6 +100,12 @@ export default function DriversPage() {
         fullName: driver.user.fullName,
       });
     },
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? 'فشل إعادة تعيين كلمة المرور';
+      alert(msg);
+    },
   });
 
   // Soft-fire — PATCHes /drivers/:id with isActive=false. The backend

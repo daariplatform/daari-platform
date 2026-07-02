@@ -197,6 +197,13 @@ else
 fi
 
 echo ""
+echo "── 9. logrotate ─────────────────────────────────────────"
+# The systemd units append to /var/log/daari-water/*.log with no built-in
+# rotation, so without this the logs grow unbounded until they fill the disk.
+install -m 644 "$REPO_ROOT/deploy/logrotate/daari-water" /etc/logrotate.d/daari-water
+echo "  ✓ logrotate policy installed (/etc/logrotate.d/daari-water)"
+
+echo ""
 echo "════════════════════════════════════════════════════════════════"
 echo " Bootstrap complete. Next:"
 echo "════════════════════════════════════════════════════════════════"

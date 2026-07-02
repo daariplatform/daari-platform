@@ -1,6 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { ExpenseCategory, Prisma, RefillOrderStatus } from '@prisma/client';
+import {
+  ExpenseCategory,
+  Prisma,
+  RefillOrderKind,
+  RefillOrderStatus,
+} from '@prisma/client';
 import { paginated, type PaginatedResult } from '../common/dto/pagination.dto';
 
 interface RecordExpenseInput {
@@ -392,18 +397,31 @@ export class AccountingService {
     });
     if (!driver) throw new NotFoundException('Driver not found');
 
-    const completedAgg = await this.prisma.refillOrder.aggregate({
+    // Per-refill commission counts ONLY genuine refills — not tank
+    // deliveries/reclaims or walk-in sales, which are not "refills" of a
+    // customer's tank (the field is commissionPerRefillIqd). Counting every
+    // completed kind inflated driver pay (e.g. a tank reclaim earned a refill
+    // commission). Performance bonus, by contrast, is a per-order snapshot and
+    // still sums across all completed orders.
+    const refills = await this.prisma.refillOrder.count({
+      where: {
+        tenantId,
+        driverId,
+        status: RefillOrderStatus.COMPLETED,
+        kind: RefillOrderKind.REFILL,
+        completedAt: { gte: periodStart, lte: periodEnd },
+      },
+    });
+    const bonusAgg = await this.prisma.refillOrder.aggregate({
       where: {
         tenantId,
         driverId,
         status: RefillOrderStatus.COMPLETED,
         completedAt: { gte: periodStart, lte: periodEnd },
       },
-      _count: { _all: true },
       _sum: { bonusIqd: true },
     });
-    const refills = completedAgg._count._all;
-    const performanceBonusIqd = completedAgg._sum.bonusIqd ?? 0;
+    const performanceBonusIqd = bonusAgg._sum.bonusIqd ?? 0;
 
     // Sum every new-customer bonus the driver earned in this period — i.e.
     // every customer they registered in the field that the plant approved

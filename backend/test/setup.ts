@@ -63,6 +63,19 @@ export async function closeTestApp(): Promise<void> {
  * (_prisma_migrations, pg_*) are left alone.
  */
 export async function truncateAll(prisma: PrismaService): Promise<void> {
+  // SAFETY GUARD: never wipe a non-test database. If a real DATABASE_URL is
+  // exported in the shell (CI, direnv, a server session), `npm test` must not
+  // TRUNCATE it. Refuse unless the connected DB name ends in `_test`.
+  const [{ current_database: dbName }] = await prisma.$queryRaw<
+    { current_database: string }[]
+  >`SELECT current_database()`;
+  if (!/_test$/i.test(dbName)) {
+    throw new Error(
+      `Refusing to truncate database "${dbName}": its name must end in "_test". ` +
+        `Point DATABASE_URL_TEST at a dedicated test database (e.g. maa_platform_test).`,
+    );
+  }
+
   const rows = await prisma.$queryRaw<{ tablename: string }[]>`
     SELECT tablename FROM pg_tables
     WHERE schemaname = 'public'

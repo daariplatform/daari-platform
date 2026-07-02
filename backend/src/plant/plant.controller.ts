@@ -368,43 +368,37 @@ export class PlantController {
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @Post('promo-blast')
   async sendPromo(@CurrentUser() user: AuthUser, @Body() dto: SendPromoDto) {
-    // Count active customers in this tenant — that's the audience.
-    const audience = await this.prisma.customer.findMany({
-      where: {
-        tenantId: user.tenantId!,
-        status: { in: ['ACTIVE', 'AT_RISK'] },
-        userId: { not: null },
-      },
-      select: { userId: true },
-    });
-    const userIds = audience.map((c) => c.userId!).filter(Boolean);
-    if (userIds.length === 0) {
-      throw new BadRequestException('لا يوجد زبائن نشطون لإرسال العرض إليهم');
-    }
-    // Pricing (per Ahmed's pricing strategy): push = 5,000 IQD flat, WhatsApp = 10,000 + 10/msg
-    const priceIqd =
-      dto.channel === PromoChannel.PUSH
-        ? 5000
-        : 10000 + userIds.length * 10;
-
-    // Create the promo record first
-    const promo = await this.prisma.promoNotification.create({
-      data: {
-        tenantId: user.tenantId!,
-        channel: dto.channel,
-        title: dto.title,
-        body: dto.body,
-        audienceCount: userIds.length,
-        priceIqd,
-        status: 'QUEUED',
-        createdById: user.id,
-      },
-    });
-
-    // Push path — synchronous (Expo handles fan-out, latency is low). The
-    // sentCount / failedCount fields are written before we return so the
-    // dashboard sees the final state without polling.
+    // ── PUSH — synchronous. Audience = active customers WITH an app account
+    // (push tokens are tied to a User). Price is flat. sentCount/failedCount
+    // are written before returning so the dashboard sees the final state. ────
     if (dto.channel === PromoChannel.PUSH) {
+      const audience = await this.prisma.customer.findMany({
+        where: {
+          tenantId: user.tenantId!,
+          status: { in: ['ACTIVE', 'AT_RISK'] },
+          userId: { not: null },
+        },
+        select: { userId: true },
+      });
+      const userIds = audience.map((c) => c.userId!).filter(Boolean);
+      if (userIds.length === 0) {
+        throw new BadRequestException('لا يوجد زبائن نشطون لإرسال العرض إليهم');
+      }
+      const priceIqd = 5000; // flat, per pricing strategy
+
+      const promo = await this.prisma.promoNotification.create({
+        data: {
+          tenantId: user.tenantId!,
+          channel: dto.channel,
+          title: dto.title,
+          body: dto.body,
+          audienceCount: userIds.length,
+          priceIqd,
+          status: 'QUEUED',
+          createdById: user.id,
+        },
+      });
+
       const result = await this.push.sendToUsers(userIds, dto.title, dto.body, {
         promoId: promo.id,
         kind: 'promo',
@@ -425,18 +419,38 @@ export class PlantController {
       return { ...promo, sentCount: result.sent, failedCount: result.failed };
     }
 
-    // WhatsApp path — handed off to a BullMQ background worker so the HTTP
-    // call returns immediately even for large audiences (one Meta Cloud
-    // request per recipient adds up fast). The processor updates
-    // sentCount / failedCount / status as it progresses; dashboard polls
-    // GET /plant/promo-blast/:id/status for the live count.
-    const customerIds = (await this.prisma.customer.findMany({
-      where: {
+    // ── WHATSAPP — async via BullMQ so the HTTP call returns immediately for
+    // large audiences. Audience = active customers reachable by phone (no app
+    // account required). Price, audienceCount AND the queued recipient list all
+    // derive from this ONE set, so billing == what's actually sent. (Previously
+    // the price/audienceCount used the userId-filtered subset while the queue
+    // used the full set → under-billing and sentCount > audienceCount.) ───────
+    const customerIds = (
+      await this.prisma.customer.findMany({
+        where: {
+          tenantId: user.tenantId!,
+          status: { in: ['ACTIVE', 'AT_RISK'] },
+        },
+        select: { id: true },
+      })
+    ).map((c) => c.id);
+    if (customerIds.length === 0) {
+      throw new BadRequestException('لا يوجد زبائن نشطون لإرسال العرض إليهم');
+    }
+    const priceIqd = 10000 + customerIds.length * 10;
+
+    const promo = await this.prisma.promoNotification.create({
+      data: {
         tenantId: user.tenantId!,
-        status: { in: ['ACTIVE', 'AT_RISK'] },
+        channel: dto.channel,
+        title: dto.title,
+        body: dto.body,
+        audienceCount: customerIds.length,
+        priceIqd,
+        status: 'QUEUED',
+        createdById: user.id,
       },
-      select: { id: true },
-    })).map((c) => c.id);
+    });
 
     await this.whatsappBlastQueue.add(
       'send',
@@ -448,8 +462,9 @@ export class PlantController {
         body: dto.body,
       },
       {
-        // Retry the whole job on hard failures (network drop). Per-recipient
-        // failures are caught inside the processor and don't trigger retries.
+        // Retry the whole job on hard failures (network drop). The processor
+        // records per-recipient sent state on the job so a retry skips anyone
+        // already messaged (no duplicate paid sends).
         attempts: 3,
         backoff: { type: 'exponential', delay: 5_000 },
         removeOnComplete: { age: 24 * 60 * 60 }, // keep for 24 h for debugging

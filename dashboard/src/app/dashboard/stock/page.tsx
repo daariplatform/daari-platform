@@ -39,6 +39,12 @@ export default function StockPage() {
       setEditCapacity(false);
       setEditThreshold(false);
     },
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? 'فشل حفظ المخزون';
+      alert(msg);
+    },
   });
 
   if (isLoading || !data) {

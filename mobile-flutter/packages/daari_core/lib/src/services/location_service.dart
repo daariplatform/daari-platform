@@ -72,6 +72,14 @@ class LocationService {
     }
   }
 
+  /// إيقاف مؤقّت التتبّع **فقط** بلا أي نداء خادم — يُستدعى عند انتهاء الجلسة.
+  /// (لا نستدعي `setStatus` هنا لأنّ التوكن ميّت: نداء آخر سيرجع 401 فيُعيد
+  /// إشعال حلقة التجديد الفاشل التي تستنزف الـ GPS/البطارية.)
+  void stopTracking() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
   /// نبضة لمرّة (لفحص الوصول / تسجيل البيع الفوري) — لا تبثّ للخادم.
   Future<Coords?> currentCoords() async {
     if (!await ensurePermission()) return null;

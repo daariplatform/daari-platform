@@ -92,6 +92,11 @@ export default function TanksPage() {
       qc.invalidateQueries({ queryKey: ['tanks'] });
       qc.invalidateQueries({ queryKey: ['customers'] });
     },
+    onError: (err) =>
+      alert(
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+          'فشل سحب الخزان',
+      ),
   });
 
   return (

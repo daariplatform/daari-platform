@@ -9,6 +9,8 @@
     <application
         android:label="daari_admin"
         android:name="${applicationName}"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
         android:icon="@mipmap/ic_launcher">
         <!-- مفتاح خرائط جوجل — يُحقَن من manifestPlaceholders (gradle property MAPS_API_KEY).
              يبقى فارغاً في التطوير (الخريطة رمادية بلا تعطّل) ويُضبط للإنتاج. -->
@@ -52,6 +54,12 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- url_launcher: فتح روابط تصدير التقارير (https). مطلوبة على Android 11+
+             وإلا يُرجِع canLaunchUrl=false فيفشل زرّ التصدير بصمت. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
         </intent>
     </queries>
 </manifest>

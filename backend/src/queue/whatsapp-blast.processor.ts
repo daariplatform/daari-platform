@@ -12,6 +12,10 @@ export interface WhatsappBlastJobData {
   customerIds: string[];
   title: string;
   body: string;
+  // Recipients already messaged in a previous attempt. Persisted onto the job
+  // (Redis) as the blast progresses so a BullMQ retry skips them instead of
+  // re-sending a paid WhatsApp message to everyone. Absent on the first run.
+  sentRecipientIds?: string[];
 }
 
 /**
@@ -59,6 +63,10 @@ export class WhatsappBlastProcessor extends WorkerHost {
       `Blast ${promoNotificationId} starting — ${recipients.length}/${customerIds.length} recipients still eligible`,
     );
 
+    // Recipients messaged in a previous attempt (persisted on the job) — skip
+    // them so a retry never re-sends a paid WhatsApp message.
+    const alreadySent = new Set<string>(job.data.sentRecipientIds ?? []);
+
     const message = `${title}\n\n${body}`;
     let sent = 0;
     let failed = 0;
@@ -67,8 +75,10 @@ export class WhatsappBlastProcessor extends WorkerHost {
 
     for (let i = 0; i < recipients.length; i++) {
       const r = recipients[i];
+      if (alreadySent.has(r.id)) continue; // messaged in a prior attempt
       try {
         await this.whatsapp.send(r.whatsapp ?? r.phone, message);
+        alreadySent.add(r.id);
         sent++;
         unflushedSent++;
       } catch (err) {
@@ -79,11 +89,13 @@ export class WhatsappBlastProcessor extends WorkerHost {
         );
       }
 
-      // Periodic checkpoint so the dashboard's progress bar can advance.
+      // Periodic checkpoint so the dashboard's progress bar can advance and a
+      // retry can resume from here instead of restarting the whole blast.
       if ((i + 1) % WhatsappBlastProcessor.FLUSH_EVERY === 0) {
         await this.flushCounters(promoNotificationId, unflushedSent, unflushedFailed);
         unflushedSent = 0;
         unflushedFailed = 0;
+        await this.persistProgress(job, alreadySent);
         // Let BullMQ know how far we are (for the UI / monitoring).
         await job.updateProgress(Math.round(((i + 1) / recipients.length) * 100));
       }
@@ -114,6 +126,7 @@ export class WhatsappBlastProcessor extends WorkerHost {
       });
     });
 
+    await this.persistProgress(job, alreadySent);
     await job.updateProgress(100);
     this.log.log(
       `Blast ${promoNotificationId} done — sent=${sent}, failed=${failed}`,
@@ -138,6 +151,19 @@ export class WhatsappBlastProcessor extends WorkerHost {
       // the final flush. Logged so DB outages are visible.
       this.log.warn(
         `Blast ${promoNotificationId} counter flush failed: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  // Persist the set of already-messaged recipients onto the job so a BullMQ
+  // retry (attempts: 3) resumes instead of re-blasting everyone. Best-effort:
+  // worst case a crash between persists re-sends at most FLUSH_EVERY recipients.
+  private async persistProgress(job: Job<WhatsappBlastJobData>, alreadySent: Set<string>) {
+    try {
+      await job.updateData({ ...job.data, sentRecipientIds: [...alreadySent] });
+    } catch (err) {
+      this.log.warn(
+        `Blast ${job.data.promoNotificationId} progress persist failed: ${(err as Error).message}`,
       );
     }
   }

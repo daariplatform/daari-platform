@@ -22,6 +22,10 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // flutter_local_notifications ^18 (pulled in via daari_core) requires
+        // core library desugaring — without it the admin app fails to build for
+        // Android. Matches customer/driver.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -67,6 +71,12 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Required by flutter_local_notifications ^18 (via daari_core) — see the
+    // isCoreLibraryDesugaringEnabled flag above. Matches customer/driver.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
 // ─── Firebase (FCM) ───────────────────────────────────────────────────────────
