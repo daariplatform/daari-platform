@@ -7,6 +7,7 @@ import { TeamController } from './team.controller';
 import { OnboardingController } from './onboarding.controller';
 import { PromoService } from './promo.service';
 import { WalletService } from './wallet.service';
+import { ReportsCleanupScheduler } from './reports-cleanup.scheduler';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
@@ -19,7 +20,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     TeamController,
     OnboardingController,
   ],
-  providers: [PromoService, WalletService],
+  providers: [PromoService, WalletService, ReportsCleanupScheduler],
   // Exported so OrdersService (campaign deduction at completion) and the
   // platform-admin module (wallet topups) can inject them.
   exports: [PromoService, WalletService],

@@ -134,7 +134,9 @@ model Tenant {
 model Subscription {
   id       String @id @default(cuid())
   tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Restrict (not Cascade): financial ledgers must not be silently wiped if a
+  // tenant is ever hard-deleted — use soft-delete/archival instead (M-B13).
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   plan     SubscriptionPlan
   priceIqd Int // monthly fee captured at subscription time
@@ -235,13 +237,19 @@ model PasswordResetToken {
 }
 
 model RefreshToken {
-  id        String    @id @default(cuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash String    @unique
-  expiresAt DateTime
-  revokedAt DateTime?
-  createdAt DateTime  @default(now())
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash     String    @unique
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  // Why the token was revoked. NULL = normal rotation (eligible for the
+  // reuse-grace window on refresh). A non-null reason (password reset, logout,
+  // admin reset) is an explicit security revocation and is rejected even within
+  // the grace window — otherwise a stolen token could still refresh in the 30s
+  // after a victim resets their password.
+  revokedReason String?
+  createdAt     DateTime  @default(now())
 
   @@index([userId])
 }
@@ -386,12 +394,12 @@ model Customer {
   registeredAt  DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  tanks          Tank[]
-  refillOrders   RefillOrder[]
-  invoices       Invoice[]
-  addresses      CustomerAddress[]
-  ratings        Rating[]
-  schedules      ScheduledOrder[]
+  tanks        Tank[]
+  refillOrders RefillOrder[]
+  invoices     Invoice[]
+  addresses    CustomerAddress[]
+  ratings      Rating[]
+  schedules    ScheduledOrder[]
 
   @@unique([tenantId, phone])
   @@index([tenantId, status])
@@ -480,7 +488,9 @@ enum PaymentMethod {
 model RefillOrder {
   id       String @id @default(cuid())
   tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Restrict (not Cascade): orders are the core financial record — never
+  // silently delete them on tenant removal (M-B13).
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   // customerId is required for normal refills but null for WALKIN_SALE,
   // where the buyer is a one-time walk-up customer with no account.
@@ -637,19 +647,21 @@ enum CashHandoverStatus {
 
 // Driver hands collected cash to the plant; plant confirms receipt.
 model CashHandover {
-  id          String             @id @default(cuid())
-  tenantId    String
-  driverId    String
-  driver      Driver             @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  amountIqd   Int
-  note        String?
+  id              String             @id @default(cuid())
+  tenantId        String
+  driverId        String
+  // Restrict (not Cascade): deleting a driver must not erase their cash-handover
+  // ledger — keep the money trail (M-B13).
+  driver          Driver             @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  amountIqd       Int
+  note            String?
   // Idempotency key from the client (see RefillOrder.clientRequestId). Guards a
   // double-tap / retried handover from being recorded twice. Nullable → legacy
   // clients unaffected.
   clientRequestId String?
-  status      CashHandoverStatus @default(PENDING)
-  createdAt   DateTime           @default(now())
-  confirmedAt DateTime?
+  status          CashHandoverStatus @default(PENDING)
+  createdAt       DateTime           @default(now())
+  confirmedAt     DateTime?
 
   @@unique([tenantId, clientRequestId])
   @@index([tenantId, status])
@@ -670,7 +682,8 @@ enum ExpenseCategory {
 model Expense {
   id       String @id @default(cuid())
   tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Restrict (not Cascade): keep the expense ledger on tenant removal (M-B13).
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   category    ExpenseCategory
   amountIqd   Int
@@ -741,7 +754,8 @@ model RecurringExpense {
 model Invoice {
   id            String    @id @default(cuid())
   tenantId      String
-  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Restrict (not Cascade): keep the invoice ledger on tenant removal (M-B13).
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   customerId    String?
   customer      Customer? @relation(fields: [customerId], references: [id])
   invoiceNumber String
@@ -762,7 +776,8 @@ model Invoice {
 model SalaryPayment {
   id       String @id @default(cuid())
   tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Restrict (not Cascade): keep the payroll ledger on tenant removal (M-B13).
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   driverId String
   driver   Driver @relation(fields: [driverId], references: [id])
@@ -998,7 +1013,8 @@ enum WalletTopupSource {
 model WalletTopup {
   id       String @id @default(cuid())
   tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Restrict (not Cascade): keep the wallet-topup ledger on tenant removal (M-B13).
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   amountIqd       Int
   balanceAfterIqd Int // snapshot of wallet AFTER this topup

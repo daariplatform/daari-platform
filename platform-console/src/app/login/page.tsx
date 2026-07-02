@@ -18,7 +18,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const { data } = await api.post('/auth/login', { phone, password });
-      setTokens(data.accessToken, data.refreshToken);
+      setTokens(data.accessToken);
       if (data.user?.id) {
         identifyPlantAdmin(data.user.id, {
           phone: data.user.phone,

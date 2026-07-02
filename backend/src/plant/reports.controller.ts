@@ -73,40 +73,7 @@ export class PlantReportsController {
   ) {
     const tenantId = user.tenantId!;
     const { windowStart, windowEnd } = parseRange(from, to, /* defaultDays */ 7);
-
-    // Build day buckets at midnight, end-exclusive — handles short or long
-    // windows. Caps at 366 to keep payloads sane.
-    const days: { date: string; start: Date; end: Date }[] = [];
-    const dayMs = 86_400_000;
-    const numDays = Math.min(
-      Math.ceil((windowEnd.getTime() - windowStart.getTime()) / dayMs),
-      366,
-    );
-    for (let i = 0; i < numDays; i++) {
-      const start = new Date(windowStart);
-      start.setDate(start.getDate() + i);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(start);
-      end.setDate(end.getDate() + 1);
-      days.push({ date: start.toISOString().slice(0, 10), start, end });
-    }
-
-    const orders = await this.prisma.refillOrder.findMany({
-      where: {
-        tenantId,
-        status: RefillOrderStatus.COMPLETED,
-        completedAt: { gte: days[0].start, lt: days[days.length - 1].end },
-      },
-      select: { completedAt: true, paidAmountIqd: true },
-    });
-
-    return days.map((d) => {
-      const inDay = orders.filter(
-        (o) => o.completedAt! >= d.start && o.completedAt! < d.end,
-      );
-      const revenueIqd = inDay.reduce((s, o) => s + (o.paidAmountIqd ?? 0), 0);
-      return { date: d.date, revenueIqd, orders: inDay.length };
-    });
+    return this.revenueByDay(tenantId, windowStart, windowEnd);
   }
 
   /**
@@ -129,38 +96,7 @@ export class PlantReportsController {
     const n = Math.min(parseInt(limit ?? '5', 10) || 5, 50);
     const windowStart = from ? new Date(from) : startOfMonth();
     const windowEnd = to ? new Date(to) : new Date();
-
-    const grouped = await this.prisma.refillOrder.groupBy({
-      by: ['customerId'],
-      where: {
-        tenantId,
-        status: RefillOrderStatus.COMPLETED,
-        completedAt: { gte: windowStart, lte: windowEnd },
-        customerId: { not: null },
-      },
-      _sum: { paidAmountIqd: true },
-      _count: { _all: true },
-      orderBy: { _sum: { paidAmountIqd: 'desc' } },
-      take: n,
-    });
-
-    const customerIds = grouped.map((g) => g.customerId!).filter(Boolean);
-    if (customerIds.length === 0) return [];
-
-    const customers = await this.prisma.customer.findMany({
-      where: { id: { in: customerIds }, tenantId },
-      select: { id: true, fullName: true, phone: true, district: true },
-    });
-    const byId = new Map(customers.map((c) => [c.id, c]));
-
-    return grouped.map((g) => ({
-      customerId: g.customerId!,
-      fullName: byId.get(g.customerId!)?.fullName ?? '—',
-      phone: byId.get(g.customerId!)?.phone ?? null,
-      district: byId.get(g.customerId!)?.district ?? null,
-      spentIqd: g._sum.paidAmountIqd ?? 0,
-      orderCount: g._count._all,
-    }));
+    return this.topCustomersData(tenantId, windowStart, windowEnd, n);
   }
 
   /**
@@ -182,39 +118,7 @@ export class PlantReportsController {
     const n = Math.min(parseInt(limit ?? '5', 10) || 5, 50);
     const windowStart = from ? new Date(from) : startOfMonth();
     const windowEnd = to ? new Date(to) : new Date();
-
-    const grouped = await this.prisma.refillOrder.groupBy({
-      by: ['driverId'],
-      where: {
-        tenantId,
-        status: RefillOrderStatus.COMPLETED,
-        completedAt: { gte: windowStart, lte: windowEnd },
-        driverId: { not: null },
-      },
-      _count: { _all: true },
-      _sum: { paidAmountIqd: true, bonusIqd: true },
-      orderBy: { _count: { driverId: 'desc' } },
-      take: n,
-    });
-
-    const driverIds = grouped.map((g) => g.driverId!).filter(Boolean);
-    if (driverIds.length === 0) return [];
-
-    const drivers = await this.prisma.driver.findMany({
-      where: { id: { in: driverIds }, tenantId },
-      include: { user: { select: { fullName: true, phone: true } } },
-    });
-    const byId = new Map(drivers.map((d) => [d.id, d]));
-
-    return grouped.map((g) => ({
-      driverId: g.driverId!,
-      fullName: byId.get(g.driverId!)?.user.fullName ?? '—',
-      phone: byId.get(g.driverId!)?.user.phone ?? null,
-      vehiclePlate: byId.get(g.driverId!)?.vehiclePlate ?? null,
-      completedOrders: g._count._all,
-      revenueIqd: g._sum.paidAmountIqd ?? 0,
-      bonusIqd: g._sum.bonusIqd ?? 0,
-    }));
+    return this.topDriversData(tenantId, windowStart, windowEnd, n);
   }
 
   /**
@@ -706,6 +610,144 @@ export class PlantReportsController {
     return { url, expiresAt };
   }
 
+  // ── Shared report datasets ────────────────────────────────────────────────
+  // Single source of truth for the three leaderboard/timeseries reports, used
+  // by BOTH the GET endpoints and the export (gatherReportData). Previously each
+  // was reimplemented in the export with divergent assumptions (30d vs 7d
+  // window, take 100 vs 50), so a fix to a screen never reached the file export.
+  // Callers pass their own window/limit; the object shape here is what the GET
+  // endpoints return, and the export flattens it to rows.
+
+  private async revenueByDay(
+    tenantId: string,
+    windowStart: Date,
+    windowEnd: Date,
+  ): Promise<{ date: string; revenueIqd: number; orders: number }[]> {
+    const days: { date: string; start: Date; end: Date }[] = [];
+    const numDays = Math.min(
+      Math.ceil((windowEnd.getTime() - windowStart.getTime()) / 86_400_000),
+      366,
+    );
+    for (let i = 0; i < numDays; i++) {
+      const start = new Date(windowStart);
+      start.setDate(start.getDate() + i);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      days.push({ date: start.toISOString().slice(0, 10), start, end });
+    }
+    const orders = await this.prisma.refillOrder.findMany({
+      where: {
+        tenantId,
+        status: RefillOrderStatus.COMPLETED,
+        completedAt: { gte: days[0].start, lt: days[days.length - 1].end },
+      },
+      select: { completedAt: true, paidAmountIqd: true },
+    });
+    return days.map((d) => {
+      const inDay = orders.filter(
+        (o) => o.completedAt! >= d.start && o.completedAt! < d.end,
+      );
+      return {
+        date: d.date,
+        revenueIqd: inDay.reduce((s, o) => s + (o.paidAmountIqd ?? 0), 0),
+        orders: inDay.length,
+      };
+    });
+  }
+
+  private async topCustomersData(
+    tenantId: string,
+    windowStart: Date,
+    windowEnd: Date,
+    limit: number,
+  ): Promise<
+    {
+      customerId: string;
+      fullName: string;
+      phone: string | null;
+      district: string | null;
+      spentIqd: number;
+      orderCount: number;
+    }[]
+  > {
+    const grouped = await this.prisma.refillOrder.groupBy({
+      by: ['customerId'],
+      where: {
+        tenantId,
+        status: RefillOrderStatus.COMPLETED,
+        completedAt: { gte: windowStart, lte: windowEnd },
+        customerId: { not: null },
+      },
+      _sum: { paidAmountIqd: true },
+      _count: { _all: true },
+      orderBy: { _sum: { paidAmountIqd: 'desc' } },
+      take: limit,
+    });
+    const customerIds = grouped.map((g) => g.customerId!).filter(Boolean);
+    if (customerIds.length === 0) return [];
+    const customers = await this.prisma.customer.findMany({
+      where: { id: { in: customerIds }, tenantId },
+      select: { id: true, fullName: true, phone: true, district: true },
+    });
+    const byId = new Map(customers.map((c) => [c.id, c]));
+    return grouped.map((g) => ({
+      customerId: g.customerId!,
+      fullName: byId.get(g.customerId!)?.fullName ?? '—',
+      phone: byId.get(g.customerId!)?.phone ?? null,
+      district: byId.get(g.customerId!)?.district ?? null,
+      spentIqd: g._sum.paidAmountIqd ?? 0,
+      orderCount: g._count._all,
+    }));
+  }
+
+  private async topDriversData(
+    tenantId: string,
+    windowStart: Date,
+    windowEnd: Date,
+    limit: number,
+  ): Promise<
+    {
+      driverId: string;
+      fullName: string;
+      phone: string | null;
+      vehiclePlate: string | null;
+      completedOrders: number;
+      revenueIqd: number;
+      bonusIqd: number;
+    }[]
+  > {
+    const grouped = await this.prisma.refillOrder.groupBy({
+      by: ['driverId'],
+      where: {
+        tenantId,
+        status: RefillOrderStatus.COMPLETED,
+        completedAt: { gte: windowStart, lte: windowEnd },
+        driverId: { not: null },
+      },
+      _count: { _all: true },
+      _sum: { paidAmountIqd: true, bonusIqd: true },
+      orderBy: { _count: { driverId: 'desc' } },
+      take: limit,
+    });
+    const driverIds = grouped.map((g) => g.driverId!).filter(Boolean);
+    if (driverIds.length === 0) return [];
+    const drivers = await this.prisma.driver.findMany({
+      where: { id: { in: driverIds }, tenantId },
+      include: { user: { select: { fullName: true, phone: true } } },
+    });
+    const byId = new Map(drivers.map((d) => [d.id, d]));
+    return grouped.map((g) => ({
+      driverId: g.driverId!,
+      fullName: byId.get(g.driverId!)?.user.fullName ?? '—',
+      phone: byId.get(g.driverId!)?.user.phone ?? null,
+      vehiclePlate: byId.get(g.driverId!)?.vehiclePlate ?? null,
+      completedOrders: g._count._all,
+      revenueIqd: g._sum.paidAmountIqd ?? 0,
+      bonusIqd: g._sum.bonusIqd ?? 0,
+    }));
+  }
+
   /** Helper: load the dataset for a given report key in the chosen window. */
   private async gatherReportData(
     tenantId: string,
@@ -715,108 +757,46 @@ export class PlantReportsController {
   ): Promise<ExportPayload> {
     if (report === 'revenue') {
       const { windowStart, windowEnd } = parseRange(from, to, 30);
-      const days: { date: string; start: Date; end: Date }[] = [];
-      const numDays = Math.min(
-        Math.ceil((windowEnd.getTime() - windowStart.getTime()) / 86_400_000),
-        366,
-      );
-      for (let i = 0; i < numDays; i++) {
-        const start = new Date(windowStart);
-        start.setDate(start.getDate() + i);
-        start.setHours(0, 0, 0, 0);
-        const end = new Date(start);
-        end.setDate(end.getDate() + 1);
-        days.push({ date: start.toISOString().slice(0, 10), start, end });
-      }
-      const orders = await this.prisma.refillOrder.findMany({
-        where: {
-          tenantId,
-          status: RefillOrderStatus.COMPLETED,
-          completedAt: { gte: days[0].start, lt: days[days.length - 1].end },
-        },
-        select: { completedAt: true, paidAmountIqd: true },
-      });
-      const rows = days.map((d) => {
-        const inDay = orders.filter(
-          (o) => o.completedAt! >= d.start && o.completedAt! < d.end,
-        );
-        return {
-          date: d.date,
-          revenueIqd: inDay.reduce((s, o) => s + (o.paidAmountIqd ?? 0), 0),
-          orders: inDay.length,
-        };
-      });
-      return { title: 'Daily Revenue', columns: ['Date', 'Revenue (IQD)', 'Orders'], rows: rows.map((r) => [r.date, r.revenueIqd, r.orders]) };
+      const rows = await this.revenueByDay(tenantId, windowStart, windowEnd);
+      return {
+        title: 'Daily Revenue',
+        columns: ['Date', 'Revenue (IQD)', 'Orders'],
+        rows: rows.map((r) => [r.date, r.revenueIqd, r.orders]),
+      };
     }
 
     if (report === 'top-customers') {
       const windowStart = from ? new Date(from) : startOfMonth();
       const windowEnd = to ? new Date(to) : new Date();
-      const grouped = await this.prisma.refillOrder.groupBy({
-        by: ['customerId'],
-        where: {
-          tenantId,
-          status: RefillOrderStatus.COMPLETED,
-          completedAt: { gte: windowStart, lte: windowEnd },
-          customerId: { not: null },
-        },
-        _sum: { paidAmountIqd: true },
-        _count: { _all: true },
-        orderBy: { _sum: { paidAmountIqd: 'desc' } },
-        take: 100,
-      });
-      const customers = await this.prisma.customer.findMany({
-        where: { id: { in: grouped.map((g) => g.customerId!).filter(Boolean) }, tenantId },
-        select: { id: true, fullName: true, phone: true, district: true },
-      });
-      const byId = new Map(customers.map((c) => [c.id, c]));
-      const rows = grouped.map((g) => [
-        byId.get(g.customerId!)?.fullName ?? '—',
-        byId.get(g.customerId!)?.phone ?? '',
-        byId.get(g.customerId!)?.district ?? '',
-        g._sum.paidAmountIqd ?? 0,
-        g._count._all,
-      ]);
+      const data = await this.topCustomersData(tenantId, windowStart, windowEnd, 100);
       return {
         title: 'Top Customers',
         columns: ['Name', 'Phone', 'District', 'Spend (IQD)', 'Orders'],
-        rows,
+        rows: data.map((c) => [
+          c.fullName,
+          c.phone ?? '',
+          c.district ?? '',
+          c.spentIqd,
+          c.orderCount,
+        ]),
       };
     }
 
     if (report === 'top-drivers') {
       const windowStart = from ? new Date(from) : startOfMonth();
       const windowEnd = to ? new Date(to) : new Date();
-      const grouped = await this.prisma.refillOrder.groupBy({
-        by: ['driverId'],
-        where: {
-          tenantId,
-          status: RefillOrderStatus.COMPLETED,
-          completedAt: { gte: windowStart, lte: windowEnd },
-          driverId: { not: null },
-        },
-        _count: { _all: true },
-        _sum: { paidAmountIqd: true, bonusIqd: true },
-        orderBy: { _count: { driverId: 'desc' } },
-        take: 100,
-      });
-      const drivers = await this.prisma.driver.findMany({
-        where: { id: { in: grouped.map((g) => g.driverId!).filter(Boolean) }, tenantId },
-        include: { user: { select: { fullName: true, phone: true } } },
-      });
-      const byId = new Map(drivers.map((d) => [d.id, d]));
-      const rows = grouped.map((g) => [
-        byId.get(g.driverId!)?.user.fullName ?? '—',
-        byId.get(g.driverId!)?.user.phone ?? '',
-        byId.get(g.driverId!)?.vehiclePlate ?? '',
-        g._count._all,
-        g._sum.paidAmountIqd ?? 0,
-        g._sum.bonusIqd ?? 0,
-      ]);
+      const data = await this.topDriversData(tenantId, windowStart, windowEnd, 100);
       return {
         title: 'Top Drivers',
         columns: ['Name', 'Phone', 'Plate', 'Completed Orders', 'Revenue (IQD)', 'Bonus (IQD)'],
-        rows,
+        rows: data.map((d) => [
+          d.fullName,
+          d.phone ?? '',
+          d.vehiclePlate ?? '',
+          d.completedOrders,
+          d.revenueIqd,
+          d.bonusIqd,
+        ]),
       };
     }
 

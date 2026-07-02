@@ -22,12 +22,15 @@ export const api = axios.create({
 });
 
 const ACCESS_KEY = 'maa_access';
+// Legacy key. The refresh token used to be stored here but was never read (the
+// web apps have no /auth/refresh flow), so a long-lived refresh token sitting in
+// localStorage was a pure XSS-exfiltration liability. We no longer write it;
+// clearTokens() still removes it to purge any value left by an older build.
 const REFRESH_KEY = 'maa_refresh';
 
-export function setTokens(access: string, refresh: string) {
+export function setTokens(access: string) {
   if (typeof window === 'undefined') return;
   localStorage.setItem(ACCESS_KEY, access);
-  localStorage.setItem(REFRESH_KEY, refresh);
 }
 
 export function getAccessToken() {

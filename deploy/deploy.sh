@@ -46,18 +46,33 @@ RSYNC_SSH="ssh -i $SSH_KEY"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # -----------------------------------------------------------------------------
-# Pre-flight: registry check. CLAUDE.md is explicit about this.
+# Pre-flight: registry check.
+#
+# This is a *shared-VPS* safety convention (the Phi-Bit box runs several
+# projects, so we refuse to touch it unless /root/PROJECTS.md lists our slug).
+# On a FRESH DEDICATED server there is no such file — that's fine, we skip the
+# check. Set SKIP_REGISTRY_CHECK=1 to bypass entirely.
 # -----------------------------------------------------------------------------
-echo "→ Checking /root/PROJECTS.md on VPS..."
-if ! $SSH 'test -f /root/PROJECTS.md && grep -qE "(daari-water|Daari Water)" /root/PROJECTS.md'; then
-  cat >&2 <<EOF
-[ABORT] /root/PROJECTS.md does not have a daari-water entry yet.
+if [[ "${SKIP_REGISTRY_CHECK:-0}" != "1" ]]; then
+  echo "→ Checking /root/PROJECTS.md on VPS..."
+  if $SSH 'test -f /root/PROJECTS.md'; then
+    if ! $SSH 'grep -qE "(daari-water|Daari Water)" /root/PROJECTS.md'; then
+      cat >&2 <<'EOF'
+[ABORT] /root/PROJECTS.md exists but has no daari-water entry.
 
-The Phi-Bit VPS already runs another project named "Daari" (Dar Al-Safari)
-on port 3000. We deliberately use the slug "daari-water" to avoid conflicts.
-Append the registry entry from deploy/PROJECTS-MD-ENTRY.md before deploying.
+This looks like a SHARED server. To avoid clobbering another project, add an
+identifying line to /root/PROJECTS.md, for example:
+
+  daari-water | Daari Water SaaS | dirs: /var/www/daari-water-* | services: daari-water-api, daari-water-dashboard
+
+Then re-run the deploy. On a dedicated box you can instead run with
+SKIP_REGISTRY_CHECK=1.
 EOF
-  exit 1
+      exit 1
+    fi
+  else
+    echo "  · /root/PROJECTS.md not found — treating this as a dedicated server (registry check skipped)."
+  fi
 fi
 
 deploy_api() {

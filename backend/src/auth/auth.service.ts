@@ -197,10 +197,11 @@ export class AuthService {
         where: { id: token.id },
         data: { usedAt: new Date() },
       });
-      // Kill any active sessions — old refresh tokens may be in attacker hands
+      // Kill any active sessions — old refresh tokens may be in attacker hands.
+      // Tagged so refresh() rejects them even inside the reuse-grace window.
       await tx.refreshToken.updateMany({
         where: { userId: user.id, revokedAt: null },
-        data: { revokedAt: new Date() },
+        data: { revokedAt: new Date(), revokedReason: 'password_reset' },
       });
     });
 
@@ -264,14 +265,19 @@ export class AuthService {
     if (!stored || stored.expiresAt < new Date()) {
       throw new UnauthorizedException('Invalid refresh token');
     }
-    if (
-      stored.revokedAt &&
-      Date.now() - stored.revokedAt.getTime() > REUSE_GRACE_MS
-    ) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
-    // Revoke on first use only (a within-grace replay is already revoked).
-    if (!stored.revokedAt) {
+    if (stored.revokedAt) {
+      // Honour the reuse-grace ONLY for tokens revoked by normal rotation
+      // (revokedReason === null). An explicit security revocation (password
+      // reset / logout / admin reset) is rejected even within the window, so a
+      // stolen token can't refresh in the 30s after the victim resets.
+      const graceApplies =
+        stored.revokedReason === null &&
+        Date.now() - stored.revokedAt.getTime() <= REUSE_GRACE_MS;
+      if (!graceApplies) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+    } else {
+      // Revoke on first use (rotation). A within-grace replay is already revoked.
       await this.prisma.refreshToken.update({
         where: { id: stored.id },
         data: { revokedAt: new Date() },
@@ -289,7 +295,7 @@ export class AuthService {
     const tokenHash = this.hashToken(refreshToken);
     await this.prisma.refreshToken.updateMany({
       where: { tokenHash, revokedAt: null },
-      data: { revokedAt: new Date() },
+      data: { revokedAt: new Date(), revokedReason: 'logout' },
     });
   }
 
@@ -379,10 +385,11 @@ export class AuthService {
         });
       }
 
-      // 4. revoke every refresh token (signs them out everywhere)
+      // 4. revoke every refresh token (signs them out everywhere). Tagged so
+      // refresh() rejects them even inside the reuse-grace window.
       await tx.refreshToken.updateMany({
         where: { userId, revokedAt: null },
-        data: { revokedAt: new Date() },
+        data: { revokedAt: new Date(), revokedReason: 'admin_reset' },
       });
 
       // 5. scrub the user row itself
