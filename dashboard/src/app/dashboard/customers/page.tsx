@@ -45,6 +45,10 @@ const STATUS: Record<string, { label: string; klass: string }> = {
   INACTIVE: { label: 'متوقف', klass: 'bg-slate-100 text-slate-700' },
   CHURNED: { label: 'فقدنا الزبون', klass: 'bg-red-50 text-red-700' },
   PENDING_APPROVAL: { label: 'بانتظار الموافقة', klass: 'bg-sky-50 text-sky-700' },
+  // Fallback for any status the backend adds later — prevents `undefined.klass`
+  // from throwing and white-screening the whole table (same class of crash that
+  // hit the drivers page in production).
+  UNKNOWN: { label: '—', klass: 'bg-slate-100 text-slate-700' },
 };
 
 export default function CustomersPage() {
@@ -230,8 +234,8 @@ export default function CustomersPage() {
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  <span className={`px-2 py-1 rounded text-xs ${STATUS[c.status].klass}`}>
-                    {STATUS[c.status].label}
+                  <span className={`px-2 py-1 rounded text-xs ${(STATUS[c.status] ?? STATUS.UNKNOWN).klass}`}>
+                    {(STATUS[c.status] ?? STATUS.UNKNOWN).label}
                   </span>
                 </td>
                 <td className="px-4 py-3">{c.totalRefills}</td>

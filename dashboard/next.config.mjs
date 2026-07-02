@@ -28,6 +28,22 @@ const withPWA = nextPwa({
   // should never be served from a stale SW cache. Everything else
   // (static HTML, JS, CSS, fonts, icons) precaches normally.
   buildExcludes: [/middleware-manifest\.json$/, /api\/.*$/],
+  // Explicit runtime caching. The default next-pwa config includes a
+  // catch-all cross-origin NetworkFirst rule that would cache authenticated
+  // API responses (customer PII, accounting, wallets) and serve them stale —
+  // even to a different user on the same browser after logout. We force the
+  // API (a different origin) and any /api path to NetworkOnly so nothing
+  // user-scoped is ever written to Cache Storage (audit finding C-1).
+  runtimeCaching: [
+    {
+      urlPattern: /\/api\//i,
+      handler: 'NetworkOnly',
+    },
+    {
+      urlPattern: ({ url }) => url.origin !== self.location.origin,
+      handler: 'NetworkOnly',
+    },
+  ],
 });
 
 /** @type {import('next').NextConfig} */
@@ -36,6 +52,22 @@ const nextConfig = {
   experimental: { typedRoutes: true },
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1',
+  },
+  // Baseline security headers. The admin panels authenticate client-side, so
+  // deny framing (clickjacking of admin actions) and add sane hardening
+  // defaults (audit finding M-S6).
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        ],
+      },
+    ];
   },
 };
 

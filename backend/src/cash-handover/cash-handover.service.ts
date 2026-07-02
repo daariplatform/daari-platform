@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CashHandoverStatus,
+  PaymentMethod,
   Prisma,
   RefillOrderStatus,
 } from '@prisma/client';
@@ -75,7 +76,9 @@ export class CashHandoverService {
   /**
    * Today's cash reconciliation for a driver:
    *  - collectedTodayIqd: sum of paidAmountIqd on the driver's COMPLETED
-   *    orders completed today (what they took in)
+   *    orders completed today that were paid in CASH (what they took in as
+   *    physical cash). Non-cash methods (ZainCash/Asia Hawala/credit) are
+   *    excluded so this figure is comparable to the cash handovers below.
    *  - handedOverTodayIqd: sum of handovers the driver logged today
    *  - pendingIqd: sum of all the driver's handovers still PENDING confirmation
    */
@@ -90,6 +93,7 @@ export class CashHandoverService {
         where: {
           driverId,
           status: RefillOrderStatus.COMPLETED,
+          paymentMethod: PaymentMethod.CASH,
           completedAt: { gte: start, lt: end },
         },
         _sum: { paidAmountIqd: true },

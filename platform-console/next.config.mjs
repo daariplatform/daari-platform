@@ -28,6 +28,19 @@ const withPWA = nextPwa({
   // should never be served from a stale SW cache. Everything else
   // (static HTML, JS, CSS, fonts, icons) precaches normally.
   buildExcludes: [/middleware-manifest\.json$/, /api\/.*$/],
+  // Explicit runtime caching — force API + cross-origin requests to
+  // NetworkOnly so authenticated, tenant-scoped responses are never written
+  // to Cache Storage and served stale across users (audit finding C-1).
+  runtimeCaching: [
+    {
+      urlPattern: /\/api\//i,
+      handler: 'NetworkOnly',
+    },
+    {
+      urlPattern: ({ url }) => url.origin !== self.location.origin,
+      handler: 'NetworkOnly',
+    },
+  ],
 });
 
 /** @type {import('next').NextConfig} */
@@ -36,6 +49,21 @@ const nextConfig = {
   experimental: { typedRoutes: true },
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1',
+  },
+  // Baseline security headers — deny framing (clickjacking) + hardening
+  // defaults (audit finding M-S6).
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        ],
+      },
+    ];
   },
 };
 

@@ -622,9 +622,13 @@ export class OrdersService {
     // Layer 1: GPS distance check — only enforced when both sides have coordinates.
     let gpsDistanceM: number | null = null;
     let gpsVerified = false;
+    // Number.isFinite (not `!= null`) so a non-numeric or NaN coordinate can
+    // never slip past the geofence: NaN > limit is false, which would wrongly
+    // stamp gpsVerified=true. DTO validators reject non-numbers first; this is
+    // defense-in-depth.
     const gpsAvailable =
-      input.completionLng != null &&
-      input.completionLat != null &&
+      Number.isFinite(input.completionLng) &&
+      Number.isFinite(input.completionLat) &&
       order.customer.locationLng != null &&
       order.customer.locationLat != null;
 

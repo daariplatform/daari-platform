@@ -39,6 +39,14 @@ export function clearTokens() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(ACCESS_KEY);
   localStorage.removeItem(REFRESH_KEY);
+  // Best-effort: purge Cache Storage so a logged-out (or the next) user on
+  // this browser can't be served the previous session's cached responses.
+  if ('caches' in window) {
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+      .catch(() => {});
+  }
 }
 
 api.interceptors.request.use((config) => {
@@ -50,7 +58,12 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (r) => r,
   async (err) => {
-    if (err.response?.status === 401) {
+    // Don't hijack the 401 from a failed login attempt — redirecting to
+    // /login there triggers a full reload that wipes the "wrong credentials"
+    // error before the user can read it. Only bounce authenticated-session 401s.
+    const url: string = err.config?.url ?? '';
+    const isLoginAttempt = url.includes('/auth/login');
+    if (err.response?.status === 401 && !isLoginAttempt) {
       clearTokens();
       if (typeof window !== 'undefined') window.location.href = '/login';
     }

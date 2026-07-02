@@ -32,6 +32,14 @@ import {
 
 type Tab = 'overview' | 'expenses' | 'salaries' | 'invoices' | 'transactions';
 
+/** Local YYYY-MM-DD — avoids the day-back shift toISOString() causes at UTC+3. */
+function localDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 const EXPENSE_CATEGORIES = [
   { id: 'FUEL', label: 'وقود' },
   { id: 'MAINTENANCE', label: 'صيانة' },
@@ -384,13 +392,13 @@ function SalariesTab() {
 
   const [driverId, setDriverId] = useState<string>('');
   // Default window = current calendar month so the typical "pay end-of-month"
-  // flow takes one click.
+  // flow takes one click. Build the YYYY-MM-DD strings from LOCAL date parts —
+  // toISOString() would shift them a day back in Iraq's UTC+3 (e.g. render the
+  // previous month's last day as "start of this month").
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const [periodStart, setPeriodStart] = useState(
-    monthStart.toISOString().slice(0, 10),
-  );
-  const [periodEnd, setPeriodEnd] = useState(now.toISOString().slice(0, 10));
+  const [periodStart, setPeriodStart] = useState(localDateStr(monthStart));
+  const [periodEnd, setPeriodEnd] = useState(localDateStr(now));
 
   return (
     <div className="space-y-4">
@@ -424,8 +432,11 @@ function SalariesTab() {
           onClick={() =>
             computeMutation.mutate({
               driverId,
-              periodStart: new Date(periodStart).toISOString(),
-              periodEnd: new Date(periodEnd).toISOString(),
+              // Local start-of-day → end-of-day so the chosen end date's full
+              // day of commissions is included (a bare date parses as UTC
+              // midnight = 03:00 local, dropping the last day's orders).
+              periodStart: new Date(`${periodStart}T00:00:00`).toISOString(),
+              periodEnd: new Date(`${periodEnd}T23:59:59.999`).toISOString(),
             })
           }
           disabled={!driverId || computeMutation.isPending}

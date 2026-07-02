@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { randomInt } from 'node:crypto';
 
 /**
  * Thin wrapper over the otpiq.com SMS API.
@@ -28,9 +29,9 @@ export class OtpService {
     }
   }
 
-  /** Generate a 6-digit numeric OTP. */
+  /** Generate a 6-digit numeric OTP using a CSPRNG (not Math.random). */
   generateCode(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    return randomInt(0, 1_000_000).toString().padStart(6, '0');
   }
 
   /**

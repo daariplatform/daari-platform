@@ -16,7 +16,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { diskStorage, MulterError } from 'multer';
-import { extname, join } from 'node:path';
+import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 
@@ -52,25 +52,38 @@ const MAX_BYTES = 5 * 1024 * 1024;
 // silent upload failures. `image/jpeg` is canonical; `image/jpg` is the
 // quirk; both decode the same JPEG bytes.
 const ACCEPTED_MIME = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+// Canonical extension per accepted MIME type. The stored filename derives
+// its extension from the (validated) MIME rather than the attacker-controlled
+// `originalname`, so a spoofed `evil.svg`/`evil.html` can never be written to
+// disk and served back as active content.
+const EXT_BY_MIME: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+};
 
 /**
- * Multer surfaces size violations as `MulterError(code='LIMIT_FILE_SIZE')`,
- * which Nest doesn't translate to a clean HTTP response by default —
- * the driver app would see a generic 500. This filter intercepts that
- * specific case and any HttpExceptions that bubble out of our fileFilter,
- * and returns a friendly Arabic JSON payload with the right status code.
+ * Multer surfaces size violations as `MulterError(code='LIMIT_FILE_SIZE')`.
+ * NestJS's FileInterceptor converts that into a `PayloadTooLargeException`
+ * before this filter runs, so we match on that (keeping the raw MulterError
+ * branch as a defensive fallback). Without it the driver app would see the
+ * generic English "File too large" body instead of the Arabic message.
  */
 @Catch(MulterError, HttpException)
 class UploadExceptionFilter implements ExceptionFilter {
   catch(exception: MulterError | HttpException, host: ArgumentsHost) {
     const res = host.switchToHttp().getResponse<Response>();
+    if (
+      exception instanceof PayloadTooLargeException ||
+      (exception instanceof MulterError && exception.code === 'LIMIT_FILE_SIZE')
+    ) {
+      return res.status(HttpStatus.PAYLOAD_TOO_LARGE).json({
+        statusCode: HttpStatus.PAYLOAD_TOO_LARGE,
+        message: 'حجم الملف يتجاوز 5 ميجابايت',
+      });
+    }
     if (exception instanceof MulterError) {
-      if (exception.code === 'LIMIT_FILE_SIZE') {
-        return res.status(HttpStatus.PAYLOAD_TOO_LARGE).json({
-          statusCode: HttpStatus.PAYLOAD_TOO_LARGE,
-          message: 'حجم الملف يتجاوز 5 ميجابايت',
-        });
-      }
       return res.status(HttpStatus.BAD_REQUEST).json({
         statusCode: HttpStatus.BAD_REQUEST,
         message: exception.message,
@@ -98,7 +111,8 @@ export class UploadsController {
       storage: diskStorage({
         destination: PROOF_DIR,
         filename: (_req, file, cb) => {
-          const ext = extname(file.originalname || '.jpg').toLowerCase() || '.jpg';
+          // Extension from the validated MIME, never from originalname.
+          const ext = EXT_BY_MIME[file.mimetype] ?? '.jpg';
           cb(null, `${randomUUID()}${ext}`);
         },
       }),

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -193,7 +194,7 @@ export class CustomersController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
   async importPreview(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new Error('لم يتم رفع ملف');
+      throw new BadRequestException('لم يتم رفع ملف');
     }
     const rows = await this.bulkImport.parseExcel(file.buffer);
     const errors = rows.filter((r) => r.errors && r.errors.length > 0);
@@ -222,7 +223,7 @@ export class CustomersController {
     @Query('skipInvalid') skipInvalidQuery?: string,
   ) {
     if (!file) {
-      throw new Error('لم يتم رفع ملف');
+      throw new BadRequestException('لم يتم رفع ملف');
     }
     const skipInvalid = skipInvalidQuery === 'true' || skipInvalidQuery === '1';
     const rows = await this.bulkImport.parseExcel(file.buffer);

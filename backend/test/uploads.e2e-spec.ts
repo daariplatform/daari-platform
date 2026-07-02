@@ -12,9 +12,7 @@
  * the success path actually writes a file (still cheap — 1 KB).
  */
 import request from 'supertest';
-import * as path from 'node:path';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import { createTestApp, closeTestApp, truncateAll, describeIfDb } from './setup';
 import { seedTwoTenants, TwoTenants } from './fixtures';
 
@@ -25,14 +23,10 @@ describeIfDb('POST /api/v1/uploads/proof', () => {
   let tmpDir: string;
 
   beforeAll(async () => {
-    // UPLOADS_DIR is read at module-import time by uploads.controller.ts.
-    // We can't shift it after AppModule loads. The default /var/uploads/proof
-    // won't exist on most dev machines, so we point it at a tmp dir BEFORE
-    // creating the test app. Note: if /var/uploads happens to exist + be
-    // writable (root setup), this test still works — multer creates the
-    // subdir as needed.
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'daari-uploads-'));
-    process.env.UPLOADS_DIR = tmpDir;
+    // UPLOADS_DIR is frozen by uploads.controller.ts at module-import time, so
+    // it is set in test/setup-env.ts (jest setupFiles, before any import). Here
+    // we just read it back for cleanup — a beforeAll override would be too late.
+    tmpDir = process.env.UPLOADS_DIR!;
 
     const { app, prisma } = await createTestApp();
     server = app.getHttpServer();

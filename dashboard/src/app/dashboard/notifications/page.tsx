@@ -23,6 +23,9 @@ const STATUS: Record<NotificationLog['status'], { label: string; klass: string }
   READ: { label: 'مقروء', klass: 'bg-emerald-50 text-emerald-700' },
   FAILED: { label: 'فشل', klass: 'bg-red-50 text-red-700' },
 };
+// Fallback for any status value outside the known union — prevents a bad row
+// from throwing `undefined.klass` and white-screening the table.
+const STATUS_FALLBACK = { label: '—', klass: 'bg-slate-100 text-slate-700' };
 
 const KIND_LABELS: Record<string, string> = {
   REFILL_REMINDER: 'تذكير تعبئة',
@@ -69,8 +72,8 @@ export default function NotificationsPage() {
                 <td className="px-4 py-3 text-xs uppercase tracking-wide">{n.channel}</td>
                 <td className="px-4 py-3" dir="ltr">{n.recipient}</td>
                 <td className="px-4 py-3">
-                  <span className={`px-2 py-1 rounded text-xs ${STATUS[n.status].klass}`}>
-                    {STATUS[n.status].label}
+                  <span className={`px-2 py-1 rounded text-xs ${(STATUS[n.status] ?? STATUS_FALLBACK).klass}`}>
+                    {(STATUS[n.status] ?? STATUS_FALLBACK).label}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-slate-500">

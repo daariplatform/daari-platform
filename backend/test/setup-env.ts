@@ -11,6 +11,7 @@
  * with a clear message if not (see test/setup.ts → createTestApp).
  */
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 
 // 1. Optional .env.test — minimal parser, no extra dep.
@@ -38,6 +39,12 @@ process.env.JWT_SECRET = process.env.JWT_SECRET ?? 'test-jwt-secret-not-for-prod
 process.env.JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '15m';
 process.env.FEATURE_VENDORS = process.env.FEATURE_VENDORS ?? 'false';
 process.env.NODE_ENV = 'test';
+
+// uploads.controller.ts freezes UPLOADS_DIR at import time, so it must be set
+// here (jest setupFiles run before any app module loads) — a beforeAll override
+// in the spec is too late. Point proof uploads at a writable temp dir.
+process.env.UPLOADS_DIR =
+  process.env.UPLOADS_DIR ?? path.join(os.tmpdir(), 'daari-test-uploads');
 
 // Silence noisy console output during tests; uncomment for debugging.
 // jest.spyOn(console, 'log').mockImplementation(() => {});

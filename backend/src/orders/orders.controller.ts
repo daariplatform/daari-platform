@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { PaymentMethod, RefillOrderKind, RefillOrderStatus, TankReclaimReason, UserRole } from '@prisma/client';
 import { OrdersService } from './orders.service';
 import { DriversService } from '../drivers/drivers.service';
@@ -49,10 +49,10 @@ class CompleteOrderDto {
   @IsOptional() @IsString()
   proofPhotoUrl?: string;
 
-  @IsOptional()
+  @IsOptional() @IsNumber()
   completionLng?: number;
 
-  @IsOptional()
+  @IsOptional() @IsNumber()
   completionLat?: number;
 
   // ── Reclaim-only fields ──
@@ -101,10 +101,10 @@ class WalkinRefillDto {
   @IsOptional() @IsString()
   proofPhotoUrl?: string;
 
-  @IsOptional()
+  @IsOptional() @IsNumber()
   completionLng?: number;
 
-  @IsOptional()
+  @IsOptional() @IsNumber()
   completionLat?: number;
 
   // Idempotency key (UUID) from the offline client. A flushed-twice walk-in
