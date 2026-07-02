@@ -23,3 +23,12 @@ const ARGON2_OPTS: argon2.Options = {
 export function hashPassword(plain: string): Promise<string> {
   return argon2.hash(plain, ARGON2_OPTS);
 }
+
+/**
+ * Verify a plaintext password against an argon2 hash. The hash is
+ * self-describing (it encodes its own parameters), so this stays correct even
+ * after `ARGON2_OPTS` is bumped — old hashes verify with their original params.
+ */
+export function verifyPassword(hash: string, plain: string): Promise<boolean> {
+  return argon2.verify(hash, plain);
+}

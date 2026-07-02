@@ -9,7 +9,6 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../notifications/push.service';
 import { CustomersService } from '../customers/customers.service';
-import { EmailService } from '../email/email.service';
 import { PromoService } from '../plant/promo.service';
 import {
   CustomerStatus,
@@ -24,6 +23,7 @@ import {
   TenantStatus,
 } from '@prisma/client';
 import { paginated, type PaginatedResult } from '../common/dto/pagination.dto';
+import { LITERS_BY_CAPACITY } from '../common/tank';
 
 interface CreateOrderInput {
   customerId: string;
@@ -64,7 +64,6 @@ export class OrdersService {
     private prisma: PrismaService,
     private push: PushService,
     private customers: CustomersService,
-    private email: EmailService,
     private promo: PromoService,
   ) {}
 
@@ -786,7 +785,7 @@ export class OrdersService {
       // Wave 4: decrement plant's water stock for refills. Defensive try
       // so a missing/disabled stock row doesn't block the refill itself.
       if (order.kind === RefillOrderKind.REFILL && order.tank) {
-        const liters = order.tank.capacity === 'L500' ? 500 : 350;
+        const liters = LITERS_BY_CAPACITY[order.tank.capacity];
         try {
           await tx.waterStock.update({
             where: { tenantId: order.tenantId },
@@ -861,44 +860,6 @@ export class OrdersService {
     // so the next /customers/me must hit DB.
     if (order.customer?.userId) {
       await this.customers.invalidateMeCache(order.customer.userId, order.tenantId);
-    }
-
-    // Email receipt — only for refills, only if the customer has email on
-    // file. Customer schema doesn't (yet) have an email column, so we
-    // gracefully no-op when none is available. Wrapped in try/catch so an
-    // SMTP outage never blocks order completion. Follow-up TODO: add
-    // `Customer.email` (optional) so receipts can actually be delivered.
-    if (
-      order.kind === RefillOrderKind.REFILL &&
-      order.customer &&
-      result.completedAt
-    ) {
-      const recipientEmail = (order.customer as unknown as { email?: string | null }).email;
-      if (recipientEmail) {
-        try {
-          const tenant = await this.prisma.tenant.findUnique({
-            where: { id: order.tenantId },
-            select: { name: true },
-          });
-          const refillLiters = order.tank?.capacity === 'L500' ? 500 : 350;
-          await this.email.sendReceipt(recipientEmail, {
-            customerName: order.customer.fullName,
-            orderId: order.id,
-            refillLiters,
-            refillPriceIqd: input.paidAmountIqd,
-            tenantName: tenant?.name ?? 'داري',
-            completedAt: result.completedAt,
-          });
-        } catch (err) {
-          this.log.warn(
-            `Email receipt failed for order ${order.id}: ${(err as Error).message}`,
-          );
-        }
-      } else {
-        // Customer has no email — silently skip. Logged at debug only so
-        // production logs aren't flooded.
-        this.log.debug(`No email on customer ${order.customer.id} — skipping receipt`);
-      }
     }
 
     return result;

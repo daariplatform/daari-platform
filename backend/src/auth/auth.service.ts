@@ -6,26 +6,12 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import * as argon2 from 'argon2';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RefillOrderStatus, UserRole } from '@prisma/client';
 import { Capability } from '../common/capabilities';
+import { hashPassword, verifyPassword } from '../common/crypto';
 import { OtpService } from './otp.service';
-
-/**
- * Argon2 parameters — explicit so they survive any future library
- * default change. `argon2id` is the hybrid variant recommended for
- * password hashing (resists both GPU and side-channel attacks).
- * Memory cost 64 MiB + 3 passes + 4-way parallelism is the OWASP
- * 2024 recommendation balanced for a 4-core VPS.
- */
-const ARGON2_OPTS: argon2.Options = {
-  type: argon2.argon2id,
-  memoryCost: 65536,
-  timeCost: 3,
-  parallelism: 4,
-};
 
 @Injectable()
 export class AuthService {
@@ -201,7 +187,7 @@ export class AuthService {
       throw new UnauthorizedException('كود غير صحيح');
     }
 
-    const newHash = await argon2.hash(newPassword, ARGON2_OPTS);
+    const newHash = await hashPassword(newPassword);
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: user.id },
@@ -226,7 +212,7 @@ export class AuthService {
     if (!user || !user.passwordHash) {
       throw new UnauthorizedException('Invalid phone or password');
     }
-    const ok = await argon2.verify(user.passwordHash, password);
+    const ok = await verifyPassword(user.passwordHash, password);
     if (!ok) throw new UnauthorizedException('Invalid phone or password');
     if (!user.isActive) throw new UnauthorizedException('Account disabled');
 
@@ -321,10 +307,10 @@ export class AuthService {
     if (!user || !user.passwordHash) {
       throw new UnauthorizedException('Account not found');
     }
-    const ok = await argon2.verify(user.passwordHash, currentPassword);
+    const ok = await verifyPassword(user.passwordHash, currentPassword);
     if (!ok) throw new UnauthorizedException('Current password is incorrect');
 
-    const newHash = await argon2.hash(newPassword, ARGON2_OPTS);
+    const newHash = await hashPassword(newPassword);
     await this.prisma.user.update({
       where: { id: userId },
       data: { passwordHash: newHash },

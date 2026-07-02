@@ -21,6 +21,7 @@ import { UserScopedCacheInterceptor } from '../cache/user-scoped-cache.intercept
 import { WHATSAPP_BLAST_QUEUE } from '../queue/queue.constants';
 import { IsEnum, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 import { PromoChannel, UserRole } from '@prisma/client';
+import { LITERS_BY_CAPACITY } from '../common/tank';
 import { paginated } from '../common/dto/pagination.dto';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -584,8 +585,7 @@ export class PlantController {
       // Subtitle: prefer tank capacity (refill — enum mapped to liters),
       // fall back to walkinLiters (walk-in sale), then to the price.
       let liters = 0;
-      if (o.tank?.capacity === 'L350') liters = 350;
-      else if (o.tank?.capacity === 'L500') liters = 500;
+      if (o.tank) liters = LITERS_BY_CAPACITY[o.tank.capacity];
       else if (o.walkinLiters) liters = o.walkinLiters;
       const subtitle = liters > 0
         ? `${liters.toLocaleString('en-US')} لتر`

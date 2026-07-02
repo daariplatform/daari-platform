@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { LITERS_BY_CAPACITY } from '../common/tank';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -371,8 +372,7 @@ export class AiService {
 
     const loaded: Loaded[] = orders.map((o) => {
       let liters = 0;
-      if (o.tank?.capacity === 'L350') liters = 350;
-      else if (o.tank?.capacity === 'L500') liters = 500;
+      if (o.tank) liters = LITERS_BY_CAPACITY[o.tank.capacity];
       else if (o.walkinLiters) liters = o.walkinLiters;
       return {
         id: o.id,
