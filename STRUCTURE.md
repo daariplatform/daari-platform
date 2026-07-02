@@ -179,7 +179,7 @@ mobile-flutter/
 ## 5) النشر والأدوات
 
 - **`deploy/`** — `deploy.sh` (نشر API/dashboard؛ يشغّل `prisma db push` **+ يزرع مالك المنصّة** عبر `backend/prisma/seed-prod.cjs` **+ ينشئ مجلّد `uploads`** تلقائياً؛ **يتطلّب `SSH_TARGET`** — الخادم السابق `45.84.138.119` أُلغي، لا هدف افتراضي), `vps-bootstrap.sh` (تجهيز VPS جديد), `RUNBOOK-clientRequestId-db-push.md` (إجراء نشر قيد idempotency), و إعدادات `nginx/` (**تخدم `/uploads/` — صور الإثبات + التقارير — عبر `alias`**), `systemd/`, `logrotate/`.
-- **`scripts/`** — `backup-db.sh`, `eas-setup-and-build.sh`, `generate-icons.py`, `github-setup.sh`.
+- **`scripts/`** — `backup-db.sh`، و`eas-setup-and-build.sh` + `generate-icons.py` (أدوات Expo القديمة، تبقى مع تطبيقات Expo حتى تقاعدها).
 - **`legal/`** — سياسة الخصوصية (EN/AR)، شروط الخدمة (AR)، قوائم متجر Play (الزبون/العامل).
 - **`store-assets/`** — حزمة تقديم Google Play Console.
 
