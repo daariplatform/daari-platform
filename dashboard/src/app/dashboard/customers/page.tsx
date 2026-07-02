@@ -53,6 +53,7 @@ const STATUS: Record<string, { label: string; klass: string }> = {
 
 export default function CustomersPage() {
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
@@ -64,11 +65,16 @@ export default function CustomersPage() {
 
   const qc = useQueryClient();
   const { data: pageData } = useQuery<CustomersPage>({
-    queryKey: ['customers', page, search],
+    queryKey: ['customers', page, search, statusFilter],
     queryFn: async () =>
       (
         await api.get('/customers', {
-          params: { search: search || undefined, page, pageSize: PAGE_SIZE },
+          params: {
+            search: search || undefined,
+            status: statusFilter || undefined,
+            page,
+            pageSize: PAGE_SIZE,
+          },
         })
       ).data,
   });
@@ -151,7 +157,14 @@ export default function CustomersPage() {
             </div>
           </div>
           <button
-            onClick={() => setSearch('بانتظار')}
+            onClick={() => {
+              // Real status filter — the backend matches free-text search only
+              // against name/phone/address/QR, never status, so searching for a
+              // literal Arabic word returned an empty list.
+              setSearch('');
+              setStatusFilter('PENDING_APPROVAL');
+              setPage(1);
+            }}
             className="text-amber-800 text-sm font-medium hover:underline"
           >
             عرض ←
@@ -170,6 +183,7 @@ export default function CustomersPage() {
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
+              setStatusFilter('');
               setPage(1);
             }}
             className="border rounded-lg px-3 py-2 w-80"
