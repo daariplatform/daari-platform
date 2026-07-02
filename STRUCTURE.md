@@ -6,29 +6,27 @@
 
 > هذا الملف هو **المرجع الوحيد** لهيكلية المشروع العامة.
 
-> **تحديث التوجّه (2026-06):** اعتُمِدت تطبيقات **Flutter** (`mobile-flutter/`) كواجهة الجوّال **الرسمية**.
-> تطبيقات **Expo/React Native** (`mobile-customer` · `mobile-worker` · `mobile-admin`) أصبحت **قديمة (legacy)
-> قيد الإيقاف التدريجي**. الخادم يبقى **NestJS** بلا إعادة كتابة، ولوحات الويب تبقى **Next.js**. الإشعارات على
-> الخادم تحوّلت إلى **FCM (firebase-admin)**. تفاصيل ما أُنجِز والمتبقّي في **[`PROGRESS.md`](PROGRESS.md)**.
+> **تحديث التوجّه (2026-07):** تطبيقات **Flutter** (`mobile-flutter/`) هي واجهة الجوّال **الوحيدة**.
+> تطبيقات **Expo/React Native** القديمة (`mobile-customer` · `mobile-worker` · `mobile-admin`) **حُذِفت نهائياً**.
+> الخادم **NestJS** ولوحات الويب **Next.js**. الإشعارات على الخادم عبر **FCM (firebase-admin)**.
+> تفاصيل ما أُنجِز والمتبقّي في **[`PROGRESS.md`](PROGRESS.md)**.
 
 ---
 
 ## المعمارية العامة
 
 ```
-                         ┌──────────────────────────────┐
-                         │   backend  (NestJS + Prisma)  │
-                         │   REST API  ·  /api/v1 :3000  │
-                         │   PostgreSQL + PostGIS · Redis│
-                         └───────────────┬──────────────┘
-                                         │  HTTP (Dio / axios)
-        ┌──────────────┬─────────────────┼─────────────────┬──────────────┐
-        │              │                 │                 │              │
-   لوحات ويب        تطبيقات الجوّال (Expo)            إعادة بناء Flutter
-   (Next.js)                                                                  
-  dashboard :3001   mobile-customer   mobile-worker   mobile-admin   mobile-flutter
-  platform-console  (الزبون)          (السائق/العامل) (الإدارة)       (الزبون + السائق + الإدارة)
-        :3011
+                    ┌──────────────────────────────┐
+                    │   backend  (NestJS + Prisma)  │
+                    │   REST API  ·  /api/v1 :3000  │
+                    │   PostgreSQL + PostGIS · Redis│
+                    └───────────────┬──────────────┘
+                                    │  HTTP (Dio / axios)
+             ┌──────────────────────┴──────────────────────┐
+             │                                              │
+        لوحات ويب (Next.js)                       تطبيقات الجوّال (Flutter)
+     dashboard :3001                          mobile-flutter/apps/
+     platform-console :3011                     customer · driver · admin
 ```
 
 كل الواجهات تتحدّث مع **نفس** الخادم على `/api/v1`، دون منطق أعمال مكرّر في العميل.
@@ -42,12 +40,9 @@
 | `backend/` | NestJS 10 + Prisma 5 | خادم الـ API المركزي (القلب) |
 | `dashboard/` | Next.js 14 | لوحة ويب تشغيلية (المنفذ 3001) |
 | `platform-console/` | Next.js 14 | لوحة ويب على مستوى المنصّة (المنفذ 3011) |
-| `mobile-customer/` | Expo / React Native | تطبيق الزبون (الأصل) — `maa-customer` |
-| `mobile-worker/` | Expo / React Native | تطبيق السائق/العامل — `maa-worker` |
-| `mobile-admin/` | Expo / React Native | تطبيق الإدارة — `daari-admin` |
-| `mobile-flutter/` | Flutter (Dart) | إعادة بناء تطبيقات الزبون + السائق + الإدارة بـ Flutter |
+| `mobile-flutter/` | Flutter (Dart) | تطبيقات الجوّال الرسمية: الزبون + السائق + الإدارة |
 | `deploy/` | سكربتات + إعدادات | النشر على VPS (nginx, systemd, logrotate) |
-| `scripts/` | سكربتات مساعدة | نسخ احتياطي DB، بناء EAS، توليد أيقونات… |
+| `scripts/` | سكربتات مساعدة | النسخ الاحتياطي لقاعدة البيانات (`backup-db.sh`) |
 | `legal/` | مستندات | سياسات الخصوصية والشروط وقوائم متجر Play |
 | `store-assets/` | مستندات | حزمة تقديم Google Play Console |
 | `.claude/` | إعدادات | إعداد أدوات Claude Code |
@@ -66,9 +61,9 @@
 - **نقطة الدخول:** `src/main.ts` (بادئة `/api/v1`، المنفذ 3000).
 - **النطاقات (modules):** `auth`, `tenants`, `tanks`, `customers`, `drivers`, `orders`, `ratings`,
   `customer-address`, `scheduled-orders`, `cash-handover`, `accounting`, `platform-admin`, `ai`,
-  `vendors`, `uploads`, `health`, `notifications` (SMS/WhatsApp + Push عبر **FCM/firebase-admin**)، و `plant/` (العروض + المحفظة +
+  `uploads`, `health`, `notifications` (SMS/WhatsApp + Push عبر **FCM/firebase-admin**)، و `plant/` (العروض + المحفظة +
   الإعداد + التقارير + الفريق).
-- **قاعدة البيانات:** `prisma/schema.prisma` (≈37 نموذجاً) — تُطبَّق عبر `prisma db push`؛ بذور التطوير `prisma/seed.ts` (ديمو، معزول خلف `NODE_ENV !== 'production'`)، وبذرة الإنتاج `prisma/seed-prod.cjs` (مالك المنصّة فقط، idempotent، JS صِرف يعمل مع `--omit=dev`).
+- **قاعدة البيانات:** `prisma/schema.prisma` (≈28 نموذجاً) — تُطبَّق عبر `prisma db push`؛ بذور التطوير `prisma/seed.ts` (ديمو، معزول خلف `NODE_ENV !== 'production'`)، وبذرة الإنتاج `prisma/seed-prod.cjs` (مالك المنصّة فقط، idempotent، JS صِرف يعمل مع `--omit=dev`).
 - **الاختبارات:** `test/` — Jest e2e (مصادقة، طلبات، عزل المستأجِرين، رفع…).
 
 ```
@@ -104,29 +99,9 @@ src/
 
 ---
 
-## 3) تطبيقات الجوّال — Expo / React Native (قديمة · قيد الإيقاف)
+## 3) تطبيقات الجوّال — Flutter — `mobile-flutter/`
 
-> ⚠️ هذه التطبيقات **يجري استبدالها بـ Flutter** (القسم 4) وستُحذف بعد اكتمال التحويل. تبقى حتى ذلك الحين
-> **مرجعاً وظيفياً** — خصوصاً `mobile-admin` كمخطّط للوحة الإدارة بـ Flutter (غير المبنية بعد). الإشعارات
-> على الخادم لم تعد تمرّ عبر Expo Push بل عبر **FCM** مباشرةً.
-
-ثلاثة تطبيقات بـ **Expo SDK 54 / React Native 0.81 / expo-router**، تبني وتُنشر عبر EAS:
-
-| المجلّد | الاسم | الدور | ميزات بارزة |
-|---|---|---|---|
-| `mobile-customer/` | `maa-customer` | الزبون | الطلب والتتبّع، خرائط، إشعارات |
-| `mobile-worker/` | `maa-worker` | السائق/العامل | الكاميرا، SQLite (طور غير متصل)، مهام خلفية |
-| `mobile-admin/` | `daari-admin` | الإدارة | مصادقة حيوية، حافظة، إدارة المنصّة |
-
-الحزمة المشتركة بينها: axios + React Query (مع تخزين دائم)، Sentry، nativewind (Tailwind)،
-zod، zustand، expo-secure-store، expo-notifications، react-native-maps.
-
----
-
-## 4) إعادة البناء بـ Flutter — `mobile-flutter/`
-
-إعادة بناء تطبيقات **الزبون + السائق + الإدارة** بـ **Flutter**، تستهلك نفس الـ API دون أي تغيير في الخادم.
-بنية **Dart pub workspace**:
+تطبيقات **الزبون + السائق + الإدارة** بـ **Flutter**، تستهلك نفس الـ API. بنية **Dart pub workspace**:
 
 ```
 mobile-flutter/
@@ -159,27 +134,24 @@ mobile-flutter/
 - **تتبّع تكافؤ السائق:** [`mobile-flutter/DRIVER_PARITY_BACKLOG.md`](mobile-flutter/DRIVER_PARITY_BACKLOG.md)
   (56 فجوة + 5 نتائج سلامة مالية + خطّة دفعات) و`mobile-flutter/.parity/driver-audit-2026-06-30.json` (الخام).
 - **خطّة اختبار الجهاز الفعلي (QA):** [`mobile-flutter/DEVICE_QA_CHECKLIST.md`](mobile-flutter/DEVICE_QA_CHECKLIST.md)
-  (7 أقسام: idempotency المال · GPS/خرائط · تدفّقات السائق/الزبون · الإدارة/البصمة · FCM · E2E + جدول اعتماد) — البوّابة قبل تقاعد Expo.
+  (7 أقسام: idempotency المال · GPS/خرائط · تدفّقات السائق/الزبون · الإدارة/البصمة · FCM · E2E + جدول اعتماد).
 - **تهيئة Firebase (FCM):** [`mobile-flutter/FIREBASE_SETUP.md`](mobile-flutter/FIREBASE_SETUP.md) — الربط البرمجي جاهز (حزم + `push_service` + مكوّن
   `google-services` **مربوط مشروطاً** في التطبيقات الثلاثة: يُفعَّل عند إسقاط `google-services.json`، ولا يكسر البناء بدونه). المتبقّي أصول الكونسول + اعتماد الخادم.
 
-> **التوجّه المعتمَد:** تطبيقات Flutter هي **الواجهة الرسمية** للجوّال؛ وتطبيقات Expo
-> (`mobile-customer/worker/admin`) **قديمة قيد الإيقاف** وتُحذف بعد اكتمال التحويل. تطبيق **الزبون** جُرِد بدقّة
-> (75 فجوة داخلية، **أُغلِق 74 → مكتمل التكافؤ**؛ الوحيد المتبقّي قرار منتج — [السجلّ](mobile-flutter/CUSTOMER_PARITY_BACKLOG.md))،
-> و**السائق** **جُرِد** (12 زوج شاشة): التطابق على مستوى الشاشات كامل، **56 فجوة داخلية + 5 نتائج سلامة مالية** ([السجلّ](mobile-flutter/DRIVER_PARITY_BACKLOG.md))،
-> **تكافؤ السائق مكتمل عملياً** — **55 بنداً مُغلقاً (52 من الـ56 + MS‑1/2/3)** عبر 7 دفعات (6أ/ج/د/هـ + history‑1 + 6و + 6ب): سلامة مالية + تدفّقات حرجة + GPS/خريطة + لمسات الشاشات + اسم الزبون + تجميل شامل + **idempotency الخادم لإغلاق الثغرة المالية**. `tsc` exit 0 · `flutter analyze` نظيف. المتبقّي 3 مؤجَّلة منخفضة.
-> ✅ **بوّابة جاهزية (#17):** أُعيد التحقّق أنّ الوحدات الأربع (customer · driver · admin · daari_core) تُحلَّل **بلا أي ملاحظة** (نُظّفت 11 ملاحظة `info` موروثة في core بـ`dart fix`)، والخادم `tsc --noEmit` = 0 أخطاء → **الشيفرة قابلة للشحن، لا حواجز بناء.**
-> ✅ **الثغرة المالية مُغلقة:** walk-in/تسليم النقد صارا idempotent عبر `clientRequestId` + قيد `@@unique([tenantId, clientRequestId])` (إضافة **متوافقة رجعياً** — Expo بلا مفتاح يبقى كما هو). ⚠️ **خطوة نشر:** `prisma db push` (مؤتمَتة في `deploy.sh`؛ الإجراء الآمن موثّق في [`deploy/RUNBOOK-clientRequestId-db-push.md`](deploy/RUNBOOK-clientRequestId-db-push.md)). ويبقى **اختبار ميداني** (GPS/خريطة/بصمة/طابور المال).
-> أمّا **لوحة الإدارة بـ Flutter (`com.phibit.daariadmin`)** فتطبيق `apps/admin` **مكتمل التكافؤ الوظيفي بـ 14 شاشة**
+> **التوجّه المعتمَد:** تطبيقات Flutter هي **الواجهة الوحيدة** للجوّال (حُذِفت تطبيقات Expo نهائياً).
+> سجلّات التكافؤ ([customer](mobile-flutter/CUSTOMER_PARITY_BACKLOG.md) · [driver](mobile-flutter/DRIVER_PARITY_BACKLOG.md)) تبقى **مرجعاً تاريخياً** لما أُغلِق مقابل Expo قبل حذفه.
+> ✅ **الحالة:** الوحدات الأربع (customer · driver · admin · daari_core) تُحلَّل **بلا أي ملاحظة**، والخادم `tsc --noEmit` = 0 أخطاء.
+> ✅ **الثغرة المالية مُغلقة:** walk-in/تسليم النقد idempotent عبر `clientRequestId` + قيد `@@unique([tenantId, clientRequestId])`. ⚠️ **خطوة نشر:** `prisma db push` (مؤتمَتة في `deploy.sh`؛ الإجراء الآمن في [`deploy/RUNBOOK-clientRequestId-db-push.md`](deploy/RUNBOOK-clientRequestId-db-push.md)). ويبقى **اختبار ميداني** (GPS/خريطة/بصمة/طابور المال).
+> **لوحة الإدارة بـ Flutter (`com.phibit.daariadmin`)** — تطبيق `apps/admin` بـ **15 شاشة**
 > (مصادقة + **قفل بصمة (`local_auth`)** + لوحة مؤشّرات حيّة + التقارير الأساسية والمتقدّمة **بفلاتر تاريخ** + الفريق بإجراءاته + العروض **مع متابعة بثّ حيّة** + المخزون + تهيئة المعمل + **خريطة أسطول حيّة** + **أداء السائقين** + **خريطة حرارية** + **سجلّ تدقيق مرقّم**)،
 > ولم يبقَ عليه سوى **اختبار البصمة ميدانياً** (+ مفتاح خرائط للإنتاج). الحالة التفصيلية في **[`PROGRESS.md`](PROGRESS.md)**.
 
 ---
 
-## 5) النشر والأدوات
+## 4) النشر والأدوات
 
 - **`deploy/`** — `deploy.sh` (نشر API/dashboard؛ يشغّل `prisma db push` **+ يزرع مالك المنصّة** عبر `backend/prisma/seed-prod.cjs` **+ ينشئ مجلّد `uploads`** تلقائياً؛ **يتطلّب `SSH_TARGET`** — الخادم السابق `45.84.138.119` أُلغي، لا هدف افتراضي), `vps-bootstrap.sh` (تجهيز VPS جديد), `RUNBOOK-clientRequestId-db-push.md` (إجراء نشر قيد idempotency), و إعدادات `nginx/` (**تخدم `/uploads/` — صور الإثبات + التقارير — عبر `alias`**), `systemd/`, `logrotate/`.
-- **`scripts/`** — `backup-db.sh`، و`eas-setup-and-build.sh` + `generate-icons.py` (أدوات Expo القديمة، تبقى مع تطبيقات Expo حتى تقاعدها).
+- **`scripts/`** — `backup-db.sh` (النسخ الاحتياطي الليلي لقاعدة البيانات مع تدوير + رفع S3).
 - **`legal/`** — سياسة الخصوصية (EN/AR)، شروط الخدمة (AR)، قوائم متجر Play (الزبون/العامل).
 - **`store-assets/`** — حزمة تقديم Google Play Console.
 
@@ -192,7 +164,6 @@ mobile-flutter/
 | `backend` (API) | 3000 (`/api/v1`) |
 | `dashboard` | 3001 |
 | `platform-console` | 3011 |
-| `mobile-admin` (Expo dev) | 8085 |
 
 ---
 
@@ -205,9 +176,6 @@ cd backend && npm install && npm run start:dev
 # لوحة ويب
 cd dashboard && npm install && npm run dev          # أو platform-console
 
-# تطبيق Expo
-cd mobile-customer && npm install && npx expo start # أو mobile-worker / mobile-admin
-
-# تطبيق Flutter
+# تطبيق Flutter (customer / driver / admin)
 cd mobile-flutter/apps/customer && flutter run --dart-define=API_URL=https://api.phi-bit.com/api/v1
 ```

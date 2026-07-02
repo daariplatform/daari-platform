@@ -1,4 +1,4 @@
-import { DynamicModule, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
@@ -19,7 +19,6 @@ import { CashHandoverModule } from './cash-handover/cash-handover.module';
 import { AccountingModule } from './accounting/accounting.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PlantModule } from './plant/plant.module';
-import { VendorsModule } from './vendors/vendors.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { HealthModule } from './health/health.module';
 import { CacheModule } from './cache/cache.module';
@@ -30,9 +29,6 @@ import { AiModule } from './ai/ai.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { TenantGuard } from './common/guards/tenant.guard';
 import { CapabilitiesGuard } from './common/guards/capabilities.guard';
-
-const vendorsEnabled = (process.env.FEATURE_VENDORS ?? 'false') === 'true';
-const optionalModules: DynamicModule['imports'] = vendorsEnabled ? [VendorsModule] : [];
 
 @Module({
   imports: [
@@ -111,7 +107,6 @@ const optionalModules: DynamicModule['imports'] = vendorsEnabled ? [VendorsModul
     AiModule,
     UploadsModule,
     HealthModule,
-    ...optionalModules,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

@@ -130,8 +130,8 @@ export class AuthController {
   }
 
   /**
-   * Returns the current user's identity + capabilities. The worker app
-   * polls this after vendor self-registration to refresh its mode toggle.
+   * Returns the current user's identity + capabilities. Apps poll this to
+   * refresh their capability-driven UI after a profile change.
    */
   @ApiBearerAuth()
   @Get('me')

@@ -27,26 +27,6 @@ google-services.json
 secrets/
 keys/
 
-# ─── Expo / EAS ─────────────────────────────────────
-.expo/
-.expo-shared/
-dist/
-web-build/
-expo-env.d.ts
-.eas-build-local/
-
-# ─── React Native ───────────────────────────────────
-# NOTE: android/ and ios/ are committed in mobile-customer/ and mobile-worker/
-# for the bare-workflow EAS Build path. Per-project .gitignore handles
-# build artifacts (android/build/, android/.gradle/, ios/Pods/, etc.).
-#
-# Do NOT add `android/` or `ios/` here — eas-cli reads .gitignore when
-# copying the project to its build sandbox (see vcs/local.js
-# makeShallowCopyAsync). A blanket `android/` rule here causes EAS to
-# strip the committed prebuild output before the build runs, which then
-# fails with "ENOENT: no such file or directory ... android/gradlew" in
-# the FIX_GRADLEW phase.
-
 # ─── Next.js ────────────────────────────────────────
 .next/
 out/

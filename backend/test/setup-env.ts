@@ -37,7 +37,6 @@ process.env.SENTRY_DSN = process.env.SENTRY_DSN ?? '';
 process.env.ZOHO_SMTP_PASS = process.env.ZOHO_SMTP_PASS ?? '';
 process.env.JWT_SECRET = process.env.JWT_SECRET ?? 'test-jwt-secret-not-for-production-use-only';
 process.env.JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '15m';
-process.env.FEATURE_VENDORS = process.env.FEATURE_VENDORS ?? 'false';
 process.env.NODE_ENV = 'test';
 
 // uploads.controller.ts freezes UPLOADS_DIR at import time, so it must be set

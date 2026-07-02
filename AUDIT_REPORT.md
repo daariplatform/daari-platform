@@ -382,16 +382,15 @@
 
 ## 6) مرشّحات للحذف — القرار المُتَّخذ
 
-بناءً على قرارك «احذف كل ما لا يؤثّر على المشروع»، طُبِّق التالي في **المرحلة 5**:
+بناءً على قراريك، طُبِّق التالي:
 
-1. ✅ **نماذج Prisma غير المرجعية (§5.3) — حُذِفت:** `DataReport` · `DataReportPurchase` · `AdCampaign` · `AdImpression` · `BulkDeal` · `BulkDealParticipation` + التعدادات الأربعة. صفر مرجع في الكود، فحذفها لا يؤثّر على البناء/الاختبارات/التشغيل. `prisma db push` على DB الاختبار أسقط الجداول (الفارغة) نظيفًا. **أُبقِيَ `PlantGroup` و`VendorWalletEntry`** (مستخدمان فعلًا).
-2. ✅ **`scripts/github-setup.sh` — حُذِف:** سكربت one-shot مُنجَز (المستودع موجود بالفعل) ولا يشير إليه أي تدفّق.
-3. ⏸️ **أُبقِيَت عمدًا (حذفها قرار منتج لا «تنظيف محايد»):**
-   - **وحدة `vendors`** — معلَنة صراحةً كميزة **Phase-3 مخطّطة** (`.env.production.example`)؛ حذفها إزالة عمل مستقبلي مقصود، لا تنظيف. (بديل أخفّ: تسييج استعلام المصادقة خلف `FEATURE_VENDORS` — انظر L-arch.)
-   - **تطبيقات Expo + أدواتها (`eas-setup-and-build.sh`، `generate-icons.py`)** — محفوظة **عمدًا كمرجع وظيفي حتى بوّابة QA** ([DEVICE_QA_CHECKLIST.md](mobile-flutter/DEVICE_QA_CHECKLIST.md))؛ حذفها قبل تأكيد تكافؤ Flutter ميدانيًا يزيل شبكة الأمان في خطّة الترحيل.
+1. ✅ **نماذج Prisma غير المرجعية (§5.3) — حُذِفت (المرحلة 5):** `DataReport` · `DataReportPurchase` · `AdCampaign` · `AdImpression` · `BulkDeal` · `BulkDealParticipation` + التعدادات الأربعة. **أُبقِيَ `PlantGroup`** (مستخدم عبر `Tenant.group`).
+2. ✅ **`scripts/github-setup.sh` — حُذِف (المرحلة 5):** سكربت one-shot مُنجَز.
+3. ✅ **وحدة `vendors` كاملة — حُذِفت (المرحلة 6):** الوحدة + الخدمة + التحكّم + استعلام المصادقة في `computeCapabilities` + قدرة `vendor` + النماذج (`Vendor`, `DeliveryOrder`, `VendorWalletEntry` + تعداداتها) + علاقاتها في `Tenant`/`User`/`Customer` + علَم `FEATURE_VENDORS`. `prisma db push` أسقط الجداول نظيفًا · `tsc`/`build` نظيفان · 18/18 e2e.
+4. ✅ **تطبيقات Expo الثلاثة — حُذِفت (المرحلة 6):** `mobile-customer` · `mobile-worker` · `mobile-admin` + أدواتها (`eas-setup-and-build.sh`, `generate-icons.py`). Flutter صار الواجهة الوحيدة. سجلّات التكافؤ (`*_PARITY_BACKLOG.md`) تبقى مرجعًا تاريخيًا.
+5. ⏸️ **يبقى بانتظار قرارك:**
    - **مفتاح Firebase المكشوف** — لا يُعالَج بالحذف (يبقى في تاريخ git)؛ يحتاج **تدوير/تقييد** في Google Cloud Console.
-
-> لو رغبت بحذف `vendors` و/أو تطبيقات Expo أيضًا، أخبرني صراحةً وأنفّذها بأمان (فحص + اختبارات).
+   - **وحدة `ai`** — صارت بلا مستهلك بعد حذف Expo admin (كانت `/plant/ai/*` تُستهلَك منه فقط). قرارك: نقلها للوحة Flutter admin أم حذفها.
 
 ---
 

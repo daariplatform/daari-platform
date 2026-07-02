@@ -114,7 +114,6 @@ model Tenant {
   expenses             Expense[]
   salaries             SalaryPayment[]
   notifications        NotificationLog[]
-  vendors              Vendor[]
   subscriptions        Subscription[]
   promoCampaigns       PromoCampaign[]
   walletTopups         WalletTopup[]
@@ -177,7 +176,6 @@ model User {
 
   driver              Driver?
   customer            Customer?
-  vendor              Vendor?
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
   pushTokens          PushToken[]
@@ -390,7 +388,6 @@ model Customer {
 
   tanks          Tank[]
   refillOrders   RefillOrder[]
-  deliveryOrders DeliveryOrder[]
   invoices       Invoice[]
   addresses      CustomerAddress[]
   ratings        Rating[]
@@ -657,106 +654,6 @@ model CashHandover {
   @@unique([tenantId, clientRequestId])
   @@index([tenantId, status])
   @@index([driverId, createdAt])
-}
-
-// ─── Mobile vendor (tuk-tuk) marketplace ──────────────────────────────────────
-
-enum VendorStatus {
-  PENDING_APPROVAL
-  ACTIVE
-  SUSPENDED
-}
-
-enum VehicleType {
-  STOOTA
-  TUKTUK
-  SMALL_PICKUP
-}
-
-model Vendor {
-  id       String  @id @default(cuid())
-  // Vendors can be "platform-wide" (no tenant) or attached to a single plant.
-  tenantId String?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id])
-
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id])
-
-  vehicleType       VehicleType
-  vehiclePlate      String?
-  maxCapacityLiters Int          @default(25)
-  status            VendorStatus @default(PENDING_APPROVAL)
-
-  isAvailable    Boolean   @default(false)
-  currentLng     Float?
-  currentLat     Float?
-  lastLocationAt DateTime?
-
-  walletBalanceIqd Int   @default(0)
-  rating           Float @default(5.0)
-  totalDeliveries  Int   @default(0)
-
-  deliveryOrders DeliveryOrder[]
-  walletEntries  VendorWalletEntry[]
-}
-
-enum DeliveryOrderStatus {
-  SEARCHING
-  ACCEPTED
-  EN_ROUTE
-  DELIVERED
-  CANCELLED
-  EXPIRED
-}
-
-model DeliveryOrder {
-  id String @id @default(cuid())
-
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id])
-
-  vendorId String?
-  vendor   Vendor? @relation(fields: [vendorId], references: [id])
-
-  liters        Int // 5–25
-  priceIqd      Int
-  commissionIqd Int // platform cut (~7–10%)
-  status        DeliveryOrderStatus @default(SEARCHING)
-
-  pickupLng   Float?
-  pickupLat   Float?
-  dropLng     Float
-  dropLat     Float
-  dropAddress String
-
-  paymentMethod PaymentMethod @default(CASH)
-  requestedAt   DateTime      @default(now())
-  acceptedAt    DateTime?
-  deliveredAt   DateTime?
-  cancelReason  String?
-
-  @@index([status, requestedAt])
-  @@index([vendorId, status])
-}
-
-enum WalletEntryKind {
-  EARNING
-  COMMISSION
-  WITHDRAWAL
-  ADJUSTMENT
-}
-
-model VendorWalletEntry {
-  id        String          @id @default(cuid())
-  vendorId  String
-  vendor    Vendor          @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  kind      WalletEntryKind
-  amountIqd Int // signed (+/-)
-  reference String? // delivery order id, withdrawal ref, etc.
-  note      String?
-  createdAt DateTime        @default(now())
-
-  @@index([vendorId, createdAt])
 }
 
 // ─── Accounting ───────────────────────────────────────────────────────────────
