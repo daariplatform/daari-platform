@@ -32,6 +32,7 @@ import { UserScopedCacheInterceptor } from './user-scoped-cache.interceptor';
       useFactory: (): any => {
         const host = process.env.REDIS_HOST ?? '127.0.0.1';
         const port = Number(process.env.REDIS_PORT ?? 6379);
+        const password = process.env.REDIS_PASSWORD;
         const log = new Logger('CacheModule');
 
         const ttl = 60_000;
@@ -42,7 +43,10 @@ import { UserScopedCacheInterceptor } from './user-scoped-cache.interceptor';
         }
 
         log.log(`Cache backed by Redis at ${host}:${port}`);
-        const keyvRedis = new KeyvRedis(`redis://${host}:${port}`);
+        // Include the password in the URL when set so a requirepass-hardened
+        // Redis authenticates instead of silently failing every cache op.
+        const auth = password ? `:${encodeURIComponent(password)}@` : '';
+        const keyvRedis = new KeyvRedis(`redis://${auth}${host}:${port}`);
         keyvRedis.on('error', (err) => log.warn(`Redis cache error: ${(err as Error).message}`));
         const store = new Keyv({ store: keyvRedis });
         store.on('error', (err) => log.warn(`Keyv cache error: ${(err as Error).message}`));

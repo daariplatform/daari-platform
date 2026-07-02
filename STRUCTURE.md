@@ -27,7 +27,7 @@
    لوحات ويب        تطبيقات الجوّال (Expo)            إعادة بناء Flutter
    (Next.js)                                                                  
   dashboard :3001   mobile-customer   mobile-worker   mobile-admin   mobile-flutter
-  platform-console  (الزبون)          (السائق/العامل) (الإدارة)       (الزبون + السائق)
+  platform-console  (الزبون)          (السائق/العامل) (الإدارة)       (الزبون + السائق + الإدارة)
         :3011
 ```
 
@@ -87,8 +87,9 @@ backend/
 
 ## 2) لوحات الويب — `dashboard/` و `platform-console/`
 
-لوحتان بـ **Next.js 14 (App Router)** بنفس الحزمة التقنية:
-React Query، خرائط Leaflet، مخططات Recharts، حالة Zustand، Tailwind، PWA.
+لوحتان بـ **Next.js 14 (App Router)** بحزمة تقنية متقاربة:
+React Query (إدارة الحالة والبيانات)، مخططات Recharts، Tailwind، PWA (next-pwa).
+خرائط Leaflet في `dashboard` فقط (الخريطة الحيّة للسائقين).
 
 - **`dashboard/`** — لوحة تشغيلية (المنفذ **3001**).
 - **`platform-console/`** — لوحة على مستوى المنصّة (المنفذ **3011**).
@@ -136,9 +137,9 @@ mobile-flutter/
 │      └── api/ + models/ تشمل أيضاً **طبقة الإدارة** `/plant/*`:
 │         {plant,promo,reports,team,onboarding}_repository + نماذجها
 └── apps/
-    ├── customer/   ← تطبيق الزبون (17 شاشة)  · com.phibit.daaricustomer
+    ├── customer/   ← تطبيق الزبون (18 شاشة)  · com.phibit.daaricustomer
     ├── driver/     ← تطبيق السائق (12 شاشة)  · com.phibit.daaridriver
-    └── admin/      ← تطبيق الإدارة (14 شاشة)  · com.phibit.daariadmin
+    └── admin/      ← تطبيق الإدارة (15 شاشة)  · com.phibit.daariadmin
         # lib/: main · router (حارس مصادقة) · providers · widgets/{common,home_shell}
         #       screens/: splash · login · home(KPIs) · reports · team(دعوة/تعديل/حذف) ·
         #                 more · stock · promos(حملات+بثّ+متابعة بثّ حيّة) · reports/advanced_reports(فلاتر تاريخ) · onboarding ·

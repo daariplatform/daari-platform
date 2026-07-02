@@ -22,6 +22,10 @@ import { NotificationsModule } from '../notifications/notifications.module';
         connection: {
           host: process.env.REDIS_HOST === 'disabled' ? '127.0.0.1' : (process.env.REDIS_HOST ?? '127.0.0.1'),
           port: Number(process.env.REDIS_PORT ?? 6379),
+          // Authenticate when Redis is password-protected (requirepass).
+          ...(process.env.REDIS_PASSWORD
+            ? { password: process.env.REDIS_PASSWORD }
+            : {}),
         },
       }),
     }),
