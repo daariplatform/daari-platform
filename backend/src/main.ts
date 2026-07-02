@@ -20,6 +20,14 @@ async function bootstrap() {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  // In production, fail closed if CORS_ORIGINS is unset rather than reflecting
+  // every origin — a forgotten env var must not silently open the API to any
+  // site. Locally we still match all origins for convenience.
+  if (corsOrigins.length === 0 && process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'CORS_ORIGINS must be set in production (comma-separated allowed origins).',
+    );
+  }
   const cors = corsOrigins.length > 0
     ? { origin: corsOrigins, credentials: true }
     : true; // dev fallback — match all origins locally

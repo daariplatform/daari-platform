@@ -260,7 +260,16 @@ export class AccountingService {
   async markInvoicePaid(tenantId: string, id: string, amountIqd?: number) {
     const inv = await this.prisma.invoice.findFirst({ where: { id, tenantId } });
     if (!inv) throw new NotFoundException('Invoice not found');
+    // Don't re-settle an already-paid or voided invoice.
+    if (inv.status === 'PAID' || inv.status === 'VOID') {
+      throw new BadRequestException('لا يمكن تحصيل فاتورة مدفوعة أو ملغاة');
+    }
     const paid = amountIqd ?? inv.totalIqd;
+    // A payment below the total must not flip the invoice to PAID (that would
+    // report an unpaid balance as settled). Partial payments aren't modelled.
+    if (paid < inv.totalIqd) {
+      throw new BadRequestException('المبلغ المدفوع أقل من إجمالي الفاتورة');
+    }
     return this.prisma.invoice.update({
       where: { id },
       data: {
@@ -446,10 +455,14 @@ export class AccountingService {
     if (!existing) {
       throw new NotFoundException('Salary payment not found');
     }
-    return this.prisma.salaryPayment.update({
-      where: { id: salaryId },
+    // Idempotent + atomic: only stamp paidAt when it's still null. A repeat
+    // call (double-tap) must not overwrite the original timestamp, which would
+    // retroactively move the outflow into a different accounting period.
+    await this.prisma.salaryPayment.updateMany({
+      where: { id: salaryId, paidAt: null },
       data: { paidAt: new Date() },
     });
+    return this.prisma.salaryPayment.findUnique({ where: { id: salaryId } });
   }
 
   /**

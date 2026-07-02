@@ -1000,13 +1000,36 @@ export class OrdersService {
       throw new ForbiddenException('Unauthorised role for cancel');
     }
 
-    return this.prisma.refillOrder.update({
-      where: { id: orderId },
+    // Atomic guard: only flip to CANCELLED if the order is STILL in a status
+    // this role may cancel from. Without it, a complete() that commits between
+    // the stale read above and this write would be overwritten — leaving a
+    // CANCELLED order that already applied completion's balance/loyalty/stock/
+    // promo-wallet side effects, with the money then hidden from every
+    // status=COMPLETED report. count===0 means the order raced out from under us.
+    const allowedFrom: RefillOrderStatus[] =
+      role === 'CUSTOMER'
+        ? [RefillOrderStatus.PENDING, RefillOrderStatus.ASSIGNED]
+        : role === 'DRIVER'
+          ? [RefillOrderStatus.ASSIGNED, RefillOrderStatus.EN_ROUTE]
+          : [
+              RefillOrderStatus.PENDING,
+              RefillOrderStatus.ASSIGNED,
+              RefillOrderStatus.EN_ROUTE,
+            ];
+
+    const res = await this.prisma.refillOrder.updateMany({
+      where: { id: orderId, status: { in: allowedFrom } },
       data: {
         status: RefillOrderStatus.CANCELLED,
         cancelReason: reason ?? (role === 'CUSTOMER' ? 'ألغاه الزبون' : 'بدون سبب'),
       },
     });
+    if (res.count === 0) {
+      throw new ConflictException(
+        'تغيّرت حالة الطلب — تعذّر الإلغاء. حدّث الصفحة وحاول مجدداً.',
+      );
+    }
+    return this.prisma.refillOrder.findUnique({ where: { id: orderId } });
   }
 
   /**

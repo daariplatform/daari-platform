@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Logger } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 
@@ -16,6 +16,7 @@ import { PrismaService } from '../prisma/prisma.service';
 @ApiTags('health')
 @Controller()
 export class HealthController {
+  private readonly logger = new Logger(HealthController.name);
   constructor(private prisma: PrismaService) {}
 
   @Public()
@@ -33,10 +34,12 @@ export class HealthController {
       await this.prisma.$queryRaw`SELECT 1`;
       return { status: 'ready', db: 'ok' };
     } catch (err) {
+      // Log the detailed driver error server-side only — the response is public
+      // and unauthenticated, so it must not leak DB host/schema/connection info.
+      this.logger.error(`/ready DB check failed: ${(err as Error).message}`);
       return {
         status: 'degraded',
         db: 'unreachable',
-        error: (err as Error).message,
       };
     }
   }
