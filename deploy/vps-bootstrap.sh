@@ -36,15 +36,34 @@ fi
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SLUG="daari-water"
 
-# Pre-flight: registry check. CLAUDE.md is explicit about this — never
-# install anything on this VPS before updating /root/PROJECTS.md.
-if [[ ! -f /root/PROJECTS.md ]] || ! grep -qE "(daari-water|Daari Water)" /root/PROJECTS.md; then
-  cat >&2 <<EOF
-[ABORT] /root/PROJECTS.md does not have a daari-water entry yet.
-Add it BEFORE running bootstrap. See deploy/PROJECTS-MD-ENTRY.md in the
-repo for the exact text to append.
+# -----------------------------------------------------------------------------
+# Pre-flight: registry check.
+#
+# This is a *shared-VPS* safety convention (the Phi-Bit box runs several
+# projects, so we refuse to touch it unless /root/PROJECTS.md lists our slug).
+# On a FRESH DEDICATED server there is no such file — that's fine, we skip the
+# check. Set SKIP_REGISTRY_CHECK=1 to bypass entirely. (Mirrors deploy.sh.)
+# -----------------------------------------------------------------------------
+if [[ "${SKIP_REGISTRY_CHECK:-0}" != "1" ]]; then
+  if [[ -f /root/PROJECTS.md ]]; then
+    if ! grep -qE "(daari-water|Daari Water)" /root/PROJECTS.md; then
+      cat >&2 <<'EOF'
+[ABORT] /root/PROJECTS.md exists but has no daari-water entry.
+
+This looks like a SHARED server. To avoid clobbering another project, add an
+identifying line to /root/PROJECTS.md (see deploy/PROJECTS-MD-ENTRY.md for the
+exact text), for example:
+
+  daari-water | Daari Water SaaS | dirs: /var/www/daari-water-* | services: daari-water-api, daari-water-dashboard
+
+Then re-run bootstrap. On a dedicated box you can instead run with
+SKIP_REGISTRY_CHECK=1.
 EOF
-  exit 1
+      exit 1
+    fi
+  else
+    echo "  · /root/PROJECTS.md not found — treating this as a dedicated server (registry check skipped)."
+  fi
 fi
 
 echo "════════════════════════════════════════════════════════════════"
